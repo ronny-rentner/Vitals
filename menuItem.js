@@ -30,6 +30,8 @@ export const MenuItem = GObject.registerClass({
 
         // add value
         this._valueLabel = new St.Label({ text: value });
+        // In a row that is too narrow for both, the label is shortened and the value is shown in full.
+        this._valueLabel.get_clutter_text().ellipsize = 0;
         this._valueLabel.set_x_align(Clutter.ActorAlign.END);
         this._valueLabel.set_x_expand(true);
         this._valueLabel.set_y_expand(true);
@@ -40,6 +42,12 @@ export const MenuItem = GObject.registerClass({
 
     get checked() {
         return this._checked;
+    }
+
+    set checked(checked) {
+        if (this._checked == checked) return;
+        this._checked = checked;
+        this._updateOrnament();
     }
 
     get key() {
@@ -88,5 +96,9 @@ export const MenuItem = GObject.registerClass({
 
     get label() {
         return this._labelActor.text;
+    }
+
+    set label(label) {
+        this._labelActor.text = label;
     }
 });

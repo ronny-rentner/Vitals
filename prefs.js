@@ -6,19 +6,17 @@ import Gdk from 'gi://Gdk';
 import Gtk from 'gi://Gtk';
 import {ExtensionPreferences, gettext as _} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
-import {sensorCatalog, colorPageForSensor} from './helpers/catalog.js';
+import {sensorCategories, colorPageForSensor} from './helpers/categories.js';
 import {
     compareColorEntries,
     DEFAULT_THRESHOLD_RGBA,
     formatColorEntry,
-    labelFromSensorKey,
     sanitizeAndSortColorEntries,
-    sensorKeyBelongsToColorPage,
-    sensorKeyFromTypeLabel,
 } from './helpers/colors.js';
-import * as SensorsModule from './sensors.js';
+import {readCatalog, writeCategoryEnabled, sensorPresent} from './helpers/storedCatalog.js';
 
-const SENSOR_DISCOVERY_SETTLE_SECONDS = 2;
+// The update intervals offered in the preferences, in seconds.
+const UPDATE_SECONDS = [1, 2, 3, 5, 10, 15, 30, 60];
 
 class Settings {
     constructor(extensionObject) {
@@ -41,16 +39,10 @@ class Settings {
         // so we do not construct dozens of Gtk.ColorButtons up front.
         // pageName -> { settingsKey, page, addGroup, palettes, addColorsDropdown, ... }
         this._thresholdColorPages = {};
-        // Session-only stash of panel sensors removed when a group is toggled off,
-        // so turning the group back on before closing prefs can restore them.
-        this._removedHotSensors = {};
-        // pageName -> sorted list of discovered sensor keys (from Sensors.query).
-        this._discoveredSensorsByPage = {};
-        this._sensors = null;
-        this._sensorDiscoveryTimeoutId = 0;
+        // pageName -> the sensors that can get a colour scale of their own on that page: colour target -> label.
+        this._sensorLabelsByPage = this._read_sensor_labels();
         this._bind_sensor_page_gates();
         this._bind_settings();
-        this._start_sensor_discovery();
     }
 
     _flatButton({icon_name, label, tooltip_text}) {
@@ -67,65 +59,28 @@ class Settings {
         return new Gtk.Button(props);
     }
 
-    destroy() {
-        if (this._sensorDiscoveryTimeoutId) {
-            GLib.source_remove(this._sensorDiscoveryTimeoutId);
-            this._sensorDiscoveryTimeoutId = 0;
+    // The sensors on this machine, from the catalog the extension saved. A sensor is named in the colour settings
+    // by its category and key.
+    _read_sensor_labels() {
+        let labelsByPage = {};
+        for (let [categoryName, category] of Object.entries(readCatalog(this._settings))) {
+            if (categoryName == 'panel') continue;
+            for (let sensor of category.sensors || []) {
+                let page = colorPageForSensor(categoryName, sensor.format);
+                if (!page || !sensorPresent(category, sensor)) continue;
+                if (!labelsByPage[page])
+                    labelsByPage[page] = new Map();
+                // A GPU temperature is on the temperature page; its label says where it belongs.
+                labelsByPage[page].set(categoryName + '/' + sensor.key,
+                    page == categoryName ? sensor.label : `${sensor.label} (${categoryName})`);
+            }
         }
-        if (this._sensors) {
-            this._sensors.destroy();
-            this._sensors = null;
-        }
+        return labelsByPage;
     }
 
-    _start_sensor_discovery() {
-        if (this._sensors)
-            return;
-
-        this._sensors = new SensorsModule.Sensors(this._settings, sensorCatalog, _);
-        let collect = (label, value, type, format) => {
-            this._collect_discovered_sensor(label, type, format);
-        };
-
-        // First pass starts hwmon discovery; second pass fills processor deltas.
-        this._sensors.query(collect, 1);
-        GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 1, () => {
-            if (this._sensors)
-                this._sensors.query(collect, 1);
-            return GLib.SOURCE_REMOVE;
-        });
-        this._sensorDiscoveryTimeoutId = GLib.timeout_add_seconds(
-            GLib.PRIORITY_DEFAULT, SENSOR_DISCOVERY_SETTLE_SECONDS, () => {
-                this._sensorDiscoveryTimeoutId = 0;
-                this._refresh_add_colors_dropdowns();
-                return GLib.SOURCE_REMOVE;
-            });
-    }
-
-    _collect_discovered_sensor(label, type, format) {
-        if (!type || type.endsWith('-group'))
-            return;
-
-        let key = sensorKeyFromTypeLabel(type, label);
-        if (!key || key.startsWith('__'))
-            return;
-
-        let pageName = colorPageForSensor(type, format);
-        if (!pageName)
-            return;
-
-        if (!this._discoveredSensorsByPage[pageName])
-            this._discoveredSensorsByPage[pageName] = [];
-        if (!this._discoveredSensorsByPage[pageName].includes(key))
-            this._discoveredSensorsByPage[pageName].push(key);
-    }
-
-    _refresh_add_colors_dropdowns() {
-        for (let pageName of Object.keys(this._discoveredSensorsByPage))
-            this._discoveredSensorsByPage[pageName].sort();
-
-        for (let pageName of Object.keys(this._thresholdColorPages))
-            this._sync_add_colors_row(pageName);
+    // The label of a sensor named in the colour settings. One that is not on this machine is shown by that name.
+    _sensor_label(pageName, sensorKey) {
+        return this._sensorLabelsByPage[pageName]?.get(sensorKey) ?? sensorKey;
     }
 
     _apply_icon_style() {
@@ -152,7 +107,7 @@ class Settings {
     refresh_sidebar_icons() {
         this._apply_icon_style();
 
-        for (let name of Object.keys(sensorCatalog)) {
+        for (let name of Object.keys(sensorCategories)) {
             let image = this.builder.get_object('sidebar-icon-' + name);
             if (!image)
                 continue;
@@ -164,7 +119,7 @@ class Settings {
     }
 
     ensure_threshold_colors_for_page(pageName) {
-        if (this._thresholdColorPages[pageName] || !sensorCatalog[pageName]?.colorFormats)
+        if (this._thresholdColorPages[pageName] || !sensorCategories[pageName]?.colorFormats)
             return;
 
         this._add_threshold_colors_group(
@@ -215,7 +170,7 @@ class Settings {
         let flagWidget = this.builder.get_object('network-public-ip-show-flag');
 
         this._sensorPageGates = {
-            'temperature': { toggle: 'show-temperature', widgets: ['unit'] },
+            'temperature': { toggle: 'show-temperature', widgets: ['unit', 'hide-zeros'] },
             'voltage': { toggle: 'show-voltage', widgets: [] },
             'fan': { toggle: 'show-fan', widgets: [] },
             'memory': { toggle: 'show-memory', widgets: ['memory-measurement'] },
@@ -224,6 +179,7 @@ class Settings {
             'network': {
                 toggle: 'show-network',
                 widgets: [
+                    'network-hardware-only',
                     'include-public-ip',
                     'network-public-ip-interval',
                     'network-public-ip-provider',
@@ -252,63 +208,16 @@ class Settings {
         }
     }
 
-    // Drop panel-pinned sensors that belong to a disabled sensor group.
-    // Keys look like _memory_usage_ / __network-rx_max__; group name is in the key.
-    _remove_hot_sensors_for_group(group) {
-        let hotSensors = this._settings.get_strv('hot-sensors');
-        let removed = [];
-        let filtered = hotSensors.filter(key => {
-            if (key === '_default_icon_')
-                return true;
-            if (key.includes(group)) {
-                removed.push(key);
-                return false;
-            }
-            return true;
-        });
-
-        if (removed.length === 0)
-            return;
-
-        this._removedHotSensors[group] = removed;
-
-        if (filtered.length === 0)
-            filtered.push('_default_icon_');
-
-        this._settings.set_strv('hot-sensors', filtered);
-    }
-
-    // Restore sensors stashed earlier in this prefs session when the group is re-enabled.
-    _restore_hot_sensors_for_group(group) {
-        let restored = this._removedHotSensors[group];
-        if (!restored || restored.length === 0)
-            return;
-
-        delete this._removedHotSensors[group];
-
-        let hotSensors = this._settings.get_strv('hot-sensors').filter(
-            key => key !== '_default_icon_'
-        );
-        for (let key of restored) {
-            if (!hotSensors.includes(key))
-                hotSensors.push(key);
-        }
-
-        this._settings.set_strv('hot-sensors', hotSensors);
-    }
-
     // Bind the gtk window to the schema settings
     _bind_settings() {
         let widget;
 
         // process sensor toggles
-        let sensors = [ 'show-temperature', 'show-voltage', 'show-fan',
-                        'show-memory', 'show-processor', 'show-system',
-                        'show-network', 'show-storage', 'use-higher-precision',
-                        'alphabetize', 'hide-zeros', 'include-public-ip',
-                        'network-public-ip-show-flag', 'show-battery', 'fixed-widths',
+        let sensors = [ 'use-higher-precision',
+                        'include-aggregates', 'hide-zeros', 'include-public-ip', 'network-hardware-only',
+                        'network-public-ip-show-flag', 'fixed-widths', 'emphasize-values',
                         'hide-icons', 'menu-centered', 'include-static-info',
-                        'show-gpu', 'include-static-gpu-info' ];
+                        'include-static-gpu-info', 'allow-panel-dragging' ];
 
         for (let key in sensors) {
             let sensor = sensors[key];
@@ -316,15 +225,17 @@ class Settings {
             widget = this.builder.get_object(sensor);
             widget.set_active(this._settings.get_boolean(sensor));
             widget.connect('state-set', (_, val) => {
-                // update hot-sensors before flipping show-* so the extension redraw sees it
-                if (sensor.startsWith('show-')) {
-                    let group = sensor.substring(5);
-                    if (!val)
-                        this._remove_hot_sensors_for_group(group);
-                    else
-                        this._restore_hot_sensors_for_group(group);
-                }
                 this._settings.set_boolean(sensor, val);
+            });
+        }
+
+        // Whether a category is switched on is part of the saved catalog.
+        let catalog = readCatalog(this._settings);
+        for (let categoryName of Object.keys(sensorCategories)) {
+            widget = this.builder.get_object('show-' + categoryName);
+            widget.set_active(catalog[categoryName].enabled);
+            widget.connect('state-set', (_, enabled) => {
+                writeCategoryEnabled(this._settings, categoryName, enabled);
             });
         }
 
@@ -349,10 +260,15 @@ class Settings {
             this._sync_sensor_page_sensitivity('network');
         });
 
+        // The update interval is chosen from these, in the order of the drop-down's entries in prefs.ui.
+        // A value that was set another way and is not among them is shown as the nearest one.
         let updateTime = this.builder.get_object('update-time');
-        updateTime.set_value(this._settings.get_int('update-time'));
-        updateTime.connect('value-changed', (widget) => {
-            this._settings.set_int('update-time', Math.round(widget.get_value()));
+        let savedSeconds = this._settings.get_int('update-time');
+        let nearestSeconds = UPDATE_SECONDS.reduce((nearest, seconds) =>
+            Math.abs(seconds - savedSeconds) < Math.abs(nearest - savedSeconds) ? seconds : nearest);
+        updateTime.set_active(UPDATE_SECONDS.indexOf(nearestSeconds));
+        updateTime.connect('changed', (widget) => {
+            this._settings.set_int('update-time', UPDATE_SECONDS[widget.get_active()]);
         });
 
         this._settings.bind('network-public-ip-interval', this.builder.get_object('network-public-ip-interval'),
@@ -375,7 +291,7 @@ class Settings {
 
     }
 
-    // Runtime matching is `value >= threshold` (see values.js), so each band is
+    // Runtime matching is `value >= threshold` (see formatter.js), so each band is
     // [low, high). Integer breakpoints use high-1 in the label (0–39, 40–59, …).
     // Float breakpoints keep an explicit half-open label (0 – <0.5).
     _band_title(low, high) {
@@ -478,21 +394,8 @@ class Settings {
 
     _color_sensor_options(pageName, settingsKey, excludeKeys = null) {
         let excluded = new Set(excludeKeys || []);
-        let live = [];
-        let liveSet = new Set();
-        for (let key of (this._discoveredSensorsByPage[pageName] || [])) {
-            if (excluded.has(key) || liveSet.has(key))
-                continue;
-            liveSet.add(key);
-            live.push(key);
-        }
-        for (let key of this._settings.get_strv('hot-sensors')) {
-            if (!sensorKeyBelongsToColorPage(pageName, key) || excluded.has(key) || liveSet.has(key))
-                continue;
-            liveSet.add(key);
-            live.push(key);
-        }
-        live.sort();
+        let liveSet = new Set(this._sensorLabelsByPage[pageName]?.keys());
+        let live = [...liveSet].filter(key => !excluded.has(key)).sort();
 
         let orphans = [];
         let orphanSet = new Set();
@@ -515,9 +418,7 @@ class Settings {
     }
 
     _sensor_key_is_live(pageName, sensorKey) {
-        if ((this._discoveredSensorsByPage[pageName] || []).includes(sensorKey))
-            return true;
-        return this._settings.get_strv('hot-sensors').includes(sensorKey);
+        return this._sensorLabelsByPage[pageName]?.has(sensorKey) ?? false;
     }
 
     _available_add_color_targets(pageName, settingsKey) {
@@ -533,11 +434,11 @@ class Settings {
         }
         for (let key of live) {
             keys.push(key);
-            labels.push(labelFromSensorKey(key));
+            labels.push(this._sensor_label(pageName, key));
         }
         for (let key of orphans) {
             keys.push(key);
-            labels.push(_('%s (unavailable)').format(labelFromSensorKey(key)));
+            labels.push(_('%s (unavailable)').format(this._sensor_label(pageName, key)));
         }
         return {keys, labels};
     }
@@ -591,7 +492,7 @@ class Settings {
         if (!sensorKey)
             return _('All sensors colors');
 
-        let label = labelFromSensorKey(sensorKey);
+        let label = this._sensor_label(pageName, sensorKey);
         if (this._sensor_key_is_live(pageName, sensorKey))
             return _('%s colors').format(label);
         return _('%s colors (unavailable)').format(label);
@@ -850,7 +751,6 @@ export default class VitalsPrefs extends ExtensionPreferences {
         let settings = new Settings(this);
         window._vitalsSettings = settings;
         window.connect('close-request', () => {
-            settings.destroy();
             window._vitalsSettings = null;
         });
 
@@ -866,7 +766,7 @@ export default class VitalsPrefs extends ExtensionPreferences {
         window.get_content().set_child(root);
 
         let pages = [{ name: 'general' }];
-        for (let name of Object.keys(sensorCatalog))
+        for (let name of Object.keys(sensorCategories))
             pages.push({ name });
         for (let info of pages) {
             let page = settings.builder.get_object(info.name + '-page');

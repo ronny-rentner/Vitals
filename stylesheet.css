@@ -1,15 +1,18 @@
 .vitals-panel-item{spacing: 0;}
-.vitals-panel-menu{spacing: 11px; padding: 3px; }
-.vitals-panel-icon-temperature { margin: 0 1px 0 0; padding: 0; }
-.vitals-panel-icon-voltage { margin: 0 0 0 0; padding: 0; }
-.vitals-panel-icon-fan { margin: 0 4px 0 0; padding: 0; }
-.vitals-panel-icon-memory { margin: 0 2px 0 0; padding: 0; }
-.vitals-panel-icon-processor { margin: 0 3px 0 0; padding: 0; }
-.vitals-panel-icon-system { margin: 0 3px 0 0; padding: 0; }
-.vitals-panel-icon-network { margin: 0 3px 0 0; padding: 0; }
-.vitals-panel-icon-storage { margin: 0 2px 0 0; padding: 0; }
-.vitals-panel-icon-battery { margin: 0 4px 0 0; padding: 0; }
+.vitals-panel-menu{spacing: 0; padding: 3px; }
+/* The distances around a top-bar icon are set per icon in extension.js, from the empty room in its file. */
+.vitals-panel-icon { margin: 0; padding: 0; }
 .vitals-button-action { -st-icon-style: symbolic; border-radius: 32px; margin: 0px; min-height: 22px; min-width: 22px; padding: 10px; font-size: 100%; border: 1px solid transparent; }
 .vitals-button-action:hover, .vitals-button-action:focus { border-color: #777; }
 .vitals-button-action > StIcon { icon-size: 16px; }
 .vitals-button-box { padding: 0px; spacing: 22px; }
+/* The dropdown menu has one width. A label that does not fit next to its value is shortened with "…". */
+.vitals-menu { width: 24em; }
+/* Digits of one width, so a top-bar value does not change width when only its digits change. */
+.vitals-panel-label { font-feature-settings: "tnum"; }
+/* A unit that is written with a space after its number, such as "GB", stands this far from it. */
+.vitals-panel-unit-apart { margin-left: 0.28em; }
+/* With the "emphasize values" option, a unit is smaller and thinner than its number and closer to it.
+   panelValue.js also draws it lighter. */
+.vitals-panel-unit-light { font-size: 0.85em; font-weight: normal; }
+.vitals-panel-unit-light.vitals-panel-unit-apart { margin-left: 0.18em; }

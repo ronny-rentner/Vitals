@@ -7,8 +7,8 @@ export const DEFAULT_THRESHOLD_RGBA = {
     blue: 36 / 255,
 };
 
-// Entries: "threshold r g b" or "threshold r g b sensor:<key>"
-// Trailing sensor tokens may contain spaces (legacy key quirk).
+// Entries: "threshold r g b" or "threshold r g b sensor:<category>/<key>"
+// The sensor token may contain spaces, as device names do.
 export function parseColorEntry(colorEntry) {
     if (typeof colorEntry !== 'string')
         return null;
@@ -112,62 +112,4 @@ export function getUsageColor(value, colors, sensorKey = null) {
 
     const groupWide = entries.filter(entry => !entry.sensorKey);
     return styleForEntries(value, groupWide);
-}
-
-export function sensorKeyFromTypeLabel(type, label) {
-    let typeKey = (type || '').replace('-group', '');
-    if (/^network-(?!rx$|tx$)/.test(typeKey))
-        typeKey = 'network';
-    return '_' + typeKey + '_' + String(label).replaceAll(' ', '_').toLowerCase() + '_';
-}
-
-// Hot-sensor / color keys: _<type>_<label parts>_
-export function parseSensorKey(key) {
-    if (typeof key !== 'string' || !key.startsWith('_') || key.length < 3)
-        return null;
-
-    let inner = key.endsWith('_') ? key.slice(1, -1) : key.slice(1);
-    let parts = inner.split('_');
-    return {
-        typePart: parts[0] || '',
-        label: parts.slice(1).join(' ').trim(),
-    };
-}
-
-export function labelFromSensorKey(key) {
-    let parsed = parseSensorKey(key);
-    if (!parsed)
-        return key || '';
-
-    let {typePart, label} = parsed;
-    if (typePart.startsWith('gpu') && label)
-        return `${label} (${typePart})`;
-    return label || typePart;
-}
-
-// Keys that belong on a given threshold-colors prefs page.
-export function sensorKeyBelongsToColorPage(pageName, key) {
-    if (typeof key !== 'string' || !key.startsWith('_') || key.startsWith('__'))
-        return false;
-
-    let parsed = parseSensorKey(key);
-    if (!parsed)
-        return false;
-
-    let {typePart} = parsed;
-
-    if (pageName === 'temperature') {
-        if (typePart === 'temperature')
-            return true;
-        // GPU temps also use temperature-colors.
-        return typePart.startsWith('gpu') && /temp/i.test(key);
-    }
-
-    if (pageName === 'gpu') {
-        if (!typePart.startsWith('gpu'))
-            return false;
-        return !/temp/i.test(key);
-    }
-
-    return typePart === pageName || typePart.startsWith(pageName + '#');
 }
