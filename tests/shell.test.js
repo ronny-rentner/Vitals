@@ -519,6 +519,8 @@ export async function run() {
     equal([...sensors.activeSources.values()].flat().map(([, sensor]) => sensor.key).join(','), first.key + ',' + second.key,
         'with the menu closed only the pinned sensors are read');
 
+    // The made-up interfaces that follow are not hardware, and those have rows only with this option off.
+    settings.set_boolean('network-hardware-only', false);
     // Rows are created and destroyed one by one: count them while interfaces come and go.
     let rowsCreated = [];
     let addRow = button._addRow;
@@ -590,6 +592,7 @@ export async function run() {
     settings.set_boolean('network-hardware-only', false);
     equal(button._rows.has(fixtureUpload), true, 'switching it off brings the rows back');
     await sensors._rediscoverNetwork(new Map());
+    settings.reset('network-hardware-only');
     print('PASS pin visibility, saved position, single-row updates, interface removal and no query on menu close');
 
     await Scripting.sleep(250);

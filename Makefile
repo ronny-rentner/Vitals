@@ -1,15 +1,17 @@
-.PHONY: preview test test-shell
+.PHONY: preview test test-shell screenshots
 
-preview test-shell: export XDG_CONFIG_HOME = $(CURDIR)/build/$@/config
-preview test-shell: export XDG_DATA_HOME = $(CURDIR)/build/$@/data
-preview test-shell: export XDG_CACHE_HOME = $(CURDIR)/build/$@/cache
-preview test-shell: export GSETTINGS_BACKEND := keyfile
+preview test-shell screenshots: export XDG_CONFIG_HOME = $(CURDIR)/build/$@/config
+preview test-shell screenshots: export XDG_DATA_HOME = $(CURDIR)/build/$@/data
+preview test-shell screenshots: export XDG_CACHE_HOME = $(CURDIR)/build/$@/cache
+preview test-shell screenshots: export GSETTINGS_BACKEND := keyfile
 preview: SHELL_ARGS := --devkit
 test-shell: SHELL_ARGS := --headless --virtual-monitor 1280x720 --automation-script tests/shell.test.js
-# The shell test starts from the schema defaults; the preview keeps what was set in it.
-test-shell: RESET_SETTINGS := gsettings --schemadir schemas reset-recursively org.gnome.shell.extensions.vitals
+screenshots: SHELL_ARGS := --headless --virtual-monitor 1920x1080 --automation-script docs/screenshots/screenshots.js
+screenshots: export SCREENSHOT_DIR = $(CURDIR)/docs/screenshots
+# The shell test and the screenshots start from the schema defaults; the preview keeps what was set in it.
+test-shell screenshots: RESET_SETTINGS := gsettings --schemadir schemas reset-recursively org.gnome.shell.extensions.vitals
 
-preview test-shell:
+preview test-shell screenshots:
 	glib-compile-schemas --strict schemas
 	$(RESET_SETTINGS)
 	mkdir -p "$(XDG_DATA_HOME)/gnome-shell/extensions/Vitals@CoreCoding.com"

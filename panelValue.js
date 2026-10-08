@@ -4,6 +4,8 @@ import St from 'gi://St'
 
 // How strongly a unit is drawn when it is set off from its number. 255 is fully opaque.
 const UNIT_OPACITY = 170;
+// The empty room that is seen between a number and its unit, in pixels of an unscaled display.
+const UNIT_GAP = 3;
 
 // A sensor's value in the top bar: the number and its unit. With `emphasizeNumber`, the unit is smaller, thinner
 // and lighter than the number; otherwise both look the same.
@@ -45,12 +47,32 @@ export const PanelValue = GObject.registerClass({
     setText(text, unit = '') {
         this._text = text;
         this._number.text = unit ? text.slice(0, -unit.length) : text;
-        // The distance between number and unit is the stylesheet's, so it can differ with the unit's look.
+        // Without the space some units are written with: the distance to the number is the same for all (_unitOffset).
         this._unit.text = unit.trim();
-        if (unit.startsWith(' '))
-            this._unit.add_style_class_name('vitals-panel-unit-apart');
-        else
-            this._unit.remove_style_class_name('vitals-panel-unit-apart');
+    }
+
+    // How far the unit's label is moved away from the number's, so that UNIT_GAP whole pixels are empty between what
+    // is drawn of the two, whatever the unit and the number's last digit are. Glyphs bring different amounts of empty
+    // room at their sides: "%" more than "B", and "1" more than "0".
+    _unitOffset() {
+        if (!this._unit.text) return 0;
+        // Where the drawing of a label's text starts and ends, and how wide the text is with its empty room.
+        let drawing = label => {
+            let text = label.get_clutter_text();
+            let [drawn, whole] = text.get_layout().get_extents();
+            // From the layout's units to the units actors are placed in, as for the baseline in vfunc_allocate.
+            let toActorUnits = text.height / whole.height;
+            return {start: drawn.x * toActorUnits, end: (drawn.x + drawn.width) * toActorUnits, width: whole.width * toActorUnits};
+        };
+        let number = drawing(this._number);
+        let gap = UNIT_GAP * St.ThemeContext.get_for_stage(global.stage).scale_factor;
+        // The number's drawing ends inside a pixel and the unit's starts inside one; both of those pixels are not empty.
+        return Math.ceil(number.end) + gap - Math.floor(drawing(this._unit).start) - Math.ceil(number.width);
+    }
+
+    vfunc_get_preferred_width(forHeight) {
+        let offset = this._unitOffset();
+        return super.vfunc_get_preferred_width(forHeight).map(width => width + offset);
     }
 
     // The width the text needs, whatever width is set on this value. Only for a value that is on the stage.
@@ -58,7 +80,7 @@ export const PanelValue = GObject.registerClass({
         // A label has the font of the theme only once it is styled.
         this._number.ensure_style();
         this._unit.ensure_style();
-        return this._number.get_preferred_width(-1)[1] + this._unit.get_preferred_width(-1)[1];
+        return this._number.get_preferred_width(-1)[1] + this._unit.get_preferred_width(-1)[1] + this._unitOffset();
     }
 
     // A box lines its children up by their edges, and the unit's font is smaller than the number's. So that the
@@ -73,5 +95,6 @@ export const PanelValue = GObject.registerClass({
             return layout.get_baseline() / layout.get_extents()[1].height * text.height;
         };
         this._unit.translation_y = baseline(this._number) - baseline(this._unit);
+        this._unit.translation_x = this._unitOffset();
     }
 });

@@ -27,9 +27,11 @@
 import {colorsKeyForSensor} from './helpers/categories.js';
 import {getUsageColor} from './helpers/colors.js';
 
-const decimal = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+// Units as the standards write them (SI, and IEC 80000-13 for bits and bytes): the prefix for a thousand is a
+// lowercase "k", the one for 1024 is "Ki", and a rate is the unit with "/s".
+const decimal = ['B', 'kB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
 const binary = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB', 'ZiB', 'YiB'];
-const hertz = ['Hz', 'KHz', 'MHz', 'GHz', 'THz', 'PHz', 'EHz', 'ZHz'];
+const hertz = ['Hz', 'kHz', 'MHz', 'GHz', 'THz', 'PHz', 'EHz', 'ZHz'];
 
 export class Formatter {
     constructor(settings) {
@@ -81,7 +83,7 @@ export class Formatter {
                 if (!fixed && value >= Math.pow(base, exponent) * (base - 0.05)) exponent++;
                 let digits = format == 'speed' ? (precise ? 1 : 0) : (precise ? 2 : 1);
                 let ending = units[exponent];
-                if (format == 'speed') ending = bits ? ending.replace('B', 'bps') : ending + '/s';
+                if (format == 'speed') ending = (bits ? ending.replace('B', 'bit') : ending) + '/s';
                 if (format == 'storage-rate') ending += '/s';
                 unit = ' ' + ending;
                 text = (value / Math.pow(base, exponent)).toFixed(digits) + unit;

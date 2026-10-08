@@ -58,7 +58,7 @@
       <description>The unit ('centigrade' or 'fahrenheit') the extension should display the temperature in</description>
     </key>
     <key type="b" name="network-hardware-only">
-      <default>false</default>
+      <default>true</default>
       <summary>Only show hardware interfaces</summary>
       <description>Leave the interfaces that are not hardware, such as bridges, container and VPN interfaces and the loopback, out of the network menu. The network totals are over the hardware interfaces either way.</description>
     </key>
@@ -89,7 +89,7 @@
     <key type="i" name="network-speed-unit">
       <default>0</default>
       <summary>Fixed network speed unit</summary>
-      <description>Fix the network speed unit instead of auto-scaling. 0=Auto, 1=Kbps or KB/s, 2=Mbps or MB/s</description>
+      <description>Fix the network speed unit instead of auto-scaling. 0=Auto, 1=kbit/s or kB/s, 2=Mbit/s or MB/s</description>
     </key>
     <key type="s" name="storage-path">
       <default>"/"</default>

@@ -889,8 +889,8 @@
                 <property name="valign">center</property>
                 <items>
                   <item translatable="yes">Auto</item>
-                  <item translatable="yes">Kbps / KiB/s</item>
-                  <item translatable="yes">Mbps / MiB/s</item>
+                  <item translatable="yes">kbit/s / kB/s</item>
+                  <item translatable="yes">Mbit/s / MB/s</item>
                 </items>
               </object>
             </child>

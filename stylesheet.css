@@ -10,9 +10,6 @@
 .vitals-menu { width: 24em; }
 /* Digits of one width, so a top-bar value does not change width when only its digits change. */
 .vitals-panel-label { font-feature-settings: "tnum"; }
-/* A unit that is written with a space after its number, such as "GB", stands this far from it. */
-.vitals-panel-unit-apart { margin-left: 0.28em; }
-/* With the "emphasize values" option, a unit is smaller and thinner than its number and closer to it.
-   panelValue.js also draws it lighter. */
+/* With the "emphasize values" option, a unit is smaller and thinner than its number. panelValue.js also draws it
+   lighter, and sets its distance from the number. */
 .vitals-panel-unit-light { font-size: 0.85em; font-weight: normal; }
-.vitals-panel-unit-light.vitals-panel-unit-apart { margin-left: 0.18em; }
