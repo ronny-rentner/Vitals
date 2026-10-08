@@ -28,6 +28,10 @@ let vitalsMenu;
 // value that stays shorter, such as free memory, gives the room back.
 const WIDTH_MEMORY_SECONDS = 60;
 
+// The order of labels in the menu: natural order for numbers, so that "Core 2" comes before "Core 10".
+// One collator for all comparisons; String.localeCompare with options builds a new one on every call.
+const LABEL_ORDER = new Intl.Collator(undefined, {numeric: true, sensitivity: 'base'});
+
 // The "emphasize values" option draws top-bar icons and units lighter and smaller than the numbers, which are
 // what is read. Each pair below is the value with the option on and with it off.
 // The size of a top-bar icon, in em: a step smaller than the Shell's own status icons, or their size.
@@ -67,6 +71,8 @@ var VitalsMenuButton = GObject.registerClass({
         this._rows = new Map();
         this._panelItems = new Map();
         this._widths = new Map();
+        // Category name to the sensor whose value its header shows.
+        this._headerSensors = new Map();
         // Category name to the line above the rows that are set apart at its end, where there is one.
         this._separators = new Map();
         // The icon shown in the top bar while no sensor is.
@@ -94,12 +100,16 @@ var VitalsMenuButton = GObject.registerClass({
         this._connectSettingsSignals();
 
         this._initializeMenu();
-        // The saved catalog is shown at once, with its last readings, until discovery and the first tick replace them.
+        // Shows the saved catalog at once, before the hardware has been looked for.
         this._syncCatalog();
 
         this._sensors.onCatalogChanged = () => this._syncCatalog();
         this._sensors.onValuesChanged = recomputedSensors => this._render(recomputedSensors);
-        this._discoverSensors();
+        // Read once now: the timer's first tick is a whole update interval away.
+        this._discoverSensors().then(() => {
+            if (!this._sensors.destroyed)
+                this._querySensors();
+        });
 
         // start monitoring sensors
         this._initializeTimer();
@@ -143,7 +153,7 @@ var VitalsMenuButton = GObject.registerClass({
 
         // display sensor categories, in the alphabetical order of their names in the menu
         let menuName = name => _(this._ucFirst(name));
-        for (let [name, category] of this._sensors.categories().sort(([a], [b]) => menuName(a).localeCompare(menuName(b))))
+        for (let [name, category] of this._sensors.categories().sort(([a], [b]) => LABEL_ORDER.compare(menuName(a), menuName(b))))
             this._initializeMenuGroup(name, category);
 
         // add separator
@@ -353,7 +363,7 @@ var VitalsMenuButton = GObject.registerClass({
             };
             let draggable = DND.makeDraggable(item);
             draggable.connect('drag-begin', () => {
-                // A drag only holds the display still. Collection goes on, so the readings are current at the drop.
+                // While this is set, _render and _syncCatalog do nothing, so the items hold still under the pointer.
                 this._dragging = true;
                 this.menu.close();
             });
@@ -563,10 +573,11 @@ var VitalsMenuButton = GObject.registerClass({
     // The sensors of a category that have a row, in the order of their rows: by section where the sensors name
     // one, and inside a section by label.
     _sensorsInRowOrder(category) {
-        return category.sensors.filter(sensor => this._rows.has(sensor)).sort((a, b) =>
-            (a.section ?? 0) - (b.section ?? 0) ||
-            // use natural sort order for system load, etc
-            _(a.label).localeCompare(_(b.label), undefined, { numeric: true, sensitivity: 'base' }));
+        // Each label is translated once, not once per comparison.
+        return category.sensors.filter(sensor => this._rows.has(sensor))
+            .map(sensor => ({sensor, section: sensor.section ?? 0, label: _(sensor.label)}))
+            .sort((a, b) => a.section - b.section || LABEL_ORDER.compare(a.label, b.label))
+            .map(({sensor}) => sensor);
     }
 
     _removeSeparator(categoryName) {
@@ -590,17 +601,24 @@ var VitalsMenuButton = GObject.registerClass({
     // Marks in the catalog what is on screen: the header of every category in the open menu, the rows of every
     // open category, and the sensors in the top bar. The collector reads what is marked.
     _markShown() {
+        let marksChanged = false;
+        let mark = (sensorOrCategory, shown) => {
+            if (sensorOrCategory.shown !== shown) {
+                sensorOrCategory.shown = shown;
+                marksChanged = true;
+            }
+        };
+        let sensorsInPanel = new Set(this._sensors.catalog.panel.sensors
+            .filter(link => this._sensors.linkShown(link)).map(link => link.sensor));
         for (let [name, category] of this._sensors.categories()) {
-            category.shown = this.menu.isOpen && category.enabled;
+            mark(category, this.menu.isOpen && category.enabled);
             let rowsOnScreen = category.shown && this._groups[name].menu.isOpen;
             for (let sensor of category.sensors)
-                sensor.shown = rowsOnScreen && this._rows.has(sensor);
+                mark(sensor, sensorsInPanel.has(sensor) || (rowsOnScreen && this._rows.has(sensor)));
         }
-        for (let link of this._sensors.catalog.panel.sensors) {
-            if (this._sensors.linkShown(link))
-                link.sensor.shown = true;
-        }
-        this._sensors.shownChanged();
+        // This runs on every tick; the collector is told only when what is on screen changed.
+        if (marksChanged)
+            this._sensors.shownChanged();
     }
 
     _formatted(categoryName, sensor) {
@@ -627,29 +645,31 @@ var VitalsMenuButton = GObject.registerClass({
         };
         let pinnedSensors = new Set([...this._panelItems.keys()].map(link => link.sensor));
         for (let [name, category] of this._sensors.categories()) {
-            // Which sensor a header shows can change without that sensor's reading changing, so headers are always written.
             let headerLabel = this._groups[name]._statusLabel;
             let header = category.header;
             if (!header || !sensorPresent(category, header)) {
                 headerLabel.hide();
-            } else if (category.shown) {
+                this._headerSensors.delete(name);
+            // A header is written when its sensor has a new reading, and when it shows another sensor than before.
+            } else if (category.shown && (changed(header) || this._headerSensors.get(name) != header)) {
+                this._headerSensors.set(name, header);
                 let formatted = this._formatted(name, header);
                 headerLabel.visible = header.status != 'unavailable';
                 if (headerLabel.text != formatted.text) headerLabel.text = formatted.text;
                 if (headerLabel.style != formatted.style) headerLabel.style = formatted.style;
             }
-
-            for (let sensor of category.sensors) {
-                let row = this._rows.get(sensor);
-                if (!row || !sensor.shown || !changed(sensor)) continue;
-                let formatted = this._formatted(name, sensor);
-                row.visible = sensor.status != 'unavailable';
-                row.checked = pinnedSensors.has(sensor);
-                if (row.value != formatted.text) row.value = formatted.text;
-                if (row.valueStyle != formatted.style) row.valueStyle = formatted.style;
-                if (sensor.country !== undefined && !row.gicon.equal(flagIcon(sensor)))
-                    row.gicon = flagIcon(sensor);
-            }
+        }
+        // This runs once for every source that was read, so it only touches the rows of the sensors that changed.
+        for (let sensor of changedSensors ?? this._rows.keys()) {
+            let row = this._rows.get(sensor);
+            if (!row || !sensor.shown) continue;
+            let formatted = this._formatted(row.categoryName, sensor);
+            row.visible = sensor.status != 'unavailable';
+            row.checked = pinnedSensors.has(sensor);
+            if (row.value != formatted.text) row.value = formatted.text;
+            if (row.valueStyle != formatted.style) row.valueStyle = formatted.style;
+            if (sensor.country !== undefined && !row.gicon.equal(flagIcon(sensor)))
+                row.gicon = flagIcon(sensor);
         }
         for (let [link, {item, value}] of this._panelItems) {
             let sensor = link.sensor;
@@ -673,7 +693,7 @@ var VitalsMenuButton = GObject.registerClass({
     _addRow(categoryName, category, sensor) {
         let gicon = Gio.icon_new_for_string(this._sensorIconPath(categoryName, this._iconName(sensor)));
         let pinned = [...this._panelItems.keys()].some(link => link.sensor == sensor);
-        let row = new MenuItem.MenuItem(gicon, sensor.key, _(sensor.label), '…', pinned);
+        let row = new MenuItem.MenuItem(gicon, categoryName, _(sensor.label), '…', pinned);
         row.connect('toggle', () => {
             this._sensors.setPanelSensorVisible(categoryName, sensor, row.checked);
             if (this._dragging) return;
@@ -769,6 +789,7 @@ var VitalsMenuButton = GObject.registerClass({
         this._rows.clear();
         this._panelItems.clear();
         this._widths.clear();
+        this._headerSensors.clear();
         this._separators.clear();
         this._defaultItem = null;
 

@@ -62,11 +62,12 @@ catalog = {
 - `shown`: whether it is on screen right now. The renderer sets this; see "What is collected".
 - `value` and `updated`: its reading and when it was taken. A few readings are text, such as a battery's state.
 - `status`: `ready` when `value` is current, `pending` while there is none yet (shown as "…"), `unavailable` when it cannot be read (the row is hidden), and `saved` when `value` comes from an earlier session.
-- Fields that say where its value comes from, where the sensor is found on the machine: `file` for a hardware sensor, the interface name for a network rate (with `hardware`, whether that interface is a hardware device), the core for a CPU core. A sensor that always exists and is always computed the same way, such as memory usage, needs none.
+- `file`: the file the sensor is read from. A temperature has a file of its own; the memory sensors all name `/proc/meminfo`. A few sensors are read from something that is not a file and have no `file`: a card read through `nvidia-smi` has `nvidia`, and the storage space, the public IP, the refresh rate and, on some machines, the CPU frequencies are known by their key. A sensor whose value discovery wrote, such as the kernel version, has none either, and neither has an average, minimum or maximum.
+- Fields that say which part of the file is the sensor's: the interface name for a network rate (with `hardware`, whether that interface is a hardware device), the core for a CPU core.
 
 Any further field can be added to a sensor later without changing the structure.
 
-There is no field that says how to compute the value. The code has one piece for each kind of sensor and knows from the sensor's category and fields which one applies (`Sensors._definition`): a temperature with a `file` is that file's number divided by 1000, and "memory usage" is computed from `/proc/meminfo`. The sensors that are found by their key alone, such as memory usage, are listed with their label, format and computation in the `FIXED` table in `sensors.js`.
+There is no field that says how to compute the value. The code knows from the sensor's category and fields which rule applies (`Sensors._value`): a temperature is its file's number divided by 1000, and "memory usage" is computed from two lines of `/proc/meminfo`. The sensors that are found by their key alone, such as memory usage, are listed with their label, format and computation in the `FIXED` table in `sensors.js`.
 
 ## Keys
 
@@ -135,6 +136,10 @@ Other settings stay as they are: the display settings, and the options that belo
 ## What is collected
 
 The renderer sets in the catalog what it shows: it marks a sensor as `shown` when it puts it on screen and clears the mark when it takes it away, and it marks a category as `shown` while its header is on screen. The collector fills in the values of the sensors that are marked and of the headers of the categories that are marked, and reads only the files behind those. With the menu closed that is two or three files per tick.
+
+A tick is one pass over the catalog. It collects the files of the marked sensors, and for each file the sensors that are written from it. Each file is then read once, its content is taken apart once, and that read writes all its sensors; the renderer is told about them at once, so a slow source does not hold the others back. Nothing is kept between ticks about which sensors are collected: the catalog and its marks say it.
+
+An average, minimum or maximum is not read from anything. When one of them is marked, every sensor of its category is read, also those that are not on screen, and the three are computed together once, when the last of those reads is in. The voltage header works the same way: while it is on screen all voltages are read, and it shows the best one that could be read.
 
 After it changed the marks, the renderer tells the collector so (`shownChanged`); see the last section.
 

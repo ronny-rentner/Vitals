@@ -21,7 +21,7 @@ export function colorSettingsKeys() {
         .map(group => `${group}-colors`);
 }
 
-// GSettings key for threshold colors for a live sensor (shared by values + prefs).
+// GSettings key for threshold colors for a live sensor (shared by the formatter and prefs).
 export function colorsKeyForSensor(categoryName, format) {
     // All temperatures share the temperature threshold UI, including GPU rows.
     if (format === 'temp')

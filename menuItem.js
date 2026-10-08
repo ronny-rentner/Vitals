@@ -11,13 +11,13 @@ export const MenuItem = GObject.registerClass({
 
 }, class MenuItem extends PopupMenu.PopupBaseMenuItem {
 
-    _init(icon, key, label, value, checked) {
+    _init(icon, categoryName, label, value, checked) {
         super._init({ reactive: true });
 
         this._checked = checked;
         this._updateOrnament();
 
-        this._key = key;
+        this._categoryName = categoryName;
         this._gIcon = icon;
 
         // add icon
@@ -50,8 +50,9 @@ export const MenuItem = GObject.registerClass({
         this._updateOrnament();
     }
 
-    get key() {
-        return this._key;
+    // The name of the category the row's sensor belongs to.
+    get categoryName() {
+        return this._categoryName;
     }
 
     get gicon() {

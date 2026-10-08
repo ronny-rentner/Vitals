@@ -1,4 +1,4 @@
-/* Threshold color entry helpers shared by prefs and values. */
+/* Threshold color entry helpers shared by prefs and the formatter. */
 
 // Default seed for a new single-breakpoint scale (Adwaita destructive red).
 export const DEFAULT_THRESHOLD_RGBA = {

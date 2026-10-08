@@ -8,14 +8,15 @@ import {equal} from './harness.js';
 
 const CATEGORIES = ['temperature', 'voltage', 'fan', 'memory', 'processor', 'system', 'network', 'storage', 'battery', 'gpu'];
 
-// Made-up sensors for the renderer to show. Where the value of each comes from is made up as well, so for these
-// sensors the collector's own rules are replaced.
+// Made-up sensors for the renderer to show. How the value of each follows from its source's reading is made up
+// as well, so for these sensors the collector's own rules are replaced.
 class Fixtures {
     constructor(sensors) {
         this._sensors = sensors;
-        this._definitions = new Map();
-        let realDefinition = sensors._definition.bind(sensors);
-        sensors._definition = (categoryName, sensor) => this._definitions.get(sensor) ?? realDefinition(categoryName, sensor);
+        this._values = new Map();
+        let realValue = sensors._value.bind(sensors);
+        sensors._value = (categoryName, sensor, reading) =>
+            this._values.has(sensor) ? this._values.get(sensor)(reading) : realValue(categoryName, sensor, reading);
     }
 
     // Takes every sensor off the machine, as a discovery run that finds nothing does, and empties the panel.
@@ -34,10 +35,13 @@ class Fixtures {
         sensor.discovered = this.run - 1;
     }
 
-    add(categoryName, fields, inputs, compute) {
+    // Adds a sensor that is on the machine. `file` in its fields names the made-up source it is read from, and
+    // `value` is how its value follows from that source's reading. A sensor without both follows the collector's rules.
+    add(categoryName, fields, value) {
         let sensor = {status: 'pending', discovered: this.run, ...fields};
         this._sensors.catalog[categoryName].sensors.push(sensor);
-        this._definitions.set(sensor, {inputs, compute});
+        if (value)
+            this._values.set(sensor, value);
         return sensor;
     }
 }
@@ -56,7 +60,7 @@ async function waitFor(predicate, message) {
 }
 
 async function checkPanelVisibility(button, fixtures) {
-    let {average, sum, counterRate} = await import('file://' + button._extensionObject.path + '/helpers/sensorMath.js');
+    let {counterRate} = await import('file://' + button._extensionObject.path + '/helpers/sensorMath.js');
     let sensors = button._sensors;
     let settings = button._settings;
     let failures = [];
@@ -86,7 +90,7 @@ async function checkPanelVisibility(button, fixtures) {
             ['processor', 'percent', true, false], ['system', 'load', false, false],
             ['network', 'speed', true, false], ['storage', 'storage-rate', true, false],
             ['battery', 'watt', false, false], ['gpu', 'percent', false, false],
-            ['temperature', 'temp', false, true], ['network', 'speed', true, true]
+            ['temperature', 'temp', false, true]
         ]) {
             let name = categoryName + (aggregate ? ' aggregate' : '');
             let source = 'test:visibility:' + name;
@@ -98,15 +102,15 @@ async function checkPanelVisibility(button, fixtures) {
                 return value;
             }});
             fixtures.retireAll();
-            let compute = rate ? ([s]) => counterRate(s, value => value) : ([s]) => s.value;
+            let sourceValue = rate ? s => counterRate(s, value => value) : s => s.value;
             let fixture;
             if (aggregate) {
-                let parts = ['a', 'b'].map(part =>
-                    fixtures.add(categoryName, {key: 'visibility/' + part, label: 'Visibility part ' + part, format}, [source], compute));
-                fixture = fixtures.add(categoryName, {key: 'visibility-aggregate', label: 'Visibility aggregate', format},
-                    parts, categoryName == 'network' ? sum : average);
+                for (let part of ['a', 'b'])
+                    fixtures.add(categoryName, {key: 'visibility/' + part, label: 'Visibility part ' + part, format, file: source}, sourceValue);
+                // The collector's own average over the two parts.
+                fixture = fixtures.add(categoryName, {key: 'average', label: 'Visibility aggregate', format, aggregate: true, section: 1});
             } else {
-                fixture = fixtures.add(categoryName, {key: 'visibility/fixture', label: 'Visibility fixture', format}, [source], compute);
+                fixture = fixtures.add(categoryName, {key: 'visibility/fixture', label: 'Visibility fixture', format, file: source}, sourceValue);
             }
             let category = sensors.catalog[categoryName];
             category.header = fixture;
@@ -216,7 +220,7 @@ async function checkPanelVisibility(button, fixtures) {
                 await Scripting.sleep(50);
                 let initialWidth = label(fixture).width;
                 time += 60;
-                // 444 MB/s, or 888 MB/s for the sum of two, which is wider than the few B/s before and after it.
+                // 444 MB/s, which is wider than the few B/s before and after it.
                 value += 444000000 * 60;
                 await button._querySensors();
                 await Scripting.sleep(50);
@@ -357,8 +361,8 @@ export async function run() {
     let a = 40, b = 0, reads = 0;
     sensors.addSource('test:a', {read: async () => { reads++; return a; }});
     sensors.addSource('test:b', {read: async () => { reads++; return b; }});
-    let first = fixtures.add('temperature', {key: 'fixture/a', label: 'Fixture A', format: 'temp'}, ['test:a'], ([s]) => s.value);
-    let second = fixtures.add('temperature', {key: 'fixture/b', label: 'Fixture B', format: 'temp'}, ['test:b'], ([s]) => s.value);
+    let first = fixtures.add('temperature', {key: 'fixture/a', label: 'Fixture A', format: 'temp', file: 'test:a'}, s => s.value);
+    let second = fixtures.add('temperature', {key: 'fixture/b', label: 'Fixture B', format: 'temp', file: 'test:b'}, s => s.value);
     // The collector's own average, minimum and maximum over the two made-up temperatures.
     sensors._discoverAggregates(fixtures.run);
     let temperature = sensors.catalog.temperature;
@@ -425,7 +429,7 @@ export async function run() {
     // Every category opens and closes at once, a short one and one that is long enough to need a scrollbar.
     let systemGroup = button._groups.system;
     for (let index = 0; index < 60; index++)
-        fixtures.add('system', {key: 'fixture/' + index, label: 'Fixture ' + index, format: 'string', value: index}, [], () => index);
+        fixtures.add('system', {key: 'fixture/' + index, label: 'Fixture ' + index, format: 'string', value: index, status: 'ready'});
     sensors.catalogChanged();
     let click = group => group.activate(Clutter.get_current_event());
     for (let [group, needsScrollbar] of [[button._groups.temperature, false], [systemGroup, true]]) {
@@ -460,8 +464,8 @@ export async function run() {
     let shortened = label => label.get_clutter_text().get_layout().is_ellipsized();
     let menuWidth = button.menu.box.width;
     let longLabel = fixtures.add('temperature',
-        {key: 'fixture/long', label: 'A temperature sensor with a label that is far too long for any menu', format: 'temp'},
-        ['test:a'], ([s]) => s.value);
+        {key: 'fixture/long', label: 'A temperature sensor with a label that is far too long for any menu', format: 'temp',
+            file: 'test:a'}, s => s.value);
     sensors.catalogChanged();
     a = 1e15;
     await button._querySensors();
@@ -512,8 +516,8 @@ export async function run() {
     button.menu.close();
     await Scripting.sleep(50);
     equal(reads, captures, 'closing menu does not query');
-    equal([...sensors.active.keys()].map(sensor => sensor.key).join(','), first.key + ',' + second.key,
-        'with the menu closed only the pinned sensors are computed');
+    equal([...sensors.activeSources.values()].flat().map(([, sensor]) => sensor.key).join(','), first.key + ',' + second.key,
+        'with the menu closed only the pinned sensors are read');
 
     // Rows are created and destroyed one by one: count them while interfaces come and go.
     let rowsCreated = [];
@@ -725,7 +729,6 @@ export async function run() {
     sensors.setPanelSensorVisible('memory', memoryUsage, true);
     button._syncCatalog();
     await button._querySensors();
-    let lastText = button._panelItems.get(panelLink(sensors, memoryUsage)).value.text;
     equal(memoryUsage.status, 'ready', 'memory usage read before the extension stops');
 
     Main.extensionManager.disableExtension('Vitals@CoreCoding.com');
@@ -738,11 +741,11 @@ export async function run() {
     Main.extensionManager.enableExtension('Vitals@CoreCoding.com');
     await waitFor(() => Main.panel.statusArea.vitalsMenu, 'extension re-enabled');
     let restarted = Main.panel.statusArea.vitalsMenu;
-    await restarted._discoverSensors();
-    // The next tick is a minute away, so what the top bar shows now comes from the saved catalog.
     let restoredLink = restarted._sensors.catalog.panel.sensors[0];
-    equal(restoredLink.sensor.status, 'saved', 'the saved reading is kept until the first tick');
-    equal(restarted._panelItems.get(restoredLink).value.text, lastText, 'and the top bar shows it');
+    equal(restoredLink.sensor.value, memoryUsage.value, 'the saved reading is there at once after the start');
+    // The next tick is a minute away; the first reading must not wait for it.
+    await waitFor(() => restoredLink.sensor.status == 'ready', 'a first reading right after the start');
+    equal(restarted._panelItems.get(restoredLink).value.text.endsWith('%'), true, 'and the top bar shows it');
     print('PASS extension disable cleanup, saved readings and re-enable');
     print('Vitals Shell checks passed');
 }

@@ -160,6 +160,8 @@ test('a sensor says where it is read from and how it is shown, and its key leave
     equal(temperature.label, 'thinkpad CPU', 'the label the kernel gives the input');
     equal(temperature.format, 'temp');
     equal(find('temperature', 'coretemp/temp1').label, 'Processor 0', 'a renamed label does not change the key');
+    equal(find('memory', 'usage').file, '/proc/meminfo', 'a sensor that shares its file with others names it too');
+    equal(find('network', 'eth0/rx').file, NETWORK);
     equal(find('network', 'eth0/rx').interface, 'eth0');
     equal(find('network', 'eth0/rx').hardware, true, 'a network card is hardware');
     equal(find('network', 'lo/tx').hardware, false, 'the loopback is not');
@@ -278,7 +280,7 @@ test('an unplugged device stays in the catalog and is not read; when it returns 
     await sensors.discover();
     equal(find('voltage', USB_NAME + '/in0'), undefined, 'not present');
     equal(sensors.catalog.voltage.sensors.includes(usbVoltage), true, 'still in the catalog');
-    equal(sensors.active.has(usbVoltage), false, 'not computed, although it is marked as shown');
+    equal(sensors.activeSources.has(usbVoltage.file), false, 'not read, although it is marked as shown');
     for (let file of ['name', 'in0_input', 'device/type'])
         machine.write(USB + file, machineFixture[USB + file]);
     await sensors.discover();
@@ -407,6 +409,24 @@ test('a second launch finds the saved sensors again, in their order, with their 
     await second.sensors.discover();
     equal(keys(second.sensors.catalog.temperature), order, 'discovery matches every saved sensor and adds none');
     equal(second.find('memory', 'usage'), restored, 'the saved sensor is the one discovery found');
+    second.sensors.destroy();
+});
+
+test('a saved reading that is older than a minute is not shown at the next launch', async () => {
+    let first = setup();
+    await first.sensors.discover();
+    let usage = first.find('memory', 'usage');
+    first.show(usage);
+    await first.sensors.poll();
+    first.sensors.destroy();
+    // The machine was off for two minutes.
+    let saved = readCatalog(first.configuration);
+    let savedUsage = saved.memory.sensors.find(sensor => sensor.key == 'usage');
+    savedUsage.updated -= 120;
+    writeCatalog(first.configuration, saved);
+
+    let second = setup({configuration: first.configuration});
+    equal(second.find('memory', 'usage').status, 'pending', 'an old reading says nothing about now');
     second.sensors.destroy();
 });
 
@@ -840,14 +860,14 @@ test('menu demand changes preserve network readings between shared ticks', async
     advance(updateSeconds);
     machine.write(NETWORK, networkDevices(busy));
     await sensors.poll();
-    let sample = sensors.reading('source:/proc/net/dev');
+    let sample = sensors.reading(NETWORK);
     machine.reads.length = 0;
     for (let cycle = 0; cycle < 3; cycle++) {
         advance(0.1);
         show(download, find('network', 'combined'), 'memory');
         show(download);
         equal(download.value, (busy.eth0.rx - initial.eth0.rx) / updateSeconds, 'rate retained after menu close');
-        equal(sensors.reading('source:/proc/net/dev'), sample, 'counter and timestamp retained');
+        equal(sensors.reading(NETWORK), sample, 'counter and timestamp retained');
     }
     equal(machine.reads.includes(NETWORK), false, 'no premature network read');
     advance(updateSeconds);
