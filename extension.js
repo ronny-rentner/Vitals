@@ -139,7 +139,7 @@ var VitalsMenuButton = GObject.registerClass({
 
         for (let setting of [
             'include-public-ip', 'network-public-ip-provider', 'include-static-info', 'include-static-gpu-info',
-            'battery-slot', 'storage-path', 'hide-zeros'
+            'storage-path', 'hide-zeros'
         ])
             this._settings.connectObject('changed::' + setting, this._discoverSensors.bind(this), this);
 

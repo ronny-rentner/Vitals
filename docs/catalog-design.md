@@ -123,7 +123,7 @@ The readings are written when the extension stops, which is at logout and each t
 
 The setting holds the catalog as a structure, not as text. GNOME's settings format stores nested records and lists directly (type `a{sv}`). `helpers/storedCatalog.js` turns the catalog's plain data into that format; reading it back is built in.
 
-Other settings stay as they are: the display settings, and the options that belong to one category, such as hide-zeros, the storage path, the battery slot and the public-IP options.
+Other settings stay as they are: the display settings, and the options that belong to one category, such as hide-zeros, the storage path and the public-IP options.
 
 ## The renderer
 

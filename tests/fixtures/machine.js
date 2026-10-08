@@ -33,6 +33,14 @@ export const machine = deepFreeze({
     '/sys/class/hwmon/hwmon4/name': 'BAT0\n',
     '/sys/class/hwmon/hwmon4/in0_input': '7400\n',
     '/sys/class/hwmon/hwmon4/device/type': 'Battery\n',
+    '/sys/class/power_supply/AC/type': 'Mains\n',
+    '/sys/class/power_supply/BAT0/type': 'Battery\n',
+    '/sys/class/power_supply/BAT0/uevent': 'DEVTYPE=power_supply\nPOWER_SUPPLY_NAME=BAT0\nPOWER_SUPPLY_TYPE=Battery\n' +
+        'POWER_SUPPLY_STATUS=Not charging\nPOWER_SUPPLY_PRESENT=1\nPOWER_SUPPLY_TECHNOLOGY=Li-poly\n' +
+        'POWER_SUPPLY_CYCLE_COUNT=767\nPOWER_SUPPLY_VOLTAGE_MIN_DESIGN=15440000\nPOWER_SUPPLY_VOLTAGE_NOW=17324000\n' +
+        'POWER_SUPPLY_POWER_NOW=0\nPOWER_SUPPLY_ENERGY_FULL_DESIGN=57000000\nPOWER_SUPPLY_ENERGY_FULL=36420000\n' +
+        'POWER_SUPPLY_ENERGY_NOW=35620000\nPOWER_SUPPLY_CAPACITY=98\nPOWER_SUPPLY_CAPACITY_LEVEL=Normal\n',
+    '/sys/class/power_supply/ucsi-source-psy-USBC000:001/type': 'USB\n',
     '/sys/class/hwmon/hwmon5/name': 'thinkpad\n',
     '/sys/class/hwmon/hwmon5/temp1_label': 'CPU\n',
     '/sys/class/hwmon/hwmon5/temp1_input': '40000\n',

@@ -194,7 +194,7 @@ class Settings {
                 },
             },
             'storage': { toggle: 'show-storage', widgets: ['storage-path', 'storage-measurement'] },
-            'battery': { toggle: 'show-battery', widgets: ['battery-slot'] },
+            'battery': { toggle: 'show-battery', widgets: [] },
             'gpu': { toggle: 'show-gpu', widgets: ['include-static-gpu-info'] },
         };
 
@@ -242,7 +242,7 @@ class Settings {
         // process individual drop down sensor preferences
         sensors = [
             'position-in-panel', 'unit', 'network-speed-format', 'network-speed-unit',
-            'memory-measurement', 'storage-measurement', 'battery-slot', 'icon-style',
+            'memory-measurement', 'storage-measurement', 'icon-style',
             'network-public-ip-provider'
         ];
         for (let key in sensors) {

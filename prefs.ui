@@ -974,27 +974,6 @@
             </child>
           </object>
         </child>
-        <child>
-          <object class="AdwActionRow">
-            <property name="title" translatable="yes">Display Battery</property>
-            <property name="activatable-widget">battery-slot</property>
-            <child type="suffix">
-              <object class="GtkComboBoxText" id="battery-slot">
-                <property name="valign">center</property>
-                <items>
-                  <item translatable="yes">BAT0</item>
-                  <item translatable="yes">BAT1</item>
-                  <item translatable="yes">BAT2</item>
-                  <item translatable="yes">BATT</item>
-                  <item translatable="yes">CMB0</item>
-                  <item translatable="yes">CMB1</item>
-                  <item translatable="yes">CMB2</item>
-                  <item translatable="yes">macsmc-battery</item>
-                </items>
-              </object>
-            </child>
-          </object>
-        </child>
       </object>
     </child>
   </object>

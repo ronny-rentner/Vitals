@@ -70,7 +70,6 @@ const PARSERS = {
     }
 };
 const PUBLIC_IP_URLS = ['https://ipv4.corecoding.com', 'https://api.myip.com', 'https://api.ipify.org?format=json'];
-const BATTERY_DEVICES = ['BAT0', 'BAT1', 'BAT2', 'BATT', 'CMB0', 'CMB1', 'CMB2', 'macsmc-battery'];
 // Thermal zone types that are control interfaces, not sensors.
 // INT3400 is Intel's thermal policy switch; its zone reports a fixed dummy temperature.
 const NON_SENSOR_THERMAL_ZONE_LABELS = ['INT3400 Thermal'];
@@ -94,6 +93,8 @@ const NVIDIA_SCALE = {'percent': 0.01, 'temp': 1, 'memory': 1048576, 'hertz': 10
 // average, minimum or maximum over a battery, a system rail and a USB supply says nothing.
 const AGGREGATED = {temperature: 'temp', fan: 'fan'};
 const AGGREGATES = {
+    // The power rate of all batteries together, on a machine that has more than one.
+    'total-power-rate': SensorMath.sum,
     average: SensorMath.average,
     minimum: sensors => Math.min(...sensors.map(sensor => sensor.value)),
     maximum: sensors => Math.max(...sensors.map(sensor => sensor.value))
@@ -104,9 +105,9 @@ const NETWORK_SECTION = {machineSpeed: 1, hardwareInterfaces: 2, volume: 3, othe
 // What an interface that is hardware is called, by the DEVTYPE the kernel reports for it. A network card reports none.
 // "WiFi" is spelled as in the two WiFi labels below, which 22 translations are filed under.
 const HARDWARE_INTERFACE_KINDS = {wlan: 'WiFi', wwan: 'Mobile'};
-// The sensor whose value a category shows in its menu header. Temperature, voltage, fan and gpu choose theirs in _chooseHeader.
+// The sensor whose value a category shows in its menu header. Temperature, voltage, fan, battery and gpu choose theirs in _chooseHeader.
 const HEADER_KEYS = {
-    memory: 'usage', processor: 'usage', system: 'load-1m', storage: 'free', battery: 'power-rate', network: 'device-rx'
+    memory: 'usage', processor: 'usage', system: 'load-1m', storage: 'free', network: 'device-rx'
 };
 
 // A sensor that is found by its key alone: what the catalog says about it, and how its value follows from the
@@ -275,8 +276,8 @@ export class Sensors {
         this._nvidia = null;
         this._frameSignal = 0;
         this._frameTimes = [];
-        this._batteryTimes = [];
-        this._batteryState = '';
+        // For each battery file, the charging state it is in and its last readings of the time left in that state.
+        this._batteryTimes = new Map();
         this._registerSystemSources();
         this.catalog = this._load();
         // The timestamp of the latest discovery run. Every run gets a later one.
@@ -420,13 +421,19 @@ export class Sensors {
     // The id of the source a sensor is read from: its file, or a source that is not a file. A sensor whose value
     // discovery wrote, such as the kernel version, has none, and neither has an average, minimum or maximum.
     _sourceOf(categoryName, sensor) {
-        return sensor.file ?? (sensor.nvidia ? NVIDIA : FIXED[categoryName]?.[sensor.key]?.source);
+        return sensor.file ?? (sensor.nvidia ? NVIDIA : this._fixed(categoryName, sensor)?.source);
+    }
+
+    // The sensor's entry in the FIXED table, if it has one. A battery's sensors have the battery's name in their
+    // key, since a machine can have several batteries, and name their entry in `field`.
+    _fixed(categoryName, sensor) {
+        return FIXED[categoryName]?.[categoryName == 'battery' ? sensor.field : sensor.key];
     }
 
     // A sensor's value, from the reading of its source. The catalog holds no functions; which rule applies
     // follows from the category and the sensor's fields alone.
     _value(categoryName, sensor, reading) {
-        let known = FIXED[categoryName]?.[sensor.key];
+        let known = this._fixed(categoryName, sensor);
         if (known?.value)
             return known.value(reading, sensor, this);
         if (sensor.interface) {
@@ -601,8 +608,10 @@ export class Sensors {
             category.header = this._chooseHeader(name);
             return category.header ? [category.header] : [];
         }
+        // The batteries' total is over their power rates; an average, minimum or maximum is over every sensor.
         // A sensor that cannot be read is left out, so one of them does not take the summary away.
-        let readable = this._measured(category).filter(sensor => sensor.status != 'unavailable');
+        let readable = this._measured(category).filter(sensor =>
+            sensor.status != 'unavailable' && (name != 'battery' || sensor.field == 'power-rate'));
         let pending = readable.some(sensor => sensor.status == 'pending');
         let aggregates = category.sensors.filter(sensor => sensor.aggregate && sensorPresent(category, sensor));
         for (let sensor of aggregates)
@@ -684,15 +693,14 @@ export class Sensors {
     _batteryTimeLeft(sample, batteryFile) {
         let value = SensorMath.batteryTime(sample.value);
         if (typeof value != 'number') return value;
-        if (this._batteryState != batteryFile + sample.value.state) {
-            this._batteryState = batteryFile + sample.value.state;
-            this._batteryTimes = [];
+        if (this._batteryTimes.get(batteryFile)?.state != sample.value.state)
+            this._batteryTimes.set(batteryFile, {state: sample.value.state, times: []});
+        let times = this._batteryTimes.get(batteryFile).times;
+        if (!times.length || times[times.length - 1].time != sample.time) {
+            times.push({value, time: sample.time});
+            if (times.length > 10) times.shift();
         }
-        if (!this._batteryTimes.length || this._batteryTimes[this._batteryTimes.length - 1].time != sample.time) {
-            this._batteryTimes.push({value, time: sample.time});
-            if (this._batteryTimes.length > 10) this._batteryTimes.shift();
-        }
-        return SensorMath.average(this._batteryTimes);
+        return SensorMath.average(times);
     }
 
     // The sources that are not one file whose content is read as it is. A file gets its source when it is first read (see _select).
@@ -814,7 +822,7 @@ export class Sensors {
             this._cancelRead(this.sources.get(id));
         let configuration = () => JSON.stringify([this.catalog.gpu.enabled, ...[
             'include-static-info', 'include-static-gpu-info', 'include-public-ip',
-            'network-public-ip-provider', 'battery-slot', 'storage-path', 'hide-zeros'
+            'network-public-ip-provider', 'storage-path', 'hide-zeros'
         ].map(key => this._settings.get_value(key).deep_unpack())]);
         // Each step with the categories it feeds. A category is complete when every step that feeds it succeeded.
         let steps = [
@@ -883,6 +891,9 @@ export class Sensors {
                 let ranked = this._measured(category).sort((a, b) => a.priority - b.priority || a.key.localeCompare(b.key));
                 return ranked.find(sensor => sensor.status != 'unavailable') ?? ranked[0];
             }
+            case 'battery':
+                // With one battery there is no total row; the header then shows that battery's power rate.
+                return withKey('total-power-rate') ?? present.find(sensor => sensor.field == 'power-rate');
             case 'gpu':
                 return present.find(sensor => sensor.field == 'utilization.gpu') ??
                     present.find(sensor => sensor.file?.endsWith('/gpu_busy_percent')) ?? withKey('refresh-rate');
@@ -1103,19 +1114,42 @@ export class Sensors {
         }
     }
 
+    // Every battery that powers the machine, whatever the kernel calls it. A sensor's key is the battery's name
+    // and the name of the value.
     async _discoverBattery(run) {
-        let file = '/sys/class/power_supply/' + BATTERY_DEVICES[this._settings.get_int('battery-slot')] + '/uevent';
-        let contents = await this._optionalRead(file);
-        if (contents === null) return;
-        let batteryFields = SensorMath.parseBattery(contents);
-        for (let [field, key] of Object.entries(BATTERY_FIELD_KEYS)) {
-            if (batteryFields[field] === undefined ||
-                (typeof batteryFields[field] == 'number' && !Number.isFinite(batteryFields[field])))
-                continue;
-            this._foundFixed(run, 'battery', key, {file});
+        let root = '/sys/class/power_supply/';
+        let supplies;
+        try {
+            supplies = await this._list(root, this._discoveryCancellation);
+        } catch (error) {
+            // A machine without power supplies of its own, such as a virtual machine, does not have the directory.
+            if (error.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.NOT_FOUND)) return;
+            throw error;
         }
-        this._foundFixed(run, 'battery', 'capacity', {file});
-        this._foundFixed(run, 'battery', 'time-left', {file});
+        let batteries = [];
+        for (let name of supplies) {
+            if (await this._optionalRead(root + name + '/type') != 'Battery') continue;
+            // The battery of a mouse or a keyboard is listed here too; the kernel marks it as a device's.
+            if (await this._optionalRead(root + name + '/scope') == 'Device') continue;
+            batteries.push(name);
+        }
+        for (let name of batteries) {
+            let file = root + name + '/uevent';
+            let batteryFields = SensorMath.parseBattery(await this._read(file, this._discoveryCancellation));
+            let found = Object.entries(BATTERY_FIELD_KEYS).filter(([batteryField]) => batteryFields[batteryField] !== undefined &&
+                !(typeof batteryFields[batteryField] == 'number' && !Number.isFinite(batteryFields[batteryField])))
+                .map(([, field]) => field);
+            for (let field of [...found, 'capacity', 'time-left']) {
+                let {label, ...fields} = FIXED.battery[field].fields;
+                // With several batteries, the labels say which one a value belongs to.
+                this._found(run, 'battery', {key: name + '/' + field, ...fields, field, file,
+                    label: batteries.length > 1 ? name + ' ' + label : label});
+            }
+        }
+        if (batteries.length > 1) {
+            this._found(run, 'battery', {key: 'total-power-rate', label: 'Total power rate', format: 'watt',
+                aggregate: true, section: 1});
+        }
     }
 
     // The average, minimum and maximum over the temperatures and over the fans the machine has.

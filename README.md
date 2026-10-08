@@ -7,7 +7,7 @@ Vitals collects the inputs needed by pinned values, visible category summaries a
 
 Temperature’s “Hide initially zero sensors” option excludes sensors that read zero during discovery from collection and averages. Excluded sensors are retried on rediscovery. Accepted sensors remain valid if they later reach zero. With the option off, readable zero temperatures are included. Zero readings in other categories remain visible.
 
-![How it works](https://raw.githubusercontent.com/corecoding/Vitals/main/howtouse.gif)
+[Screenshots](docs/screenshots/README.md)
 
 ## Installation
 

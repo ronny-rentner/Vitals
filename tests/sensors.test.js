@@ -116,6 +116,17 @@ function installNvidiaSmi() {
     };
 }
 
+// Adds a battery as the kernel shows it. `status` is "Charging", "Discharging" or "Not charging"; `scope` is
+// "Device" for the battery of a mouse or keyboard, and a battery of the machine has none.
+function plugInBattery(machine, name, {status, powerWatts, percent, scope}) {
+    machine.write('/sys/class/power_supply/' + name + '/type', 'Battery\n');
+    if (scope)
+        machine.write('/sys/class/power_supply/' + name + '/scope', scope + '\n');
+    machine.write('/sys/class/power_supply/' + name + '/uevent', 'POWER_SUPPLY_NAME=' + name + '\nPOWER_SUPPLY_STATUS=' + status +
+        '\nPOWER_SUPPLY_POWER_NOW=' + powerWatts * 1000000 + '\nPOWER_SUPPLY_CAPACITY=' + percent +
+        '\nPOWER_SUPPLY_ENERGY_FULL_DESIGN=50000000\nPOWER_SUPPLY_ENERGY_FULL=40000000\nPOWER_SUPPLY_ENERGY_NOW=20000000\n');
+}
+
 // Adds what the kernel shows for a hardware network interface: its own description and its device.
 // `deviceType` is the DEVTYPE the kernel reports, such as "wlan"; a network card has none.
 function plugInInterface(machine, name, deviceType) {
@@ -966,6 +977,43 @@ test('showing the same NVIDIA sensors in another order keeps the running process
     equal(nvidiaSmi.streams().length, 1, 'process retained');
     sensors.destroy();
     await nvidiaSmi.allStopped();
+});
+
+test('the machine\'s battery is found by its type, whatever its name; a mouse\'s battery is not', async () => {
+    let {sensors, machine, find, show} = setup();
+    let percent = 80;
+    machine.remove('/sys/class/power_supply/BAT0/type');
+    machine.remove('/sys/class/power_supply/BAT0/uevent');
+    plugInBattery(machine, 'main-battery', {status: 'Not charging', powerWatts: 0, percent});
+    plugInBattery(machine, 'hidpp_battery_0', {status: 'Discharging', powerWatts: 0, percent: 50, scope: 'Device'});
+    await sensors.discover();
+    let percentage = find('battery', 'main-battery/percentage');
+    equal(percentage.label, 'Percentage', 'with one battery the labels do not name it');
+    equal(find('battery', 'hidpp_battery_0/percentage'), undefined, 'the battery of a device is left out');
+    equal(find('battery', 'total-power-rate'), undefined, 'one battery has no total');
+    equal(sensors.catalog.battery.header, find('battery', 'main-battery/power-rate'), 'the header shows its power rate');
+    show(percentage);
+    await sensors.poll();
+    equal(percentage.value, percent / 100);
+    sensors.destroy();
+});
+
+test('two batteries each have their own sensors, and the header shows their power rates together', async () => {
+    let {sensors, machine, find, show} = setup();
+    let dischargingWatts = 12, chargingWatts = 5;
+    plugInBattery(machine, 'BAT0', {status: 'Discharging', powerWatts: dischargingWatts, percent: 40});
+    plugInBattery(machine, 'BAT1', {status: 'Charging', powerWatts: chargingWatts, percent: 90});
+    await sensors.discover();
+    equal(find('battery', 'BAT0/percentage').label, 'BAT0 Percentage', 'the labels say which battery');
+    equal(find('battery', 'BAT1/percentage').label, 'BAT1 Percentage');
+    let total = find('battery', 'total-power-rate');
+    equal(sensors.catalog.battery.header, total, 'the header shows the total');
+    show('battery', find('battery', 'BAT0/time-left'), find('battery', 'BAT1/time-left'));
+    await sensors.poll();
+    equal(find('battery', 'BAT0/power-rate').value, -dischargingWatts, 'a battery that is discharging has a negative rate');
+    equal(total.value, chargingWatts - dischargingWatts, 'the total is the sum of both');
+    equal(find('battery', 'BAT0/time-left').value !== find('battery', 'BAT1/time-left').value, true, 'each battery has its own time left');
+    sensors.destroy();
 });
 
 test('panel links are shown, hidden and moved through Sensors, which saves them', async () => {
