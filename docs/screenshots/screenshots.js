@@ -102,13 +102,19 @@ export async function run() {
         await capture(name, button);
         reset(options);
     };
-    // The menu with all categories closed, or with one of them open.
-    let menu = async (name, categoryName = null) => {
+    // The menu with all categories closed, or with one of them open, or with the actions of one of its rows open.
+    let menu = async (name, categoryName = null, actionsOf = null) => {
         button.menu.open();
         if (categoryName)
             button._groups[categoryName].menu.open();
         await read();
+        if (actionsOf) {
+            button._rows.get(actionsOf).activate();
+            await Scripting.sleep(300);
+        }
         await capture(name, button, button.menu.actor);
+        if (actionsOf)
+            button._rows.get(actionsOf).activate();
         // A category stays open while the menu is closed, and the next picture may want all of them closed.
         if (categoryName)
             button._groups[categoryName].menu.close(true);
@@ -144,6 +150,7 @@ export async function run() {
 
         await menu('menu' + style);
         await menu('menu-network' + style, 'network');
+        await menu('menu-actions' + style, 'network', find('network', 'device-tx'));
     }
     desktop.reset('color-scheme');
 

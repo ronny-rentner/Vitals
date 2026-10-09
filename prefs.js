@@ -71,8 +71,10 @@ class Settings {
                 if (!labelsByPage[page])
                     labelsByPage[page] = new Map();
                 // A GPU temperature is on the temperature page; its label says where it belongs.
+                // The name the user gave the sensor in the menu, or its own label.
+                let label = sensor.customLabel ?? sensor.label;
                 labelsByPage[page].set(categoryName + '/' + sensor.key,
-                    page == categoryName ? sensor.label : `${sensor.label} (${categoryName})`);
+                    page == categoryName ? label : `${label} (${categoryName})`);
             }
         }
         return labelsByPage;
@@ -215,7 +217,7 @@ class Settings {
         // process sensor toggles
         let sensors = [ 'use-higher-precision',
                         'include-aggregates', 'hide-zeros', 'include-public-ip', 'network-hardware-only',
-                        'network-public-ip-show-flag', 'fixed-widths', 'emphasize-values',
+                        'network-public-ip-show-flag', 'fixed-widths', 'emphasize-values', 'animate-categories',
                         'hide-icons', 'menu-centered', 'include-static-info',
                         'include-static-gpu-info', 'allow-panel-dragging' ];
 

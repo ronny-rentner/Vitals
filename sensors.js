@@ -362,6 +362,31 @@ export class Sensors {
         this._save();
     }
 
+    // Gives a sensor the name the user typed for it, or its own label again when the name is empty.
+    renameSensor(sensor, customLabel) {
+        sensor.customLabel = customLabel || undefined;
+        this._save();
+        this.catalogChanged();
+    }
+
+    // Takes a sensor out of the menu, or puts it back. A hidden sensor also does not count in the average, minimum
+    // and maximum of its category.
+    setSensorHidden(sensor, hidden) {
+        sensor.hidden = hidden || undefined;
+        this._save();
+        this.catalogChanged();
+    }
+
+    // Makes a sensor the one its category shows in its header. Without a sensor, the choice is the collector's again.
+    setCategoryDefault(categoryName, sensor = null) {
+        let category = this.catalog[categoryName];
+        for (let candidate of category.sensors)
+            candidate.categoryDefault = candidate == sensor || undefined;
+        category.header = this._chooseHeader(categoryName);
+        this._save();
+        this.catalogChanged();
+    }
+
     // Moves a panel link in front of another one, or to the end when no other is given.
     movePanelLink(link, beforeLink = null) {
         let links = this.catalog.panel.sensors;
@@ -398,10 +423,10 @@ export class Sensors {
         this._writeActive();
     }
 
-    // The temperatures, voltages or fan speeds of a category that are read from the machine, without the
-    // average, minimum and maximum that temperatures and fans have over them.
+    // The temperatures, voltages or fan speeds of a category that are read from the machine and that the user has
+    // not hidden, without the average, minimum and maximum that temperatures and fans have over them.
     _measured(category) {
-        return category.sensors.filter(sensor => sensorPresent(category, sensor) && !sensor.aggregate);
+        return category.sensors.filter(sensor => sensorPresent(category, sensor) && !sensor.aggregate && !sensor.hidden);
     }
 
     // The names of the network interfaces that are hardware, such as a network card or a Wi-Fi adapter.
@@ -467,7 +492,8 @@ export class Sensors {
                 if (name == 'voltage' ? category.shown : category.sensors.some(sensor => sensor.aggregate && onScreen(sensor)))
                     summarised.add(name);
                 for (let sensor of category.sensors) {
-                    if (!(summarised.has(name) ? sensorPresent(category, sensor) : onScreen(sensor))) continue;
+                    let summarisedSensor = summarised.has(name) && sensorPresent(category, sensor) && !sensor.hidden;
+                    if (!onScreen(sensor) && !summarisedSensor) continue;
                     let id = this._sourceOf(name, sensor);
                     if (id === undefined) continue;
                     if (!this.sources.has(id)) {
@@ -882,6 +908,9 @@ export class Sensors {
         let category = this.catalog[categoryName];
         let present = category.sensors.filter(sensor => sensorPresent(category, sensor));
         let withKey = key => present.find(sensor => sensor.key == key);
+        // The sensor the user chose in the menu comes first, while it is on the machine.
+        let chosen = present.find(sensor => sensor.categoryDefault);
+        if (chosen) return chosen;
         switch (categoryName) {
             case 'temperature':
             case 'fan':

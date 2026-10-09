@@ -28,6 +28,14 @@ let vitalsMenu;
 // value that stays shorter, such as free memory, gives the room back.
 const WIDTH_MEMORY_SECONDS = 60;
 
+// How long the panel with a sensor's actions takes to slide open or shut, and how strongly the rest of the menu is
+// drawn while it is open. 255 is full strength.
+const SENSOR_PANEL_MILLISECONDS = 150;
+const SENSOR_PANEL_DIMMED_OPACITY = 90;
+
+// How long a category takes to slide open or shut, as a submenu of GNOME Shell does.
+const CATEGORY_SLIDE_MILLISECONDS = 250;
+
 // The order of labels in the menu: natural order for numbers, so that "Core 2" comes before "Core 10".
 // One collator for all comparisons; String.localeCompare with options builds a new one on every call.
 const LABEL_ORDER = new Intl.Collator(undefined, {numeric: true, sensitivity: 'base'});
@@ -73,6 +81,13 @@ var VitalsMenuButton = GObject.registerClass({
         this._widths = new Map();
         // Category name to the sensor whose value its header shows.
         this._headerSensors = new Map();
+        // The panel with a sensor's actions that is open under the sensor's row, with what belongs to it: the
+        // sensor, the actions, the panel's head, and what is dimmed while it is open.
+        this._rowActions = {sensor: null, items: []};
+        // Category name to the row that shows its hidden sensors, for the categories that have some.
+        this._unhideRows = new Map();
+        // The names of the categories whose hidden sensors are in the menu at the moment. This is not saved.
+        this._hiddenShown = new Set();
         // Category name to the line above the rows that are set apart at its end, where there is one.
         this._separators = new Map();
         // The icon shown in the top bar while no sensor is.
@@ -255,16 +270,68 @@ var VitalsMenuButton = GObject.registerClass({
         this._groups[groupName]._statusLabel.text = _('No Data');
 
         // GNOME Shell slides a submenu open and shut only when it needs no scrollbar, and shows one with a scrollbar
-        // at once. So that every category behaves the same, none is animated.
+        // at once. So that every category behaves the same, the Shell's slide is never used: with the
+        // "animate categories" option, every category slides the way described below, and without it none does.
         let submenu = this._groups[groupName].menu;
         let openSubmenu = submenu.open.bind(submenu);
         let closeSubmenu = submenu.close.bind(submenu);
-        submenu.open = () => openSubmenu(false);
-        // The open category is still open when the menu is opened again. GNOME Shell closes the submenus after
-        // the menu has closed, and that is the one close it asks for without any animation; it is left out.
+        let slide = {duration: CATEGORY_SLIDE_MILLISECONDS, mode: Clutter.AnimationMode.EASE_OUT_EXPO};
+        submenu.open = () => {
+            // What the menu needs around its rows. It is measured while the menu is below its height limit, where
+            // the menu asks for all it needs; at the limit it asks for less, so the largest value seen is kept.
+            this._menuFrame = Math.max(this._menuFrame ?? 0,
+                this.menu.actor.get_preferred_height(-1)[1] - this.menu.box.get_preferred_height(-1)[1]);
+            // A category that is still sliding shut is closed for good now, so that only this one moves.
+            for (let group of Object.values(this._groups))
+                group.menu.actor.remove_all_transitions();
+            // Inside this call the Shell closes the category that was open; see submenu.close.
+            this._slideShutOnOpen = null;
+            this._openingCategory = true;
+            openSubmenu(false);
+            this._openingCategory = false;
+            // An empty submenu does not open.
+            if (!submenu.isOpen || !this._settings.get_boolean('animate-categories')) return;
+            // The slide ends at the height the submenu gets, not at the height of all its rows: what does not
+            // fit under the menu's height limit is scrolled, and sliding past that would overshoot and jump back.
+            // The menu asks for no more than its limit, so what its rows and frame need beyond that is the overflow.
+            // The height an actor asks for includes its margins, and the height that is set on it does not.
+            let [, heightOfAllRows] = submenu.actor.get_preferred_height(-1);
+            let margins = submenu.actor.margin_top + submenu.actor.margin_bottom;
+            let overflow = this.menu.box.get_preferred_height(-1)[1] + this._menuFrame - this.menu.actor.get_preferred_height(-1)[1];
+            // The category that was open until now slides shut at the same time, as in a menu of GNOME Shell. It
+            // starts only here, after the measuring above, which is of the menu without it.
+            this._slideShutOnOpen?.();
+            this._slideShutOnOpen = null;
+            // A long category has its scrollbar from the start of the slide: the rows are narrower next to it, and
+            // would jump sideways if it came at the end.
+            submenu.actor.height = 0;
+            submenu.actor.ease({height: heightOfAllRows - margins - overflow, ...slide,
+                onStopped: () => submenu.actor.set_height(-1)});
+        };
         submenu.close = animation => {
-            if (animation !== BoxPointer.PopupAnimation.NONE)
-                closeSubmenu(false);
+            // The open category is still open when the menu is opened again. GNOME Shell closes the submenus after
+            // the menu has closed, and that is the one close it asks for without any animation; it is left out.
+            if (!submenu.isOpen || animation === BoxPointer.PopupAnimation.NONE) return;
+            let openHeight = submenu.actor.height;
+            // Closing without the Shell's slide hides the submenu at once.
+            closeSubmenu(false);
+            if (!this._settings.get_boolean('animate-categories')) return;
+            let slideShut = () => {
+                submenu.actor.show();
+                // As above: the height an actor reports includes its margins, and the height that is set on it does not.
+                submenu.actor.height = openHeight - submenu.actor.margin_top - submenu.actor.margin_bottom;
+                submenu.actor.ease({height: 0, ...slide, onStopped: () => {
+                    submenu.actor.hide();
+                    submenu.actor.set_height(-1);
+                }});
+            };
+            // The user's own close asks for the full animation: a click on the category or the Left key. A category
+            // that the Shell closes in the middle of another one's opening slides when that one has measured.
+            // Any other close is at once.
+            if (animation === BoxPointer.PopupAnimation.FULL)
+                slideShut();
+            else if (this._openingCategory)
+                this._slideShutOnOpen = slideShut;
         };
 
         this._groups[groupName].menu.connectObject('open-state-changed', () => {
@@ -521,15 +588,22 @@ var VitalsMenuButton = GObject.registerClass({
     // Every other row stays as it is.
     _syncCatalog() {
         if (this._dragging || this._sensors.destroyed) return;
+        // Rows are placed by counting them, and the panel with a sensor's actions is not a row. So it is taken out
+        // here and put back at the end, under its row where that is now.
+        let actionsOpenFor = this._rowActions.sensor;
+        this._closeRowActions();
         let hardwareOnly = this._settings.get_boolean('network-hardware-only');
         let aggregates = this._settings.get_boolean('include-aggregates');
+        let pinnedSensors = new Set(this._sensors.catalog.panel.sensors.filter(link => link.visible).map(link => link.sensor));
         for (let [name, category] of this._sensors.categories()) {
             let rowsChanged = false;
             for (let sensor of category.sensors) {
                 let row = this._rows.get(sensor);
-                // Two options leave rows out: the interfaces that are not hardware, and the average, minimum and maximum.
-                let wanted = sensorPresent(category, sensor) && !(hardwareOnly && this._isVirtualInterface(sensor)) &&
-                    !(sensor.aggregate && !aggregates);
+                // A sensor the user hid has a row only while the user looks at the category's hidden sensors. Two
+                // options leave rows out as well: the interfaces that are not hardware, and the average, minimum
+                // and maximum.
+                let wanted = sensorPresent(category, sensor) && (!sensor.hidden || this._hiddenShown.has(name)) &&
+                    !(hardwareOnly && this._isVirtualInterface(sensor)) && !(sensor.aggregate && !aggregates);
                 if (!row == !wanted) continue;
                 // Rows are placed by counting rows, so the line between them is taken out while they change.
                 if (!rowsChanged)
@@ -542,16 +616,19 @@ var VitalsMenuButton = GObject.registerClass({
                     this._addRow(name, category, sensor);
                 }
             }
-            // Discovery can give a sensor that has a row another label or section, for example when a saved
-            // catalog from an earlier version is shown first.
+            // A sensor that has a row can get another label or section: the user renames it, or discovery does,
+            // for example when a saved catalog from an earlier version is shown first.
             let rowsInOrder = this._sensorsInRowOrder(category).map(sensor => {
                 let row = this._rows.get(sensor);
-                if (row.label != _(sensor.label))
-                    row.label = _(sensor.label);
+                if (row.label != this._label(sensor))
+                    row.label = this._label(sensor);
+                row.pinned = pinnedSensors.has(sensor);
+                row.categoryDefault = Boolean(sensor.categoryDefault);
+                row.hidden = Boolean(sensor.hidden);
                 return row;
             });
             let menu = this._groups[name].menu;
-            let rowsInMenu = menu._getMenuItems().filter(item => item != this._separators.get(name));
+            let rowsInMenu = menu._getMenuItems().filter(item => item instanceof MenuItem.MenuItem);
             if (rowsInOrder.some((row, position) => rowsInMenu[position] != row)) {
                 this._removeSeparator(name);
                 rowsChanged = true;
@@ -560,10 +637,152 @@ var VitalsMenuButton = GObject.registerClass({
             }
             if (rowsChanged)
                 this._placeSeparator(name, category);
+            this._syncUnhideRow(name, category);
         }
         this._syncPanelItems();
+        // After the top bar, since the first action says whether the sensor is pinned there.
+        if (this._rows.has(actionsOpenFor))
+            this._toggleRowActions(this._rows.get(actionsOpenFor).categoryName, actionsOpenFor, false);
         this._markShown();
         this._render();
+    }
+
+    // What a sensor is called in the menu: the name the user gave it, or its own label.
+    _label(sensor) {
+        return sensor.customLabel ?? _(sensor.label);
+    }
+
+    // A category with hidden sensors ends with a row that says how many there are. A click on it puts them into
+    // the menu, in their places and marked as hidden, and another click takes them out again. A sensor is brought
+    // back for good in its panel, where "Hide" then has a check mark.
+    _syncUnhideRow(categoryName, category) {
+        let hiddenSensors = category.sensors.filter(sensor => sensor.hidden && sensorPresent(category, sensor));
+        let row = this._unhideRows.get(categoryName);
+        if (!hiddenSensors.length) {
+            this._hiddenShown.delete(categoryName);
+            if (row) {
+                row.destroy();
+                this._unhideRows.delete(categoryName);
+            }
+            return;
+        }
+        if (!row) {
+            row = new MenuItem.MenuAction('', false, true);
+            row.connect('chosen', () => {
+                if (!this._hiddenShown.delete(categoryName))
+                    this._hiddenShown.add(categoryName);
+                this._syncCatalog();
+            });
+            this._unhideRows.set(categoryName, row);
+            this._groups[categoryName].menu.addMenuItem(row);
+        }
+        row.label = _('Show hidden sensors (%d)').replace('%d', hiddenSensors.length);
+        row.checked = this._hiddenShown.has(categoryName);
+    }
+
+    // Closes the panel with a sensor's actions and brings the rest of the menu back to full strength. `animate`
+    // lets the panel slide shut first, as when the user closes it.
+    _closeRowActions(animate = false) {
+        let {panel, dimmed = []} = this._rowActions;
+        this._rowActions = {sensor: null, items: []};
+        if (!panel) return;
+        for (let actor of dimmed)
+            actor.ease({opacity: 255, duration: animate ? SENSOR_PANEL_MILLISECONDS : 0});
+        // A panel that slides shut is still there for a moment, and no longer takes part in anything.
+        panel.actor.reactive = false;
+        panel.actor.ease({height: 0, duration: animate ? SENSOR_PANEL_MILLISECONDS : 0, onStopped: () => panel.destroy()});
+    }
+
+    // Opens the panel with a sensor's actions under the sensor's row, or closes it when it is open there. A click on
+    // the row does this. The panel is built like the menus in GNOME Shell's quick settings, such as the one for the
+    // power mode: a card with the sensor's icon and name as its head, in the place where it belongs, and the rest
+    // of the menu dimmed while it is open. `animate` lets it slide open.
+    _toggleRowActions(categoryName, sensor, animate = true) {
+        let openFor = this._rowActions.sensor;
+        this._closeRowActions(animate);
+        if (openFor == sensor) return;
+        let row = this._rows.get(sensor);
+        let pinned = [...this._panelItems.keys()].some(link => link.sensor == sensor);
+        let header = new MenuItem.SensorHeader(row.gicon, this._label(sensor), this.menu.actor);
+        let actions = [
+            [_('Pin to top bar'), () => {
+                this._sensors.setPanelSensorVisible(categoryName, sensor, !pinned);
+                // Brings the top bar in line and puts the panel back, where this action then has its check mark or not.
+                this._syncCatalog();
+            }, pinned],
+            [_('Rename'), () => header.editLabel(customLabel =>
+                // The sensor's own label, typed in again, is no name of the user's.
+                this._sensors.renameSensor(sensor, customLabel == _(sensor.label) ? '' : customLabel))],
+            [_('Hide'), () => this._sensors.setSensorHidden(sensor, !sensor.hidden), Boolean(sensor.hidden)],
+            [_('Category default'), () => this._sensors.setCategoryDefault(categoryName, sensor.categoryDefault ? null : sensor),
+                Boolean(sensor.categoryDefault)]
+        ];
+        let menu = this._groups[categoryName].menu;
+        // The Shell's style class for such a menu gives the panel its colours in every theme; its sizes, which are
+        // made for the large quick settings, are replaced in the stylesheet by those of this menu's rows.
+        let panel = new PopupMenu.PopupMenuSection();
+        panel.actor.add_style_class_name('quick-toggle-menu');
+        panel.actor.add_style_class_name('vitals-sensor-panel');
+        panel.actor.reactive = true;
+        panel.addMenuItem(header);
+        let items = actions.map(([label, act, checked]) => {
+            // Set in like the head, so that the check mark stands under the sensor's icon and the label under its name.
+            let action = new MenuItem.MenuAction(label, checked, true);
+            // The panel stays open after an action was used. Hiding ends it with the row.
+            action.connect('chosen', act);
+            panel.addMenuItem(action);
+            return action;
+        });
+        menu.addMenuItem(panel, menu._getMenuItems().indexOf(row) + 1);
+
+        // Everything but the panel is dimmed: the other parts of the menu, and the rows of the panel's own category.
+        let dimmed = [...this.menu.box.get_children().filter(actor => actor != menu.actor),
+            ...menu._getMenuItems().filter(item => item != panel).map(item => item.actor)];
+        for (let actor of dimmed)
+            actor.ease({opacity: SENSOR_PANEL_DIMMED_OPACITY, duration: animate ? SENSOR_PANEL_MILLISECONDS : 0});
+        this._rowActions = {sensor, items, panel, header, dimmed};
+
+        // The height an actor asks for includes its margins, and the height that is set on it does not.
+        let openHeight = panel.actor.get_preferred_height(-1)[1] - panel.actor.margin_top - panel.actor.margin_bottom;
+        panel.actor.height = 0;
+        panel.actor.ease({height: openHeight, duration: animate ? SENSOR_PANEL_MILLISECONDS : 0,
+            onStopped: () => panel.actor.set_height(-1)});
+
+        // While the panel is open, a click anywhere else and the Escape key close it and do nothing else. The Shell
+        // sends every event to the open menu only, so that is where they are seen. While the sensor's name is
+        // typed, both belong to the field for it.
+        this.menu.actor.connectObject('captured-event', (menuActor, event) => {
+            if (header.editing) return Clutter.EVENT_PROPAGATE;
+            let escape = event.type() == Clutter.EventType.KEY_PRESS && event.get_key_symbol() == Clutter.KEY_Escape;
+            let press = event.type() == Clutter.EventType.BUTTON_PRESS || event.type() == Clutter.EventType.TOUCH_BEGIN;
+            if (press) {
+                let [x, y] = event.get_coords();
+                let [left, top] = panel.actor.get_transformed_position();
+                let [width, height] = panel.actor.get_transformed_size();
+                press = x < left || x >= left + width || y < top || y >= top + height;
+            }
+            if (!escape && !press) return Clutter.EVENT_PROPAGATE;
+            this._closeRowActions(true);
+            return Clutter.EVENT_STOP;
+        }, panel.actor);
+
+        // Under a row at the lower edge of a long category, the panel opens outside of what is on screen, and a
+        // renamed row moves to its new place with its panel. The category scrolls just far enough to show the
+        // whole panel, also while the panel slides open. The panel's head says which sensor it is for, so the
+        // row above it need not be on screen.
+        // St.ScrollView has `vadjustment` from GNOME Shell 46 on; in 45 the scrollbar holds it.
+        let scrolling = menu.actor.vadjustment ?? menu.actor.vscroll.adjustment;
+        let reveal = () => {
+            let {y1: start, y2: end} = panel.actor.get_allocation_box();
+            if (end > scrolling.value + scrolling.page_size)
+                scrolling.value = end - scrolling.page_size;
+            if (start < scrolling.value)
+                scrolling.value = start;
+        };
+        // The panel gets its place and the category gets its new length in the same layout, in an order that is
+        // the Shell's; the panel is on screen once both have happened.
+        panel.actor.connect('notify::allocation', reveal);
+        scrolling.connectObject('notify::upper', reveal, panel.actor);
     }
 
     _isVirtualInterface(sensor) {
@@ -575,7 +794,7 @@ var VitalsMenuButton = GObject.registerClass({
     _sensorsInRowOrder(category) {
         // Each label is translated once, not once per comparison.
         return category.sensors.filter(sensor => this._rows.has(sensor))
-            .map(sensor => ({sensor, section: sensor.section ?? 0, label: _(sensor.label)}))
+            .map(sensor => ({sensor, section: sensor.section ?? 0, label: this._label(sensor)}))
             .sort((a, b) => a.section - b.section || LABEL_ORDER.compare(a.label, b.label))
             .map(({sensor}) => sensor);
     }
@@ -643,7 +862,6 @@ var VitalsMenuButton = GObject.registerClass({
             let icon = country && /^[a-z]{2}$/.test(country) && country != 'xx' ? 'icon-' + country : 'icon';
             return Gio.icon_new_for_string(this._sensorIconPath('network', icon));
         };
-        let pinnedSensors = new Set([...this._panelItems.keys()].map(link => link.sensor));
         for (let [name, category] of this._sensors.categories()) {
             let headerLabel = this._groups[name]._statusLabel;
             let header = category.header;
@@ -665,7 +883,6 @@ var VitalsMenuButton = GObject.registerClass({
             if (!row || !sensor.shown) continue;
             let formatted = this._formatted(row.categoryName, sensor);
             row.visible = sensor.status != 'unavailable';
-            row.checked = pinnedSensors.has(sensor);
             if (row.value != formatted.text) row.value = formatted.text;
             if (row.valueStyle != formatted.style) row.valueStyle = formatted.style;
             if (sensor.country !== undefined && !row.gicon.equal(flagIcon(sensor)))
@@ -692,15 +909,8 @@ var VitalsMenuButton = GObject.registerClass({
 
     _addRow(categoryName, category, sensor) {
         let gicon = Gio.icon_new_for_string(this._sensorIconPath(categoryName, this._iconName(sensor)));
-        let pinned = [...this._panelItems.keys()].some(link => link.sensor == sensor);
-        let row = new MenuItem.MenuItem(gicon, categoryName, _(sensor.label), '…', pinned);
-        row.connect('toggle', () => {
-            this._sensors.setPanelSensorVisible(categoryName, sensor, row.checked);
-            if (this._dragging) return;
-            this._syncPanelItems();
-            this._markShown();
-            this._render();
-        });
+        let row = new MenuItem.MenuItem(gicon, categoryName, this._label(sensor), '…');
+        row.connect('clicked', () => this._toggleRowActions(categoryName, sensor));
         this._rows.set(sensor, row);
         this._groups[categoryName].menu.addMenuItem(row, this._sensorsInRowOrder(category).indexOf(sensor));
     }
@@ -787,6 +997,9 @@ var VitalsMenuButton = GObject.registerClass({
         this.menu.disconnectObject(this);
 
         this._rows.clear();
+        this._unhideRows.clear();
+        this._hiddenShown.clear();
+        this._rowActions = {sensor: null, items: []};
         this._panelItems.clear();
         this._widths.clear();
         this._headerSensors.clear();

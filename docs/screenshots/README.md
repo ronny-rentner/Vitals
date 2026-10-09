@@ -24,14 +24,14 @@ Any value in the menu can be pinned to the top bar. The following screenshots sh
 
 ## Menu
 
-Each category shows one value in its header. One category can be open at a time. Selecting a row pins its value to the top bar; pinned rows are marked with a check mark.
+Each category shows one value in its header. One category can be open at a time. Selecting a row opens a panel with its actions: pin it to the top bar, rename it, hide it, or make it the value the category shows in its header. The rest of the menu is dimmed while the panel is open.
 
 The network category is shown with **Only show hardware interfaces** enabled, which is the default. It hides bridges, container, VPN and loopback interfaces.
 
-| Categories closed | Network category open |
-|---|---|
-| ![](menu.png) | ![](menu-network.png) |
-| ![](menu-light.png) | ![](menu-network-light.png) |
+| Categories closed | Network category open | Panel of a sensor |
+|---|---|---|
+| ![](menu.png) | ![](menu-network.png) | ![](menu-actions.png) |
+| ![](menu-light.png) | ![](menu-network-light.png) | ![](menu-actions-light.png) |
 
 The second row shows the same menus in the GNOME light style.
 

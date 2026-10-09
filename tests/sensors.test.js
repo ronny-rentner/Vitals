@@ -1016,6 +1016,58 @@ test('two batteries each have their own sensors, and the header shows their powe
     sensors.destroy();
 });
 
+test('a name the user gives a sensor is kept across discovery and a restart, next to the sensor\'s own label', async () => {
+    let first = setup();
+    await first.sensors.discover();
+    let temperature = first.find('temperature', 'thinkpad/temp1');
+    let ownLabel = temperature.label;
+    first.sensors.renameSensor(temperature, 'Processor');
+    await first.sensors.discover();
+    equal(temperature.customLabel, 'Processor', 'discovery does not take the name away');
+    equal(temperature.label, ownLabel, 'and still writes the sensor\'s own label');
+    first.sensors.destroy();
+
+    let second = setup({configuration: first.configuration});
+    equal(second.find('temperature', 'thinkpad/temp1').customLabel, 'Processor', 'saved with the catalog');
+    second.sensors.renameSensor(second.find('temperature', 'thinkpad/temp1'), '');
+    equal(second.find('temperature', 'thinkpad/temp1').customLabel, undefined, 'an empty name gives the own label back');
+    second.sensors.destroy();
+});
+
+test('a hidden sensor does not count in the average, minimum and maximum, and is not read for them', async () => {
+    let {sensors, machine, fileValue, find, show} = setup();
+    await sensors.discover();
+    let hidden = find('temperature', 'thinkpad/temp2');
+    sensors.setSensorHidden(hidden, true);
+    show(find('temperature', 'average'));
+    machine.reads.length = 0;
+    await sensors.poll();
+    let counted = TEMPERATURES.filter(path => path != THINKPAD + 'temp2_input');
+    equal(machine.reads.includes(THINKPAD + 'temp2_input'), false, 'not read');
+    equal(find('temperature', 'average').value, mean(counted.map(fileValue)), 'average over the others');
+    sensors.setSensorHidden(hidden, false);
+    equal(hidden.hidden, undefined, 'shown again');
+    await sensors.poll();
+    equal(find('temperature', 'average').value, mean(TEMPERATURES.map(fileValue)), 'and counted again');
+    sensors.destroy();
+});
+
+test('the sensor the user makes the category default is what the header shows, also after discovery', async () => {
+    let {sensors, find} = setup();
+    await sensors.discover();
+    let automatic = sensors.catalog.temperature.header;
+    let chosen = find('temperature', 'thinkpad/temp1');
+    sensors.setCategoryDefault('temperature', chosen);
+    equal(sensors.catalog.temperature.header, chosen);
+    await sensors.discover();
+    equal(sensors.catalog.temperature.header, chosen, 'discovery keeps the choice');
+    sensors.setCategoryDefault('temperature', find('temperature', 'thinkpad/temp2'));
+    equal(chosen.categoryDefault, undefined, 'a category has one default');
+    sensors.setCategoryDefault('temperature');
+    equal(sensors.catalog.temperature.header, automatic, 'without a choice the header is the collector\'s again');
+    sensors.destroy();
+});
+
 test('panel links are shown, hidden and moved through Sensors, which saves them', async () => {
     let configuration = settings();
     let saved = readCatalog(configuration);

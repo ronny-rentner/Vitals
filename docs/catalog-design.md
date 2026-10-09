@@ -65,6 +65,8 @@ catalog = {
 - `file`: the file the sensor is read from. A temperature has a file of its own; the memory sensors all name `/proc/meminfo`. A few sensors are read from something that is not a file and have no `file`: a card read through `nvidia-smi` has `nvidia`, and the storage space, the public IP, the refresh rate and, on some machines, the CPU frequencies are known by their key. A sensor whose value discovery wrote, such as the kernel version, has none either, and neither has an average, minimum or maximum.
 - Fields that say which part of the file is the sensor's: the interface name for a network rate (with `hardware`, whether that interface is a hardware device), the core for a CPU core.
 
+- `customLabel`, `hidden` and `categoryDefault`: what the user set for the sensor in the menu: another name, that it has no row, and that it is the sensor its category shows in its header. Discovery does not touch them.
+
 Any further field can be added to a sensor later without changing the structure.
 
 There is no field that says how to compute the value. The code knows from the sensor's category and fields which rule applies (`Sensors._value`): a temperature is its file's number divided by 1000, and "memory usage" is computed from two lines of `/proc/meminfo`. The sensors that are found by their key alone, such as memory usage, are listed with their label, format and computation in the `FIXED` table in `sensors.js`.

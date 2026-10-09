@@ -116,6 +116,11 @@
       <summary>Emphasize values in top bar</summary>
       <description>Draw icons and units in the top bar lighter and smaller than the numbers</description>
     </key>
+    <key type="b" name="animate-categories">
+      <default>true</default>
+      <summary>Animate categories</summary>
+      <description>Slide a category of the menu open and shut. Off opens and closes it at once.</description>
+    </key>
     <key type="b" name="hide-icons">
       <default>false</default>
       <summary>Hide icons in top bar</summary>

@@ -46,6 +46,17 @@ class Fixtures {
     }
 }
 
+// Pins or unpins a sensor the way a user does: a click on its row opens the panel with its actions, and the first
+// of them pins or unpins.
+function togglePin(button, sensor) {
+    let row = button._rows.get(sensor);
+    if (button._rowActions.sensor != sensor)
+        row.activate();
+    button._rowActions.items[0].activate();
+    // Without the slide a user's click would give: the checks go on at once.
+    button._closeRowActions();
+}
+
 function panelLink(sensors, sensor) {
     return sensors.catalog.panel.sensors.find(link => link.sensor == sensor);
 }
@@ -116,9 +127,7 @@ async function checkPanelVisibility(button, fixtures) {
             category.header = fixture;
             sensors.catalogChanged();
             let timer = button._refreshTimeoutId;
-            // Pinning and unpinning go the way a user's click on the menu row goes.
-            let togglePin = () => button._rows.get(fixture).activate(null);
-            togglePin();
+            togglePin(button, fixture);
             await Scripting.sleep(10);
             check(sensors.sources.get(source).pending, null, name + ' pinning does not collect');
             check(button._refreshTimeoutId, timer, name + ' pinning preserves timer');
@@ -270,10 +279,10 @@ async function checkPanelVisibility(button, fixtures) {
                 release();
                 await poll;
                 waiting = new Promise(resolve => { release = resolve; });
-                togglePin();
+                togglePin(button, fixture);
                 check(item(fixture), undefined, name + ' unpinned zero=' + zero + ' has no panel item');
                 time += 3600;
-                togglePin();
+                togglePin(button, fixture);
                 poll = button._querySensors();
                 check(item(fixture).visible, true, name + ' resumed zero=' + zero + ' placeholder visible');
                 check(label(fixture).text, '…', name + ' resumed zero=' + zero + ' discards stale display');
@@ -314,6 +323,9 @@ async function checkPanelVisibility(button, fixtures) {
 }
 
 export async function run() {
+    // The Shell's helper process for automation scripts leaves by itself after half a minute, which is before this
+    // test is done. Without this, the Shell tries to stop it at the end and ends with a failure.
+    await Scripting.disableHelperAutoExit();
     await waitFor(() => Main.extensionManager.lookup('Vitals@CoreCoding.com'), 'extension registered');
     Main.extensionManager.enableExtension('Vitals@CoreCoding.com');
     await waitFor(() => Main.panel.statusArea.vitalsMenu, 'extension enabled');
@@ -324,6 +336,8 @@ export async function run() {
     let settings = button._settings;
     settings.set_int('update-time', 60);
     settings.set_boolean('include-public-ip', false);
+    // The checks look at a category right after it opened. The slide has its own part below.
+    settings.set_boolean('animate-categories', false);
     for (let categoryName of CATEGORIES)
         writeCategoryEnabled(settings, categoryName, !['battery', 'gpu', 'fan'].includes(categoryName));
     settings.set_boolean('hide-zeros', true);
@@ -426,7 +440,8 @@ export async function run() {
     a = 40;
     await button._querySensors();
     equal(button._rows.get(first).visible, true, 'available row returns');
-    // Every category opens and closes at once, a short one and one that is long enough to need a scrollbar.
+    // Without the "animate categories" option, every category opens and closes at once, a short one and one that
+    // is long enough to need a scrollbar.
     let systemGroup = button._groups.system;
     for (let index = 0; index < 60; index++)
         fixtures.add('system', {key: 'fixture/' + index, label: 'Fixture ' + index, format: 'string', value: index, status: 'ready'});
@@ -445,6 +460,58 @@ export async function run() {
         equal(submenu.actor.get_transition('height'), null, 'closing is not animated, scrollbar=' + needsScrollbar);
         equal(submenu.actor.visible, false, 'and it is hidden at once');
     }
+    // With the option, both kinds slide, and end at the height they have without it.
+    let heightsWhile = async (submenu, act) => {
+        let heights = [];
+        // The height the category has on screen, which is not what it asks for while it slides.
+        let painted = global.stage.connect('after-paint', () =>
+            heights.push(submenu.actor.visible ? submenu.actor.get_allocation_box().get_height() : 0));
+        act();
+        await Scripting.sleep(600);
+        global.stage.disconnect(painted);
+        return heights;
+    };
+    for (let group of [button._groups.temperature, systemGroup]) {
+        let submenu = group.menu;
+        click(group);
+        await Scripting.sleep(100);
+        let openHeight = submenu.actor.get_allocation_box().get_height();
+        click(group);
+        settings.set_boolean('animate-categories', true);
+        let opening = await heightsWhile(submenu, () => click(group));
+        equal(new Set(opening).size > 3, true, 'the category slides open: ' + opening.length + ' frames');
+        equal(Math.max(...opening) < openHeight + 1, true, 'and never gets a pixel taller than it is when open: ' + Math.max(...opening) + ' of ' + openHeight);
+        equal(submenu.actor.get_allocation_box().get_height(), openHeight, 'it ends at its open height');
+        let closing = await heightsWhile(submenu, () => click(group));
+        equal(new Set(closing).size > 3, true, 'it slides shut');
+        equal(Math.max(...closing) < openHeight + 1, true, 'and never gets a pixel taller than it was when open: ' + Math.max(...closing) + ' of ' + openHeight);
+        equal(submenu.actor.visible, false, 'and is hidden at the end');
+        settings.set_boolean('animate-categories', false);
+    }
+    // When a category opens while another one is open, that one slides shut at the same time, as in a menu of
+    // GNOME Shell, and the one that opens still ends at its own height.
+    let temperatureGroup = button._groups.temperature;
+    let heightWhenOpen = new Map();
+    for (let group of [temperatureGroup, systemGroup]) {
+        click(group);
+        await Scripting.sleep(100);
+        heightWhenOpen.set(group, group.menu.actor.get_allocation_box().get_height());
+        click(group);
+    }
+    settings.set_boolean('animate-categories', true);
+    for (let [opened, other] of [[systemGroup, temperatureGroup], [temperatureGroup, systemGroup]]) {
+        if (!other.menu.isOpen) {
+            click(other);
+            await Scripting.sleep(400);
+        }
+        let closing = await heightsWhile(other.menu, () => click(opened));
+        equal(new Set(closing).size > 3, true, 'the category that was open slides shut while another one opens');
+        equal(other.menu.actor.visible, false, 'and is hidden at the end');
+        equal(opened.menu.actor.get_allocation_box().get_height(), heightWhenOpen.get(opened), 'the one that opened has its own height');
+    }
+    await Scripting.sleep(400);
+    settings.set_boolean('animate-categories', false);
+    click(button._groups.temperature);
     click(systemGroup);
     click(button._groups.temperature);
     equal(systemGroup.menu.isOpen, false, 'opening a category closes the one that was open');
@@ -498,15 +565,15 @@ export async function run() {
         removed.push(link.sensor.key);
         return removePanelItem.call(this, link);
     };
-    button._rows.get(first).activate(null);
-    button._rows.get(second).activate(null);
+    togglePin(button, first);
+    togglePin(button, second);
     equal(created.join(','), first.key + ',' + second.key, 'each pin creates one panel item');
     equal(removed.length, 0, 'pinning a second sensor leaves the first item alone');
     await button._querySensors();
-    button._rows.get(first).activate(null);
+    togglePin(button, first);
     equal(removed.join(','), first.key, 'unpinning removes that one panel item');
     equal(created.length, 2, 'unpinning creates nothing');
-    button._rows.get(first).activate(null);
+    togglePin(button, first);
     equal(created.join(','), [first.key, second.key, first.key].join(','), 'pinning again creates that one item');
     equal(removed.length, 1, 'pinning again removes nothing');
     button._createPanelItem = createPanelItem;
@@ -581,6 +648,134 @@ export async function run() {
     equal(renamedRow.label, 'Renamed total', 'and shows the new label');
     equal(networkRowLabels().includes('Downloaded this session, Renamed total, Uploaded since boot'), true,
         'in its new section, at its alphabetical place: ' + networkRowLabels());
+    // A click on a row opens a panel with the sensor's actions under it, built like the menus in GNOME Shell's quick
+    // settings: the sensor's name as its head, the actions below, and the rest of the menu dimmed. The actions pin
+    // the sensor to the top bar, rename it in the panel's head, hide it, and make it the sensor its category
+    // shows in its header.
+    let labelsWithPanel = menu => menu._getMenuItems().map(item => {
+        if (item instanceof PopupMenu.PopupSeparatorMenuItem) return '—';
+        if (item instanceof PopupMenu.PopupMenuSection) {
+            // The panel's first row is its head, with the sensor's name; the others are the actions.
+            let [head, ...actions] = item._getMenuItems();
+            return '[' + head.label + ': ' + actions.map(action => action.label).join(', ') + ']';
+        }
+        return item.label;
+    }).join(', ');
+    let temperatureMenu = button._groups.temperature.menu;
+    button.menu.open();
+    temperatureMenu.open();
+    await Scripting.sleep(100);
+    // The actions of a sensor without the one that pins, in its panel, which a click on its row opens.
+    let actionsOf = sensor => {
+        if (button._rowActions.sensor != sensor)
+            button._rows.get(sensor).activate();
+        return button._rowActions.items.slice(1);
+    };
+    equal(button._rowActions.items.length, 0, 'no panel is open');
+    button._rows.get(first).activate();
+    equal(labelsWithPanel(temperatureMenu).startsWith('Fixture A, [Fixture A: Pin to top bar, Rename, Hide, Category default], Fixture B'), true,
+        'the panel is under its row, with the sensor\'s name and its actions: ' + labelsWithPanel(temperatureMenu));
+    equal(button._rowActions.panel.actor.has_style_class_name('quick-toggle-menu'), true, 'it has the look of a quick settings menu');
+    await Scripting.sleep(300);
+    equal(button._rows.get(second).opacity < 255 && button._groups.memory.actor.opacity < 255, true,
+        'the other rows and the other categories are dimmed');
+    equal(button._rowActions.panel.actor.opacity, 255, 'and the panel is not');
+    equal(button._rowActions.items[0].checked, true, 'the first action has a check mark, since the sensor is pinned');
+    equal(button._rows.get(first).pinned, true, 'the row of a pinned sensor shows a check mark in front of its icon');
+    button._rowActions.items[0].activate();
+    equal(button._panelItems.has(panelLink(sensors, first)), false, 'the first action unpins');
+    equal(button._rows.get(first).pinned, false, 'and the row loses its check mark');
+    equal(button._rowActions.items[0].checked, false, 'and then has no check mark, with the panel still open');
+    button._rowActions.items[0].activate();
+    equal(button._panelItems.has(panelLink(sensors, first)), true, 'and pins again');
+    button._rows.get(first).activate();
+    equal(button._rowActions.items.length, 0, 'a second click on the row closes the panel');
+    await Scripting.sleep(300);
+    equal(button._rows.get(second).opacity == 255 && button._groups.memory.actor.opacity == 255, true, 'and nothing is dimmed any more');
+    equal(labelsWithPanel(temperatureMenu).startsWith('Fixture A, Fixture B'), true, 'and the panel is gone: ' + labelsWithPanel(temperatureMenu));
+    // In a category that is longer than the screen, the panel of its last row is scrolled into view.
+    systemGroup.menu.open();
+    await Scripting.sleep(100);
+    let lastSystemRow = systemGroup.menu._getMenuItems().at(-1);
+    let systemScrolling = systemGroup.menu.actor.vadjustment;
+    let panelOnScreen = () => {
+        let {y1, y2} = button._rowActions.panel.actor.get_allocation_box();
+        return y1 >= systemScrolling.value && y2 <= systemScrolling.value + systemScrolling.page_size;
+    };
+    equal(systemScrolling.upper > systemScrolling.page_size, true, 'the system category scrolls');
+    systemScrolling.value = systemScrolling.upper - systemScrolling.page_size;
+    lastSystemRow.activate();
+    await Scripting.sleep(300);
+    equal(panelOnScreen(), true, 'the panel of the last row is on screen');
+    lastSystemRow.activate();
+    await Scripting.sleep(300);
+    // A row that its new name moves to the far end of the category takes its panel along, which is scrolled into view.
+    systemScrolling.value = 0;
+    let firstSystemSensor = [...button._rows].find(([, row]) => row == systemGroup.menu._getMenuItems()[0])[0];
+    actionsOf(firstSystemSensor)[0].activate();
+    button._rowActions.header._labelEntry.text = 'zzz, the last by name';
+    button._rowActions.header._labelEntry.clutter_text.emit('activate');
+    await Scripting.sleep(300);
+    equal(button._rowActions.sensor, firstSystemSensor, 'the panel of a renamed sensor stays open');
+    equal(systemGroup.menu._getMenuItems().at(-1), button._rowActions.panel, 'at the row\'s new place');
+    equal(panelOnScreen(), true, 'and is on screen');
+    sensors.renameSensor(firstSystemSensor, '');
+    button._closeRowActions();
+    temperatureMenu.open();
+    await Scripting.sleep(100);
+    actionsOf(first)[0].activate();
+    let nameField = button._rowActions.header._labelEntry;
+    equal(nameField.text, 'Fixture A', 'Rename puts the name into a text field in the panel\'s head');
+    // A row takes the keyboard, as the row under the pointer does; the field takes it back.
+    button._rows.get(second).grab_key_focus();
+    equal(global.stage.key_focus, nameField.clutter_text, 'the text field keeps the keyboard');
+    nameField.text = 'Zone';
+    nameField.clutter_text.emit('activate');
+    equal(first.customLabel, 'Zone', 'Enter renames the sensor');
+    equal(labelsWithPanel(temperatureMenu).startsWith('Fixture B, Zone, [Zone: Pin to top bar, Rename, Hide, Category default]'), true,
+        'the row shows the new name, is sorted by it, and its panel is still open under it: ' + labelsWithPanel(temperatureMenu));
+    actionsOf(first)[0].activate();
+    equal(button._rowActions.header._labelEntry.text, 'Zone', 'renaming again starts from the name the user gave');
+    button._rowActions.header._renameRestore.emit('clicked', 0);
+    equal(first.customLabel, undefined, 'the button next to the field gives the sensor its own name back');
+    equal(button._rows.get(first).label, 'Fixture A', 'and the row shows it');
+    equal(button._rowActions.header.editing, false, 'and the renaming is over');
+    sensors.renameSensor(first, 'Zone');
+    actionsOf(first)[0].activate();
+    button._rowActions.header._labelEntry.text = '';
+    button._rowActions.header._labelEntry.clutter_text.emit('activate');
+    equal(first.customLabel, undefined, 'an emptied name does the same');
+    actionsOf(second)[2].activate();
+    equal(temperature.header, second, 'Category default makes it the header\'s sensor');
+    equal(button._rows.get(second).categoryDefault, true, 'and its row shows a star after its name');
+    equal(button._rowActions.sensor, second, 'the panel stays open');
+    equal(actionsOf(second)[2].checked, true, 'and the action has a check mark, and undoes it');
+    actionsOf(second)[2].activate();
+    equal(actionsOf(second)[2].checked, false, 'after which the check mark is gone');
+    equal(temperature.header, average, 'the header is the average again');
+    equal(button._rows.get(second).categoryDefault, false, 'and the star is gone');
+    actionsOf(first)[1].activate();
+    equal(button._rows.has(first), false, 'Hide removes the row');
+    equal(button._rowActions.items.length, 0, 'and its panel with it');
+    equal(labelsWithPanel(temperatureMenu).endsWith('Show hidden sensors (1)'), true,
+        'the category then ends with a row for the hidden sensors: ' + labelsWithPanel(temperatureMenu));
+    // That row puts the hidden sensors into the menu, marked, and takes them out again.
+    let hiddenSensorsRow = button._unhideRows.get('temperature');
+    hiddenSensorsRow.activate();
+    equal(button._rows.get(first)?.hidden, true, 'a click on it shows the hidden sensor, marked as hidden');
+    equal(button._rows.get(second).hidden, false, 'the others are not marked');
+    equal(hiddenSensorsRow.checked, true, 'and the row has a check mark');
+    hiddenSensorsRow.activate();
+    equal(button._rows.has(first), false, 'another click takes the hidden sensor out again');
+    hiddenSensorsRow.activate();
+    equal(actionsOf(first)[1].checked, true, 'in the panel of a hidden sensor, Hide has a check mark');
+    actionsOf(first)[1].activate();
+    equal(first.hidden, undefined, 'and brings the sensor back');
+    equal(button._rows.get(first).hidden, false, 'its row is no longer marked');
+    equal(button._rowActions.sensor, first, 'its panel stays open');
+    equal(button._unhideRows.has('temperature'), false, 'and the row for hidden sensors goes away with the last of them');
+    button._closeRowActions();
+    button.menu.close();
     // The made-up interfaces are not hardware. With the option on they have no rows; the totals keep theirs.
     let fixtureUpload = find('network', 'fixture0/tx');
     let networkTotal = find('network', 'device-rx');
@@ -750,5 +945,6 @@ export async function run() {
     await waitFor(() => restoredLink.sensor.status == 'ready', 'a first reading right after the start');
     equal(restarted._panelItems.get(restoredLink).value.text.endsWith('%'), true, 'and the top bar shows it');
     print('PASS extension disable cleanup, saved readings and re-enable');
+    settings.reset('animate-categories');
     print('Vitals Shell checks passed');
 }

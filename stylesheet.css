@@ -13,3 +13,17 @@
 /* With the "emphasize values" option, a unit is smaller and thinner than its number. panelValue.js also draws it
    lighter, and sets its distance from the number. */
 .vitals-panel-unit-light { font-size: 0.85em; font-weight: normal; }
+/* The panel with a sensor's actions is as wide as the rows it stands between, and its head and its actions are rows
+   of the same height, so everything in it lines up with the list. It keeps a little room above and below. */
+.vitals-sensor-panel { border-radius: 12px; padding: 4px 0; margin: 2px 0 6px 0; border: none; }
+/* The highlight of an action follows the panel's rounded corners; in a category it would be square. */
+.popup-sub-menu .vitals-sensor-panel .popup-menu-item { border-radius: 12px; }
+.vitals-sensor-name { font-weight: bold; }
+/* The field for a sensor's name, with a little less room around its text than a text field of the Shell has by
+   itself, and the two buttons after it: confirm, and back to the sensor's own name. */
+.vitals-rename-entry { padding: 0.4em 0.7em; }
+.vitals-rename-button { padding: 0.3em; border-radius: 99px; }
+.vitals-rename-button:hover { background-color: rgba(128, 128, 128, 0.35); }
+.vitals-rename-button StIcon { icon-size: 1em; }
+/* The marks after a sensor's name, for the category default and for a hidden sensor: smaller than the name. */
+.vitals-row-mark { icon-size: 0.9em; margin-left: 0.4em; }
