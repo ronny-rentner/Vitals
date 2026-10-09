@@ -652,38 +652,32 @@ test('rediscovery keeps readings and a format setting causes no reads', async ()
     sensors.destroy();
 });
 
-test('voltage group header prefers battery and system readings over USB supplies', async () => {
+test('the voltage header shows the battery, then the system, then a USB supply, as discovery finds them', async () => {
     let {sensors, machine, fileValue, show, advance} = setup();
     let header = () => sensors.catalog.voltage.header;
     await sensors.discover();
     show('voltage');
+    machine.reads.length = 0;
     await sensors.poll();
     equal(header().value, fileValue(BATTERY + 'in0_input'), 'battery preferred regardless of name or magnitude');
-    machine.write(BATTERY + 'in0_input', '0\n');
+    equal(machine.reads.join(','), BATTERY + 'in0_input', 'only the header\'s voltage is read for it');
+    machine.remove(BATTERY + 'in0_input');
     advance(1);
     await sensors.poll();
-    equal(header().value, fileValue(BATTERY + 'in0_input'), 'valid battery zero retains priority');
-    machine.remove(BATTERY + 'in0_input');
+    equal(header().status, 'unavailable', 'a header whose voltage cannot be read keeps its sensor until the next discovery');
+    await sensors.discover();
     advance(1);
     await sensors.poll();
     equal(header().value, fileValue(THINKPAD + 'in1_input'), 'system voltage preferred over USB');
     machine.remove(THINKPAD + 'in1_input');
-    advance(1);
-    await sensors.poll();
-    equal(header().value, fileValue(THINKPAD + 'in2_input'), 'remaining system voltage');
     machine.remove(THINKPAD + 'in2_input');
+    await sensors.discover();
     advance(1);
     await sensors.poll();
-    equal(header().value, fileValue(USB + 'in0_input'), 'USB used when it is the only available voltage');
+    equal(header().value, fileValue(USB + 'in0_input'), 'USB used when it is the only voltage');
     machine.remove(USB + 'in0_input');
-    advance(1);
-    await sensors.poll();
-    equal(header().status, 'unavailable', 'no available voltage');
-    machine.write(BATTERY + 'in0_input', machineFixture[BATTERY + 'in0_input']);
-    advance(1);
-    await sensors.poll();
-    equal(header().value, fileValue(BATTERY + 'in0_input'), 'battery voltage recovers');
-    equal(header().status, 'ready');
+    await sensors.discover();
+    equal(header(), undefined, 'no voltage, no header');
     sensors.destroy();
 });
 

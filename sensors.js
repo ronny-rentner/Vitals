@@ -480,8 +480,8 @@ export class Sensors {
     }
 
     // Goes over the catalog once and works out what is read: the source of every sensor that is on screen, with
-    // the sensors that are written from its reading. A category that shows a value over all its sensors has all of
-    // them read: an average, minimum or maximum, or the voltage header, which shows the best voltage there is.
+    // the sensors that are written from its reading. A category that shows a value over all its sensors, an
+    // average, minimum or maximum, has all of them read.
     _select() {
         let activeSources = new Map();
         let summarised = new Set();
@@ -489,7 +489,7 @@ export class Sensors {
             for (let [name, category] of this.categories()) {
                 let onScreen = sensor => (sensor.shown || (category.shown && sensor == category.header)) &&
                     sensorPresent(category, sensor);
-                if (name == 'voltage' ? category.shown : category.sensors.some(sensor => sensor.aggregate && onScreen(sensor)))
+                if (category.sensors.some(sensor => sensor.aggregate && onScreen(sensor)))
                     summarised.add(name);
                 for (let sensor of category.sensors) {
                     let summarisedSensor = summarised.has(name) && sensorPresent(category, sensor) && !sensor.hidden;
@@ -630,10 +630,6 @@ export class Sensors {
     // Writes what a category shows over all its sensors, and returns the sensors it wrote.
     _summarise(name) {
         let category = this.catalog[name];
-        if (name == 'voltage') {
-            category.header = this._chooseHeader(name);
-            return category.header ? [category.header] : [];
-        }
         // The batteries' total is over their power rates; an average, minimum or maximum is over every sensor.
         // A sensor that cannot be read is left out, so one of them does not take the summary away.
         let readable = this._measured(category).filter(sensor =>
@@ -916,10 +912,9 @@ export class Sensors {
             case 'fan':
                 // With one sensor there is no average row; the header then shows that sensor.
                 return withKey('average') ?? this._measured(category)[0];
-            case 'voltage': {
-                let ranked = this._measured(category).sort((a, b) => a.priority - b.priority || a.key.localeCompare(b.key));
-                return ranked.find(sensor => sensor.status != 'unavailable') ?? ranked[0];
-            }
+            case 'voltage':
+                // The battery's voltage before the system's, and a USB supply's only when there is nothing else.
+                return this._measured(category).sort((a, b) => a.priority - b.priority || a.key.localeCompare(b.key))[0];
             case 'battery':
                 // With one battery there is no total row; the header then shows that battery's power rate.
                 return withKey('total-power-rate') ?? present.find(sensor => sensor.field == 'power-rate');

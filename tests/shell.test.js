@@ -665,7 +665,8 @@ export async function run() {
     button.menu.open();
     temperatureMenu.open();
     await Scripting.sleep(100);
-    // The actions of a sensor without the one that pins, in its panel, which a click on its row opens.
+    // The actions of a sensor without the first, in its panel, which a click on its row opens: Pin to category,
+    // Rename and Hide.
     let actionsOf = sensor => {
         if (button._rowActions.sensor != sensor)
             button._rows.get(sensor).activate();
@@ -673,7 +674,7 @@ export async function run() {
     };
     equal(button._rowActions.items.length, 0, 'no panel is open');
     button._rows.get(first).activate();
-    equal(labelsWithPanel(temperatureMenu).startsWith('Fixture A, [Fixture A: Pin to top bar, Rename, Hide, Category default], Fixture B'), true,
+    equal(labelsWithPanel(temperatureMenu).startsWith('Fixture A, [Fixture A: Pin to top bar, Pin to category, Rename, Hide], Fixture B'), true,
         'the panel is under its row, with the sensor\'s name and its actions: ' + labelsWithPanel(temperatureMenu));
     equal(button._rowActions.panel.actor.has_style_class_name('quick-toggle-menu'), true, 'it has the look of a quick settings menu');
     await Scripting.sleep(300);
@@ -712,7 +713,7 @@ export async function run() {
     // A row that its new name moves to the far end of the category takes its panel along, which is scrolled into view.
     systemScrolling.value = 0;
     let firstSystemSensor = [...button._rows].find(([, row]) => row == systemGroup.menu._getMenuItems()[0])[0];
-    actionsOf(firstSystemSensor)[0].activate();
+    actionsOf(firstSystemSensor)[1].activate();
     button._rowActions.header._labelEntry.text = 'zzz, the last by name';
     button._rowActions.header._labelEntry.clutter_text.emit('activate');
     await Scripting.sleep(300);
@@ -723,7 +724,7 @@ export async function run() {
     button._closeRowActions();
     temperatureMenu.open();
     await Scripting.sleep(100);
-    actionsOf(first)[0].activate();
+    actionsOf(first)[1].activate();
     let nameField = button._rowActions.header._labelEntry;
     equal(nameField.text, 'Fixture A', 'Rename puts the name into a text field in the panel\'s head');
     // A row takes the keyboard, as the row under the pointer does; the field takes it back.
@@ -732,48 +733,55 @@ export async function run() {
     nameField.text = 'Zone';
     nameField.clutter_text.emit('activate');
     equal(first.customLabel, 'Zone', 'Enter renames the sensor');
-    equal(labelsWithPanel(temperatureMenu).startsWith('Fixture B, Zone, [Zone: Pin to top bar, Rename, Hide, Category default]'), true,
+    equal(labelsWithPanel(temperatureMenu).startsWith('Fixture B, Zone, [Zone: Pin to top bar, Pin to category, Rename, Hide]'), true,
         'the row shows the new name, is sorted by it, and its panel is still open under it: ' + labelsWithPanel(temperatureMenu));
-    actionsOf(first)[0].activate();
+    actionsOf(first)[1].activate();
     equal(button._rowActions.header._labelEntry.text, 'Zone', 'renaming again starts from the name the user gave');
     button._rowActions.header._renameRestore.emit('clicked', 0);
     equal(first.customLabel, undefined, 'the button next to the field gives the sensor its own name back');
     equal(button._rows.get(first).label, 'Fixture A', 'and the row shows it');
     equal(button._rowActions.header.editing, false, 'and the renaming is over');
     sensors.renameSensor(first, 'Zone');
-    actionsOf(first)[0].activate();
+    actionsOf(first)[1].activate();
     button._rowActions.header._labelEntry.text = '';
     button._rowActions.header._labelEntry.clutter_text.emit('activate');
     equal(first.customLabel, undefined, 'an emptied name does the same');
-    actionsOf(second)[2].activate();
-    equal(temperature.header, second, 'Category default makes it the header\'s sensor');
+    actionsOf(second)[0].activate();
+    equal(temperature.header, second, 'Pin to category makes it the header\'s sensor');
     equal(button._rows.get(second).categoryDefault, true, 'and its row shows a star after its name');
     equal(button._rowActions.sensor, second, 'the panel stays open');
-    equal(actionsOf(second)[2].checked, true, 'and the action has a check mark, and undoes it');
-    actionsOf(second)[2].activate();
-    equal(actionsOf(second)[2].checked, false, 'after which the check mark is gone');
+    equal(actionsOf(second)[0].checked, true, 'and the action has a check mark, and undoes it');
+    actionsOf(second)[0].activate();
+    equal(actionsOf(second)[0].checked, false, 'after which the check mark is gone');
     equal(temperature.header, average, 'the header is the average again');
-    equal(button._rows.get(second).categoryDefault, false, 'and the star is gone');
-    actionsOf(first)[1].activate();
+    equal(button._rows.get(second).categoryDefault, false, 'and its star is gone');
+    equal(button._rows.get(average).categoryDefault, true, 'the star is on the average, which the extension chose for the header');
+    actionsOf(first)[2].activate();
     equal(button._rows.has(first), false, 'Hide removes the row');
     equal(button._rowActions.items.length, 0, 'and its panel with it');
-    equal(labelsWithPanel(temperatureMenu).endsWith('Show hidden sensors (1)'), true,
-        'the category then ends with a row for the hidden sensors: ' + labelsWithPanel(temperatureMenu));
-    // That row puts the hidden sensors into the menu, marked, and takes them out again.
-    let hiddenSensorsRow = button._unhideRows.get('temperature');
-    hiddenSensorsRow.activate();
-    equal(button._rows.get(first)?.hidden, true, 'a click on it shows the hidden sensor, marked as hidden');
+    // The fourth button at the bottom of the menu stays pressed in, and while it is, the hidden sensors of all
+    // categories are in the menu, marked.
+    equal(button._hiddenButton.accessible_name, 'Show hidden sensors', 'the button has its name for a screen reader');
+    let pressHiddenButton = () => {
+        button._hiddenButton.checked = !button._hiddenButton.checked;
+        button._hiddenButton.emit('clicked', 0);
+    };
+    let hiddenInSystem = [...button._rows.keys()].find(sensor => sensors.catalog.system.sensors.includes(sensor));
+    sensors.setSensorHidden(hiddenInSystem, true);
+    pressHiddenButton();
+    equal(button._rows.get(first)?.hidden, true, 'pressed in, it shows the hidden sensor, marked as hidden');
+    equal(button._rows.get(hiddenInSystem)?.hidden, true, 'and the hidden sensor of another category');
     equal(button._rows.get(second).hidden, false, 'the others are not marked');
-    equal(hiddenSensorsRow.checked, true, 'and the row has a check mark');
-    hiddenSensorsRow.activate();
-    equal(button._rows.has(first), false, 'another click takes the hidden sensor out again');
-    hiddenSensorsRow.activate();
-    equal(actionsOf(first)[1].checked, true, 'in the panel of a hidden sensor, Hide has a check mark');
-    actionsOf(first)[1].activate();
+    pressHiddenButton();
+    equal(button._rows.has(first) || button._rows.has(hiddenInSystem), false, 'released, the hidden sensors are out again');
+    pressHiddenButton();
+    sensors.setSensorHidden(hiddenInSystem, false);
+    equal(actionsOf(first)[2].checked, true, 'in the panel of a hidden sensor, Hide has a check mark');
+    actionsOf(first)[2].activate();
     equal(first.hidden, undefined, 'and brings the sensor back');
     equal(button._rows.get(first).hidden, false, 'its row is no longer marked');
     equal(button._rowActions.sensor, first, 'its panel stays open');
-    equal(button._unhideRows.has('temperature'), false, 'and the row for hidden sensors goes away with the last of them');
+    pressHiddenButton();
     button._closeRowActions();
     button.menu.close();
     // The made-up interfaces are not hardware. With the option on they have no rows; the totals keep theirs.

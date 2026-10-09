@@ -48,7 +48,7 @@ catalog = {
 
 - `enabled`: whether the category is switched on. This replaced the ten `show-*` settings.
 - `discovered`: the timestamp of the last discovery run that completed this category. See "Discovery".
-- `header`: a link to the sensor of this category whose value is shown in the category's menu header. It is a link of the same kind as the panel's; on disk it is that sensor's key. The collector chooses it after every discovery run. For voltage it is the best voltage that can be read at the moment: the battery's, then the system's, then a USB supply's.
+- `header`: a link to the sensor of this category whose value is shown in the category's menu header. It is a link of the same kind as the panel's; on disk it is that sensor's key. The collector chooses it after every discovery run. For voltage it is the battery's, then the system's, then a USB supply's. A sensor the user pinned to the category (`categoryDefault`) comes before any of these rules.
 - `shown`: whether the header is on screen right now. The renderer sets this; see "What is collected".
 - `sensors`: its sensors, in the order in which they were found. The menu shows them by section and label; see "The renderer".
 
@@ -141,7 +141,7 @@ The renderer sets in the catalog what it shows: it marks a sensor as `shown` whe
 
 A tick is one pass over the catalog. It collects the files of the marked sensors, and for each file the sensors that are written from it. Each file is then read once, its content is taken apart once, and that read writes all its sensors; the renderer is told about them at once, so a slow source does not hold the others back. Nothing is kept between ticks about which sensors are collected: the catalog and its marks say it.
 
-An average, minimum or maximum is not read from anything. When one of them is marked, every sensor of its category is read, also those that are not on screen, and the three are computed together once, when the last of those reads is in. The voltage header works the same way: while it is on screen all voltages are read, and it shows the best one that could be read.
+An average, minimum or maximum is not read from anything. When one of them is marked, every sensor of its category is read, also those that are not on screen, and the three are computed together once, when the last of those reads is in.
 
 After it changed the marks, the renderer tells the collector so (`shownChanged`); see the last section.
 

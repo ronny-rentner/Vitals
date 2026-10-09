@@ -7,7 +7,7 @@
 .vitals-button-action > StIcon { icon-size: 16px; }
 .vitals-button-box { padding: 0px; spacing: 22px; }
 /* The dropdown menu has one width. A label that does not fit next to its value is shortened with "…". */
-.vitals-menu { width: 24em; }
+.vitals-menu { width: 22em; }
 /* Digits of one width, so a top-bar value does not change width when only its digits change. */
 .vitals-panel-label { font-feature-settings: "tnum"; }
 /* With the "emphasize values" option, a unit is smaller and thinner than its number. panelValue.js also draws it

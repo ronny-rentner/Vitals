@@ -11,6 +11,10 @@ function indent() {
     return new St.Icon({ style_class: 'popup-menu-icon', icon_name: 'ornament-check-symbolic', opacity: 0 });
 }
 
+// The mark of the sensor whose value its category's header shows: after its name in the list, and in front of the
+// action that pins a sensor there, so that the action shows what the mark in the list means.
+export const CATEGORY_PIN_ICON = 'starred-symbolic';
+
 // How strongly the row of a hidden sensor is drawn. 255 is full strength.
 const HIDDEN_ROW_OPACITY = 120;
 
@@ -41,9 +45,9 @@ export const MenuItem = GObject.registerClass({
         this._labelActor = new St.Label({ text: label });
         this.add_child(this._labelActor);
 
-        // After the name: a star while the sensor is the user's choice for its category's header, and a struck-out
-        // eye while the sensor is hidden.
-        this._defaultActor = new St.Icon({ style_class: 'vitals-row-mark', icon_name: 'starred-symbolic', visible: false });
+        // After the name: a star while the header of the sensor's category shows this sensor's value, and a
+        // struck-out eye while the sensor is hidden.
+        this._defaultActor = new St.Icon({ style_class: 'vitals-row-mark', icon_name: CATEGORY_PIN_ICON, visible: false });
         this.add_child(this._defaultActor);
         this._hiddenActor = new St.Icon({ style_class: 'vitals-row-mark', icon_name: 'view-conceal-symbolic', visible: false });
         this.add_child(this._hiddenActor);
@@ -69,7 +73,7 @@ export const MenuItem = GObject.registerClass({
         this._pinActor.opacity = pinned ? 255 : 0;
     }
 
-    // Whether the row shows that its sensor is the user's choice for the header of its category.
+    // Whether the row shows that the header of its category shows this sensor's value.
     get categoryDefault() {
         return this._defaultActor.visible;
     }
@@ -137,8 +141,7 @@ export const MenuItem = GObject.registerClass({
 
 });
 
-// An action in the menu that does not close the menu when it is chosen: one of the actions under a sensor's row,
-// or the row that brings a category's hidden sensors back.
+// One of the actions in a sensor's panel. Choosing it does not close the menu.
 export const MenuAction = GObject.registerClass({
 
     Signals: {
@@ -147,34 +150,26 @@ export const MenuAction = GObject.registerClass({
 
 }, class MenuAction extends PopupMenu.PopupBaseMenuItem {
 
-    // `checked` puts a check mark in front of the label. Without one that room stays empty, so the labels of all
-    // actions start at the same place. `setIn` sets the action in like a sensor's row, for one that stands among them.
-    _init(label, checked = false, setIn = false) {
+    // `checked` puts a mark in front of the label: a check mark, or the icon named by `markIconName`, for an action
+    // whose state the rows show with a mark of its own. Without a mark that room stays empty, so the labels of all
+    // actions start at the same place. The action is set in like a sensor's row, so that the mark stands under the
+    // row's icon and the label under the row's name.
+    _init(label, checked = false, markIconName = 'ornament-check-symbolic') {
         super._init({ reactive: true });
-        if (setIn)
-            this.add_child(indent());
-        // An icon without a picture takes no room, so the check mark is always there and only not drawn.
-        this._checkActor = new St.Icon({ style_class: 'popup-menu-icon', icon_name: 'ornament-check-symbolic' });
-        this.add_child(this._checkActor);
-        this.checked = checked;
+        this._checked = checked;
+        this.add_child(indent());
+        // An icon without a picture takes no room, so the mark is always there and only not drawn.
+        this.add_child(new St.Icon({ style_class: 'popup-menu-icon', icon_name: markIconName, opacity: checked ? 255 : 0 }));
         this._labelActor = new St.Label({ text: label });
         this.add_child(this._labelActor);
     }
 
     get checked() {
-        return this._checkActor.opacity == 255;
-    }
-
-    set checked(checked) {
-        this._checkActor.opacity = checked ? 255 : 0;
+        return this._checked;
     }
 
     get label() {
         return this._labelActor.text;
-    }
-
-    set label(label) {
-        this._labelActor.text = label;
     }
 
     // Not the Shell's 'activate' signal, which closes the menu. What is chosen may remove this row, and the Shell

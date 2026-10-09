@@ -84,10 +84,9 @@ var VitalsMenuButton = GObject.registerClass({
         // The panel with a sensor's actions that is open under the sensor's row, with what belongs to it: the
         // sensor, the actions, the panel's head, and what is dimmed while it is open.
         this._rowActions = {sensor: null, items: []};
-        // Category name to the row that shows its hidden sensors, for the categories that have some.
-        this._unhideRows = new Map();
-        // The names of the categories whose hidden sensors are in the menu at the moment. This is not saved.
-        this._hiddenShown = new Set();
+        // The button at the bottom of the menu that puts the hidden sensors of all categories into the menu while
+        // it is pressed in. This is not saved.
+        this._hiddenButton = null;
         // Category name to the line above the rows that are set apart at its end, where there is one.
         this._separators = new Map();
         // The icon shown in the top bar while no sensor is.
@@ -210,6 +209,12 @@ var VitalsMenuButton = GObject.registerClass({
             this._extensionObject.openPreferences();
         });
         customButtonBox.add_child(prefsButton);
+
+        // A button that stays pressed in: while it is, the hidden sensors are in the menu, marked as hidden.
+        this._hiddenButton = this._createRoundButton('view-conceal-symbolic', _('Show hidden sensors'));
+        this._hiddenButton.toggle_mode = true;
+        this._hiddenButton.connect('clicked', () => this._syncCatalog());
+        customButtonBox.add_child(this._hiddenButton);
 
         // now add the buttons to the top bar
         item.actor.add_child(customButtonBox);
@@ -343,9 +348,11 @@ var VitalsMenuButton = GObject.registerClass({
         this.menu.addMenuItem(this._groups[groupName]);
     }
 
-    _createRoundButton(iconName) {
+    // `name` is what a screen reader says for the button, which shows an icon only.
+    _createRoundButton(iconName, name) {
         let button = new St.Button({
-            style_class: 'message-list-clear-button button vitals-button-action'
+            style_class: 'message-list-clear-button button vitals-button-action',
+            accessible_name: name
         });
 
         button.child = new St.Icon({
@@ -599,10 +606,10 @@ var VitalsMenuButton = GObject.registerClass({
             let rowsChanged = false;
             for (let sensor of category.sensors) {
                 let row = this._rows.get(sensor);
-                // A sensor the user hid has a row only while the user looks at the category's hidden sensors. Two
+                // A sensor the user hid has a row only while the button for hidden sensors is pressed in. Two
                 // options leave rows out as well: the interfaces that are not hardware, and the average, minimum
                 // and maximum.
-                let wanted = sensorPresent(category, sensor) && (!sensor.hidden || this._hiddenShown.has(name)) &&
+                let wanted = sensorPresent(category, sensor) && (!sensor.hidden || this._hiddenButton.checked) &&
                     !(hardwareOnly && this._isVirtualInterface(sensor)) && !(sensor.aggregate && !aggregates);
                 if (!row == !wanted) continue;
                 // Rows are placed by counting rows, so the line between them is taken out while they change.
@@ -623,7 +630,8 @@ var VitalsMenuButton = GObject.registerClass({
                 if (row.label != this._label(sensor))
                     row.label = this._label(sensor);
                 row.pinned = pinnedSensors.has(sensor);
-                row.categoryDefault = Boolean(sensor.categoryDefault);
+                // The star marks the sensor whose value the category's header shows, whoever chose it.
+                row.categoryDefault = sensor == category.header;
                 row.hidden = Boolean(sensor.hidden);
                 return row;
             });
@@ -637,7 +645,6 @@ var VitalsMenuButton = GObject.registerClass({
             }
             if (rowsChanged)
                 this._placeSeparator(name, category);
-            this._syncUnhideRow(name, category);
         }
         this._syncPanelItems();
         // After the top bar, since the first action says whether the sensor is pinned there.
@@ -650,34 +657,6 @@ var VitalsMenuButton = GObject.registerClass({
     // What a sensor is called in the menu: the name the user gave it, or its own label.
     _label(sensor) {
         return sensor.customLabel ?? _(sensor.label);
-    }
-
-    // A category with hidden sensors ends with a row that says how many there are. A click on it puts them into
-    // the menu, in their places and marked as hidden, and another click takes them out again. A sensor is brought
-    // back for good in its panel, where "Hide" then has a check mark.
-    _syncUnhideRow(categoryName, category) {
-        let hiddenSensors = category.sensors.filter(sensor => sensor.hidden && sensorPresent(category, sensor));
-        let row = this._unhideRows.get(categoryName);
-        if (!hiddenSensors.length) {
-            this._hiddenShown.delete(categoryName);
-            if (row) {
-                row.destroy();
-                this._unhideRows.delete(categoryName);
-            }
-            return;
-        }
-        if (!row) {
-            row = new MenuItem.MenuAction('', false, true);
-            row.connect('chosen', () => {
-                if (!this._hiddenShown.delete(categoryName))
-                    this._hiddenShown.add(categoryName);
-                this._syncCatalog();
-            });
-            this._unhideRows.set(categoryName, row);
-            this._groups[categoryName].menu.addMenuItem(row);
-        }
-        row.label = _('Show hidden sensors (%d)').replace('%d', hiddenSensors.length);
-        row.checked = this._hiddenShown.has(categoryName);
     }
 
     // Closes the panel with a sensor's actions and brings the rest of the menu back to full strength. `animate`
@@ -710,12 +689,14 @@ var VitalsMenuButton = GObject.registerClass({
                 // Brings the top bar in line and puts the panel back, where this action then has its check mark or not.
                 this._syncCatalog();
             }, pinned],
+            // The action has its mark only for a sensor the user pinned there. A sensor the extension chose for the
+            // header has the star in the list too, but here the action is still to be taken, and a click shows it.
+            [_('Pin to category'), () => this._sensors.setCategoryDefault(categoryName, sensor.categoryDefault ? null : sensor),
+                Boolean(sensor.categoryDefault), MenuItem.CATEGORY_PIN_ICON],
             [_('Rename'), () => header.editLabel(customLabel =>
                 // The sensor's own label, typed in again, is no name of the user's.
                 this._sensors.renameSensor(sensor, customLabel == _(sensor.label) ? '' : customLabel))],
-            [_('Hide'), () => this._sensors.setSensorHidden(sensor, !sensor.hidden), Boolean(sensor.hidden)],
-            [_('Category default'), () => this._sensors.setCategoryDefault(categoryName, sensor.categoryDefault ? null : sensor),
-                Boolean(sensor.categoryDefault)]
+            [_('Hide'), () => this._sensors.setSensorHidden(sensor, !sensor.hidden), Boolean(sensor.hidden)]
         ];
         let menu = this._groups[categoryName].menu;
         // The Shell's style class for such a menu gives the panel its colours in every theme; its sizes, which are
@@ -725,9 +706,8 @@ var VitalsMenuButton = GObject.registerClass({
         panel.actor.add_style_class_name('vitals-sensor-panel');
         panel.actor.reactive = true;
         panel.addMenuItem(header);
-        let items = actions.map(([label, act, checked]) => {
-            // Set in like the head, so that the check mark stands under the sensor's icon and the label under its name.
-            let action = new MenuItem.MenuAction(label, checked, true);
+        let items = actions.map(([label, act, checked, markIconName]) => {
+            let action = new MenuItem.MenuAction(label, checked, markIconName);
             // The panel stays open after an action was used. Hiding ends it with the row.
             action.connect('chosen', act);
             panel.addMenuItem(action);
@@ -865,6 +845,7 @@ var VitalsMenuButton = GObject.registerClass({
         for (let [name, category] of this._sensors.categories()) {
             let headerLabel = this._groups[name]._statusLabel;
             let header = category.header;
+
             if (!header || !sensorPresent(category, header)) {
                 headerLabel.hide();
                 this._headerSensors.delete(name);
@@ -997,8 +978,7 @@ var VitalsMenuButton = GObject.registerClass({
         this.menu.disconnectObject(this);
 
         this._rows.clear();
-        this._unhideRows.clear();
-        this._hiddenShown.clear();
+        this._hiddenButton = null;
         this._rowActions = {sensor: null, items: []};
         this._panelItems.clear();
         this._widths.clear();
