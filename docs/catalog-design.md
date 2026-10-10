@@ -145,7 +145,11 @@ A tick is one pass over the catalog. It collects the files of the marked sensors
 
 An average, minimum or maximum is not read from anything. When one of them is marked, every sensor of its category is read, also those that are not on screen, and the three are computed together once, when the last of those reads is in.
 
-After it changed the marks, the renderer tells the collector so (`shownChanged`); see the last section.
+After it changed the marks, the renderer tells the collector so (`shownChanged`); see the last section. What came on screen is then read at once and does not wait for the next tick, which can be a minute away (`_readNewlyShown`, decided on 2026-10-10). Only that is read: a source that is on screen and has no reading. A source whose reading is current is not read again, and one that is still inside its own interval, such as the public IP, keeps the reading it has. The same happens when the catalog changed, for instance when another sensor became a category's header.
+
+A rate needs two readings, and all sensors of one file share them: with download speed in the top bar, `/proc/net/dev` always has two, and every network speed has its value the moment its row appears. A rate whose file was not on screen before starts from nothing, and it is not computed across the time its file was off screen. So a first reading that leaves a sensor without a value is followed by a second reading one second later (`SECOND_READING_SECONDS`), and the rate shows what happened in that second until the next tick. The second reading is called off when the source leaves the screen before it, and it is dropped when it falls into a discovery run; the rate then comes with the next tick.
+
+A tick can follow a first reading within a moment. A rate over less than half a second says nothing (processor usage over 4 ms reads 0), so a reading that arrives that soon after the last one is compared with the reading before the last one, or gives no rate when there is none (`SHORTEST_RATE_SECONDS`).
 
 ## Sensors with the same key
 
@@ -224,6 +228,7 @@ No sensor is read while a discovery run is in progress.
 
 - When a run starts, reads that are under way are cancelled.
 - A tick that falls into a run does nothing. It is not held back and carried out later; the next regular tick after the run reads again.
+- What came on screen during a run, as when the menu opens, is read when the run ends.
 
 That way no sensor is ever read through a path that the run is about to turn off.
 

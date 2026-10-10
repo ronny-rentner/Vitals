@@ -129,7 +129,7 @@ async function checkPanelVisibility(button, fixtures) {
             let timer = button._refreshTimeoutId;
             togglePin(button, fixture);
             await Scripting.sleep(10);
-            check(sensors.sources.get(source).pending, null, name + ' pinning does not collect');
+            check(sensors.sources.get(source).pending !== null, true, name + ' pinning reads at once, without a tick');
             check(button._refreshTimeoutId, timer, name + ' pinning preserves timer');
             let poll = button._querySensors();
             check(item(fixture).visible, true, name + ' initial panel item');
@@ -358,7 +358,8 @@ export async function run() {
     });
     button._syncCatalog();
     await button._querySensors();
-    await Scripting.sleep(50);
+    // Longer than the shortest time a rate is computed over.
+    await Scripting.sleep(600);
     await button._querySensors();
     for (let sensor of liveSensors)
         equal(sensor.status, 'ready', 'live ' + sensor.key);
@@ -393,13 +394,15 @@ export async function run() {
     button.menu.open();
     equal(discoveries, 1, 'opening the menu rediscovers');
     await button._discoverSensors();
-    equal(reads, 0, 'opening and rediscovering do not collect');
+    equal(reads, 2, 'opening the menu reads what it shows at once');
     equal(button._refreshTimeoutId, timer, 'opening preserves shared timer');
-    equal(button._groups.temperature._statusLabel.text, '…', 'new demand waits for tick');
+    // The reads are under way; no tick follows in this time.
+    await Scripting.sleep(50);
+    equal(button._groups.temperature._statusLabel.text, '20°C', 'what came on screen does not wait for a tick');
     let discoveriesBeforeRefresh = discoveries;
     await button._refresh();
     equal(discoveries, discoveriesBeforeRefresh + 1, 'Refresh rediscovers');
-    equal(reads > 0, true, 'Refresh reads values at once');
+    equal(reads, 4, 'Refresh reads values at once');
     equal(average.status, 'ready', 'Refresh does not wait for the next tick');
     equal(button._refreshTimeoutId, timer, 'Refresh preserves shared timer');
     await button._querySensors();
@@ -596,24 +599,37 @@ export async function run() {
         return addRow.call(this, categoryName, category, sensor);
     };
     let idle = {rx: 0, tx: 0};
-    await sensors._rediscoverNetwork(new Map([['fixture0', idle]]));
+    // From here on the machine's network interfaces are made up. The collector takes over the interfaces it finds in
+    // /proc/net/dev whenever it reads a network value, so that file lists the made-up ones as well.
+    let interfacesOnMachine = new Map();
+    let readFile = sensors._read;
+    sensors._read = function (fileLocation, cancellation) {
+        if (fileLocation != '/proc/net/dev') return readFile.call(this, fileLocation, cancellation);
+        return Promise.resolve('Inter-| Receive | Transmit\n face |bytes\n' + [...interfacesOnMachine].map(([name, {rx, tx}]) =>
+            name + ': ' + rx + ' 0 0 0 0 0 0 0 ' + tx + ' 0 0 0 0 0 0 0\n').join(''));
+    };
+    let setInterfaces = interfaces => {
+        interfacesOnMachine = interfaces;
+        return sensors._rediscoverNetwork(interfaces);
+    };
+    await setInterfaces(new Map([['fixture0', idle]]));
     let fixtureDownload = find('network', 'fixture0/rx');
     equal(button._rows.has(fixtureDownload), true, 'new network row');
     let temperatureRow = button._rows.get(first);
     rowsCreated.length = 0;
-    await sensors._rediscoverNetwork(new Map([['fixture0', idle], ['fixture1', idle]]));
+    await setInterfaces(new Map([['fixture0', idle], ['fixture1', idle]]));
     equal(rowsCreated.join(','), 'fixture1/rx,fixture1/tx', 'a new interface adds its own two rows and no other');
     equal(button._rows.get(first), temperatureRow, 'rows of other categories are left alone');
-    await sensors._rediscoverNetwork(new Map([['fixture1', idle]]));
+    await setInterfaces(new Map([['fixture1', idle]]));
     equal(button._rows.has(fixtureDownload), false, 'disappeared network row removed');
     button._addRow = addRow;
     // The network menu from top to bottom: the label of each row, and a dash for the line between rows.
     let networkRowLabels = () => button._groups.network.menu._getMenuItems()
         .map(item => item instanceof PopupMenu.PopupSeparatorMenuItem ? '—' : item.label).join(', ');
-    await sensors._rediscoverNetwork(new Map([['fixture0', idle], ['fixture1', idle], ['fixture2', idle]]));
+    await setInterfaces(new Map([['fixture0', idle], ['fixture1', idle], ['fixture2', idle]]));
     let rowsBefore = networkRowLabels();
-    await sensors._rediscoverNetwork(new Map([['fixture0', idle], ['fixture2', idle]]));
-    await sensors._rediscoverNetwork(new Map([['fixture0', idle], ['fixture1', idle], ['fixture2', idle]]));
+    await setInterfaces(new Map([['fixture0', idle], ['fixture2', idle]]));
+    await setInterfaces(new Map([['fixture0', idle], ['fixture1', idle], ['fixture2', idle]]));
     equal(networkRowLabels(), rowsBefore, 'a returning interface gets its rows back in the same place');
     // The average, minimum and maximum are below the temperatures, under a line, and an option leaves them out.
     let menuLabels = menu => menu._getMenuItems()
@@ -824,7 +840,8 @@ export async function run() {
         'the line goes with them');
     settings.set_boolean('network-hardware-only', false);
     equal(button._rows.has(fixtureUpload), true, 'switching it off brings the rows back');
-    await sensors._rediscoverNetwork(new Map());
+    await setInterfaces(new Map());
+    sensors._read = readFile;
     settings.reset('network-hardware-only');
     print('PASS pin visibility, saved position, single-row updates, interface removal and no query on menu close');
 

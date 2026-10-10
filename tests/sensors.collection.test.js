@@ -12,6 +12,14 @@ function setup() {
     let sensors = new Sensors(settings(), text => text);
     sensors.clock = () => time;
     sensors.createCancellation = () => ({cancelled: false, cancel() { this.cancelled = true; }});
+    // What the collector has scheduled for later. The test lets the time pass and runs it.
+    let scheduled = [];
+    sensors.schedule = (seconds, callback) => {
+        let entry = {seconds, callback};
+        scheduled.push(entry);
+        return entry;
+    };
+    sensors.unschedule = entry => scheduled.splice(scheduled.indexOf(entry), 1);
     sensors.onError = (id, error) => errors.push([id, error]);
     // The made-up sensors live in the fan category, which has an average over its sensors. How the value of each
     // follows from its source's reading is made up as well, so the real rules for that are replaced.
@@ -20,7 +28,7 @@ function setup() {
     let values = new Map();
     sensors._value = (categoryName, sensor, reading) => values.get(sensor)(reading);
     return {
-        sensors, errors,
+        sensors, errors, scheduled,
         // Adds a sensor that is on the machine and is read from the made-up source with this id.
         add(key, source, value) {
             let sensor = {key, file: source, status: 'pending', discovered: category.discovered};
@@ -44,7 +52,14 @@ function setup() {
                 sensor.shown = shown.includes(sensor);
             sensors.shownChanged();
         },
-        advance(seconds) { time += seconds; }
+        // Lets the time pass and runs what was scheduled for a moment that has come.
+        advance(seconds) {
+            time += seconds;
+            for (let entry of scheduled.filter(candidate => (candidate.seconds -= seconds) <= 0)) {
+                scheduled.splice(scheduled.indexOf(entry), 1);
+                entry.callback();
+            }
+        }
     };
 }
 
@@ -193,6 +208,108 @@ test('source failure preserves measurements and marks dependent results unavaila
     fail = false;
     await sensors.poll();
     equal(value.status, 'ready');
+});
+
+test('what comes on screen is read at once, without a tick, and nothing else is read with it', async () => {
+    let {sensors, add, show, advance} = setup();
+    let interval = 60;
+    let reads = {first: 0, second: 0, slow: 0};
+    sensors.addSource('first', {read: async () => ++reads.first});
+    sensors.addSource('second', {read: async () => ++reads.second});
+    sensors.addSource('slow', {interval, read: async () => ++reads.slow});
+    let firstValue = add('first-value', 'first', s => s.value);
+    let secondValue = add('second-value', 'second', s => s.value);
+    let slowValue = add('slow-value', 'slow', s => s.value);
+    let readsFinished = () => new Promise(resolve => setTimeout(resolve, 0));
+
+    show(firstValue, slowValue);
+    await readsFinished();
+    equal(firstValue.status, 'ready', 'a sensor that comes on screen has its value before any tick');
+    equal(slowValue.status, 'ready');
+    equal(reads.second, 0, 'a source nobody shows is not read');
+
+    show(firstValue, slowValue, secondValue);
+    await readsFinished();
+    equal(secondValue.status, 'ready');
+    equal(reads.first, 1, 'a source that was on screen already is not read again');
+
+    show(firstValue, secondValue);
+    advance(interval / 2);
+    show(firstValue, secondValue, slowValue);
+    await readsFinished();
+    equal(reads.slow, 1, 'a source that comes back inside its interval is not asked');
+    equal(slowValue.status, 'ready', 'and shows the reading it has');
+
+    show(firstValue, secondValue);
+    advance(interval);
+    show(firstValue, secondValue, slowValue);
+    await readsFinished();
+    equal(reads.slow, 2, 'one that comes back after its interval is asked at once');
+});
+
+test('a rate that comes on screen has its value a second later, without a tick', async () => {
+    let {sensors, add, show, advance, scheduled} = setup();
+    let counter = 1000, counterReads = 0, plainReads = 0;
+    let counted = 300;
+    sensors.addSource('counter', {read: async () => { counterReads++; return counter; }});
+    sensors.addSource('plain', {read: async () => { plainReads++; return 7; }});
+    let rate = add('rate', 'counter', s => counterRate(s, value => value));
+    let plainValue = add('plain-value', 'plain', s => s.value);
+    let readsFinished = () => new Promise(resolve => setTimeout(resolve, 0));
+
+    show(rate, plainValue);
+    await readsFinished();
+    equal(rate.status, 'pending', 'one reading gives no rate');
+    equal(scheduled.length, 1, 'a second reading is scheduled for the rate, none for the value that has its reading');
+    let secondsUntilSecondReading = scheduled[0].seconds;
+    counter += counted;
+    advance(secondsUntilSecondReading);
+    await readsFinished();
+    equal(rate.value, counted / secondsUntilSecondReading, 'the second reading gives the rate over the time since the first');
+    equal(plainReads, 1, 'the other source is not read again');
+    equal(scheduled.length, 0, 'and nothing further is scheduled');
+
+    show(plainValue);
+    show(rate, plainValue);
+    await readsFinished();
+    equal(scheduled.length, 1, 'back on screen, the rate starts over');
+    show(plainValue);
+    equal(scheduled.length, 0, 'a second reading is called off when its source leaves the screen');
+    equal(counterReads, 3);
+});
+
+test('a rate is not computed over the moment between coming on screen and the next tick', async () => {
+    let {sensors, add, show, advance} = setup();
+    let counter = 1000, reads = 0;
+    let momentBeforeTick = 0.004, updateSeconds = 5, counted = 300;
+    sensors.addSource('counter', {read: async () => { reads++; return counter; }});
+    let rate = add('rate', 'counter', s => counterRate(s, value => value));
+    show(rate);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    equal(reads, 1, 'the counter is read when the rate comes on screen');
+    advance(momentBeforeTick);
+    counter += 1;
+    await sensors.poll();
+    equal(reads, 2, 'the tick that follows at once reads it too');
+    equal(rate.status, 'pending', 'and gives no rate over that moment');
+    advance(updateSeconds);
+    counter += counted;
+    await sensors.poll();
+    equal(rate.value, counted / updateSeconds, 'the next tick gives the rate over a whole interval');
+});
+
+test('a sensor that becomes the header of a category on screen is read at once', async () => {
+    let {sensors, add} = setup();
+    let reading = 5;
+    sensors.addSource('source', {read: async () => reading});
+    let value = add('value', 'source', s => s.value);
+    sensors.catalog.fan.shown = true;
+    sensors.shownChanged();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    equal(value.status, 'pending', 'a sensor that is neither shown nor the header is not read');
+    sensors.setCategoryDefault('fan', value);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    equal(value.value, reading, 'as the header it has its value without a tick');
 });
 
 test('a finished source writes and publishes its own sensors, and the average follows when the last source is in', async () => {

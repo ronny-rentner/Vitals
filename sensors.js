@@ -45,6 +45,12 @@ const CPU_FREQUENCIES = 'cpu-frequencies';
 const FILESYSTEM = 'filesystem';
 const PUBLIC_IP = 'public-ip';
 const FRAMES = 'frames';
+// A reading taken when its sensor came on screen can be followed by a tick at once. A rate over less time than this
+// says nothing.
+const SHORTEST_RATE_SECONDS = 0.5;
+// A rate has no value after the first reading of its source. The second reading follows this much later and does
+// not wait for the next tick, which can be a minute away.
+const SECOND_READING_SECONDS = 1;
 const NVIDIA = 'nvidia';
 // How the content of a file is taken apart, for the files that hold more than one number.
 const PARSERS = {
@@ -260,6 +266,12 @@ export class Sensors {
         // Seconds of calendar time, for the timestamps that are saved with the catalog.
         this.now = () => GLib.get_real_time() / 1000000;
         this.createCancellation = () => new Gio.Cancellable();
+        // Calls `callback` once after so many seconds. What it returns calls that off when given to `unschedule`.
+        this.schedule = (seconds, callback) => GLib.timeout_add(GLib.PRIORITY_DEFAULT, seconds * 1000, () => {
+            callback();
+            return GLib.SOURCE_REMOVE;
+        });
+        this.unschedule = scheduled => GLib.Source.remove(scheduled);
         // Everything that is read, by its id: a file's path, or the name of a source that is not a file. Each holds
         // how it is read, its last reading, and the read that is under way.
         this.sources = new Map();
@@ -424,14 +436,16 @@ export class Sensors {
         this.onCatalogChanged();
         this._select();
         this.onValuesChanged(this._writeActive());
+        this._readNewlyShown();
     }
 
     // The renderer calls this after it changed which sensors and headers are marked `shown`.
-    // Waiting for the next tick would leave a sensor that comes on screen with the value from the last time it
-    // was read, and a source nobody shows any more, such as the nvidia-smi process, running until then.
+    // What came on screen is read at once: the next tick can be a whole update interval away. A source nobody
+    // shows any more, such as the nvidia-smi process, is stopped at once as well.
     shownChanged() {
         this._select();
         this._writeActive();
+        this._readNewlyShown();
     }
 
     // The temperatures, voltages or fan speeds of a category that are read from the machine and that the user has
@@ -556,13 +570,35 @@ export class Sensors {
     _stopSource(id) {
         let source = this.sources.get(id);
         this._cancelRead(source);
+        if (source.secondReading) {
+            this.unschedule(source.secondReading);
+            source.secondReading = null;
+        }
         if (source.stop) source.stop();
     }
 
+    // A tick: reads the sources of what is on screen whose reading is older than their interval. `force` reads
+    // all of them.
     async poll(force = false) {
         // No sensor is read while a discovery run is in progress. This tick is skipped, not made up for later.
         if (this.destroyed || this._discovery) return;
         this._select();
+        await this._readSources(id => force || !this._withinInterval(id));
+    }
+
+    // Reads what just came on screen, without waiting for a tick: the sources on screen that have no reading.
+    // One that was read before has none when _select found its reading older than its interval.
+    _readNewlyShown() {
+        // Nothing is read during a discovery run. The run calls this when it ends.
+        if (this.destroyed || this._discovery) return;
+        this._readSources(id => {
+            let reading = this.sources.get(id).reading;
+            return !reading || reading.status == 'pending';
+        });
+    }
+
+    // Starts a read of every source on screen that is due, and ends when those and the reads under way are in.
+    async _readSources(due) {
         let reads = [];
         for (let id of this.activeSources.keys()) {
             let source = this.sources.get(id);
@@ -570,7 +606,7 @@ export class Sensors {
                 reads.push(source.pending.promise);
                 continue;
             }
-            if (!force && this._withinInterval(id))
+            if (!due(id))
                 continue;
 
             let ticket = {cancellation: this.createCancellation()};
@@ -581,8 +617,10 @@ export class Sensors {
                 if (source.pending != ticket || this.destroyed) return;
                 let time = source.sampleTime ? source.sampleTime(value) : this.clock();
                 let last = source.reading;
-                // A rate is computed against the last reading that succeeded, never across a failure or a stop.
-                let previous = last?.status == 'ready' ? {value: last.value, time: last.time} : null;
+                // A rate is computed against the last reading that succeeded, never across a failure or a stop, and
+                // against the one before it when the last one is only a moment old.
+                let previous = last?.status != 'ready' ? null
+                    : time - last.time < SHORTEST_RATE_SECONDS ? last.previous : {value: last.value, time: last.time};
                 source.reading = {value, time, status: 'ready', previous};
             }).catch(error => {
                 if (source.pending != ticket || this.destroyed) return;
@@ -594,18 +632,27 @@ export class Sensors {
             }).finally(() => {
                 if (source.pending != ticket || this.destroyed) return;
                 source.pending = null;
-                this.onValuesChanged(new Set(this._write(id)));
+                let written = this._write(id);
+                this.onValuesChanged(new Set(written));
+                // A first reading that leaves a sensor without a value, as it does a rate, is followed by a second.
+                let withoutValue = written.some(sensor => sensor.status == 'pending' || sensor.status == 'saved');
+                if (withoutValue && !source.reading.previous && !source.secondReading) {
+                    source.secondReading = this.schedule(SECOND_READING_SECONDS, () => {
+                        source.secondReading = null;
+                        // No sensor is read during a discovery run. The rate then comes with the next tick.
+                        if (!this._discovery)
+                            this._readSources(candidate => candidate == id);
+                    });
+                }
+                // What a category shows over all its sensors is written once, when the last of their reads is in.
+                for (let name of this.summarised) {
+                    let inputs = this._measured(this.catalog[name])
+                        .map(sensor => this.sources.get(this._sourceOf(name, sensor)));
+                    if (inputs.includes(source) && !inputs.some(input => input.pending))
+                        this.onValuesChanged(new Set(this._summarise(name)));
+                }
             });
             reads.push(ticket.promise);
-        }
-        // What a category shows over all its sensors is written once, when the last of their reads is in.
-        for (let name of this.summarised) {
-            let inputReads = this._measured(this.catalog[name]).map(sensor =>
-                this.sources.get(this._sourceOf(name, sensor)).pending?.promise);
-            reads.push(Promise.all(inputReads).then(() => {
-                if (!this.destroyed)
-                    this.onValuesChanged(new Set(this._summarise(name)));
-            }));
         }
         await Promise.all(reads);
     }
@@ -796,7 +843,7 @@ export class Sensors {
             start: () => this._startFrames(),
             stop: () => this._stopFrames(),
             read: async () => {
-                if (this._frameTimes.length < 2) return undefined;
+                if (this._frameTimes.length < 2) return SensorMath.PENDING;
                 return (this._frameTimes.length - 1) /
                     (this._frameTimes[this._frameTimes.length - 1] - this._frameTimes[0]);
             }
@@ -898,7 +945,11 @@ export class Sensors {
             if (this._sensorCount() != sensorCountBefore)
                 this._save();
             this.catalogChanged();
-        })().finally(() => { this._discovery = null; });
+        })().finally(() => {
+            this._discovery = null;
+            // Nothing was read during the run, so what came on screen meanwhile is read now.
+            this._readNewlyShown();
+        });
         return this._discovery;
     }
 

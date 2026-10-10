@@ -119,11 +119,8 @@ var VitalsMenuButton = GObject.registerClass({
 
         this._sensors.onCatalogChanged = () => this._syncCatalog();
         this._sensors.onValuesChanged = recomputedSensors => this._render(recomputedSensors);
-        // Read once now: the timer's first tick is a whole update interval away.
-        this._discoverSensors().then(() => {
-            if (!this._sensors.destroyed)
-                this._querySensors();
-        });
+        // The collector reads what is on screen when the run ends; the timer's first tick is a whole update interval away.
+        this._discoverSensors();
 
         // start monitoring sensors
         this._initializeTimer();

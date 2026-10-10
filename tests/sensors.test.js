@@ -35,6 +35,8 @@ function setup({files = machineFixture, configuration = settings()} = {}) {
     let errors = [];
     sensors.clock = () => time;
     sensors.now = () => date;
+    // Here only ticks read. The second reading that follows a rate's first one is in the collection tests.
+    sensors.schedule = () => null;
     sensors.onError = (id, error) => errors.push([id, error]);
     return {
         sensors, configuration, machine, errors,
@@ -98,7 +100,10 @@ function installNvidiaSmi() {
     let streams = () => new TextDecoder().decode(GLib.file_get_contents(logFile)[1]).split('\n')
         .filter(start => start.includes(' -l ')).map(start => {
             let [pid, ...startArguments] = start.split(' ');
-            return {pid, queriedFields: startArguments.find(argument => argument.startsWith('--query-gpu=')).slice('--query-gpu='.length)};
+            return {
+                pid, interval: Number(startArguments[startArguments.indexOf('-l') + 1]),
+                queriedFields: startArguments.find(argument => argument.startsWith('--query-gpu=')).slice('--query-gpu='.length)
+            };
         });
     return {
         setCards(cards) {
@@ -374,11 +379,16 @@ test('a discovery run cancels a read that is under way, and its late result is d
     show(uptime);
     let poll = sensors.poll();
     await Promise.resolve();
+    let readAfterRun = machine.holdNextRead('/proc/uptime');
     await sensors.discover();
     equal(uptimeRead.cancellable.is_cancelled(), true, 'the read is cancelled when the run starts');
     uptimeRead.finish();
     await poll;
     equal(uptime.value, undefined, 'the late result is not taken');
+    equal(typeof readAfterRun.finish, 'function', 'the sensor is read again when the run ends, without a tick');
+    readAfterRun.finish();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    equal(uptime.value, 100, 'and has its value');
     sensors.destroy();
 });
 
@@ -874,6 +884,8 @@ test('menu demand changes preserve network readings between shared ticks', async
         equal(download.value, (busy.eth0.rx - initial.eth0.rx) / updateSeconds, 'rate retained after menu close');
         equal(sensors.reading(NETWORK), sample, 'counter and timestamp retained');
     }
+    // A read that the last change of what is on screen caused would have started by now.
+    await new Promise(resolve => setTimeout(resolve, 0));
     equal(machine.reads.includes(NETWORK), false, 'no premature network read');
     advance(updateSeconds);
     await sensors.poll();
@@ -952,6 +964,39 @@ test('the NVIDIA stream asks for the fields of the shown sensors only and stops 
     equal(amongTemperatures.label, 'GPU');
     equal(cardTemperature.value, card['temperature.gpu'], 'temperature row');
     equal(linkSpeed.status, 'unavailable', 'unsupported PCIe value');
+    show();
+    await nvidiaSmi.allStopped();
+    sensors.destroy();
+});
+
+test('a tick starts the NVIDIA stream again when the update interval changed and when the process ended', async () => {
+    let {sensors, configuration, find, show, advance} = setup();
+    let nvidiaSmi = installNvidiaSmi();
+    nvidiaSmi.setCards([{uuid: 'GPU-test', name: 'Test GPU', 'memory.used': 2048, 'memory.total': 8192}]);
+    writeCategoryEnabled(configuration, 'gpu', true);
+    sensors.reloadEnabled();
+    await sensors.discover();
+    let memoryUsed = find('gpu', 'Test GPU/memory.used');
+    show(memoryUsed);
+    await sensors.poll();
+    equal(nvidiaSmi.streams().length, 1);
+
+    let updateSeconds = configuration.get_int('update-time') + 2;
+    configuration.set_int('update-time', updateSeconds);
+    advance(updateSeconds);
+    await sensors.poll();
+    equal(nvidiaSmi.streams().length, 2, 'the tick after a changed update interval starts a new process');
+    equal(nvidiaSmi.streams()[1].interval, updateSeconds, 'which reports at that interval');
+
+    GLib.spawn_command_line_sync('kill ' + nvidiaSmi.streams()[1].pid);
+    // The first tick finds the process gone, the second has the reading of the new one.
+    for (let tick = 0; tick < 2; tick++) {
+        await new Promise(resolve => setTimeout(resolve, 300));
+        advance(updateSeconds);
+        await sensors.poll();
+    }
+    equal(nvidiaSmi.streams().length, 3, 'a tick starts the process again after it ended');
+    equal(memoryUsed.status, 'ready');
     show();
     await nvidiaSmi.allStopped();
     sensors.destroy();
