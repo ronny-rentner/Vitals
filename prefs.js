@@ -1,836 +1,377 @@
 import Adw from 'gi://Adw';
 import Gio from 'gi://Gio';
-import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import Gdk from 'gi://Gdk';
 import Gtk from 'gi://Gtk';
 import {ExtensionPreferences, gettext as _} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
-import {sensorCategories, colorPageForSensor} from './helpers/categories.js';
-import {
-    compareColorEntries,
-    DEFAULT_THRESHOLD_RGBA,
-    formatColorEntry,
-    sanitizeAndSortColorEntries,
-} from './helpers/colors.js';
+import {Formatter} from './formatter.js';
+import {sensorCategories, categoriesInOrder, MANUAL_CATEGORY_ORDER} from './helpers/categories.js';
+import {compareColorEntries, DEFAULT_THRESHOLD_RGBA, formatColorEntry, sanitizeAndSortColorEntries} from './helpers/colors.js';
 import {readCatalog, writeCategoryEnabled, sensorPresent} from './helpers/storedCatalog.js';
 
-// The update intervals offered in the preferences, in seconds.
-const UPDATE_SECONDS = [1, 2, 3, 5, 10, 15, 30, 60];
+// The preferences window, written in the order in which it shows its pages, groups and rows. A row is one call of
+// a helper below, which creates it and connects it to its setting.
+export default class VitalsPrefs extends ExtensionPreferences {
+    fillPreferencesWindow(window) {
+        this._settings = this.getSettings();
+        this._applyIconStyle();
+        this._settings.connect('changed::icon-style', () => this._applyIconStyle());
 
-class Settings {
-    constructor(extensionObject) {
-        this._extensionObject = extensionObject;
+        // The pages, with a sidebar that lists them.
+        this._pages = new Adw.ViewStack();
+        let pageArea = new Adw.NavigationPage({ title: _('General'), child: this._underHeaderBar(this._pages, { show_start_title_buttons: false }) });
+        this._pages.connect('notify::visible-child', () => pageArea.set_title(this._pages.get_page(this._pages.visible_child).title));
+        window.set_content(new Adw.NavigationSplitView({
+            sidebar: new Adw.NavigationPage({
+                title: _('Vitals'),
+                child: this._underHeaderBar(new Adw.ViewSwitcherSidebar({ stack: this._pages }), { show_end_title_buttons: false }),
+            }),
+            content: pageArea,
+        }));
+        // GNOME Shell only accepts a preferences window that was given a page its own way. Its own page list is a bar
+        // at the bottom that shortens the names when there are thirteen, so the window gets a page that is not seen.
+        window.add(new Adw.PreferencesPage());
+        // High enough for the sidebar to show all its entries.
+        window.set_default_size(780, 700);
 
-        this._settings = extensionObject.getSettings();
-        this._apply_icon_style();
+        this._page('general', _('General'), 'preferences-system-symbolic',
+            this._group('',
+                this._updateRow(),
+                this._switchRow('use-higher-precision', _('Use higher precision'), _('One more decimal place, and seconds in uptimes.')),
+                this._toggleRow('icon-style', _('Icon style'), '', [_('Original'), _('GNOME')])),
+            new Adw.PreferencesGroup({
+                title: _('About'),
+                description: _('Feature requests or bugs? Please visit <a href="https://github.com/corecoding/Vitals/issues">GitHub</a>. No warranty, expressed or implied. <a href="https://corecoding.com/donate.php">Donate</a> if you found this useful.'),
+            }));
 
-        this.builder = new Gtk.Builder();
-        this.builder.set_translation_domain(this._extensionObject.metadata['gettext-domain']);
+        this._page('top-bar', _('Top Bar'), 'focus-top-bar-symbolic',
+            this._group(_('Placement'),
+                this._comboRow('position-in-panel', _('Position'), _('Far left and far right are the outer ends of the bar.'),
+                    [_('Left'), _('Center'), _('Right'), _('Far left'), _('Far right')]),
+                this._switchRow('allow-panel-dragging', _('Reorder sensors by drag and drop'))),
+            this._group(_('Appearance'),
+                this._switchRow('fixed-widths', _('Steady widths'),
+                    _('Keep room for a value’s widest text, so its neighbours do not jump. The room is given back after a minute.')),
+                this._switchRow('emphasize-values', _('Emphasize values'), _('Draw icons and units lighter and smaller than the numbers.')),
+                this._switchRow('hide-icons', _('Hide icons'), _('The icons in the menu stay.'))));
 
-        GObject.type_ensure(Adw.HeaderBar.$gtype);
-        GObject.type_ensure(Adw.NavigationPage.$gtype);
-        GObject.type_ensure(Adw.NavigationSplitView.$gtype);
-        GObject.type_ensure(Adw.ToolbarView.$gtype);
-        GObject.type_ensure(Adw.ViewStack.$gtype);
-        this.builder.add_from_file(this._extensionObject.path + '/prefs.ui');
+        this._page('menu', _('Menu'), 'open-menu-symbolic',
+            this._group('',
+                this._switchRow('menu-centered', _('Open centered under the sensors'), _('Otherwise the menu opens centered under the pointer.')),
+                this._textRow('monitor-cmd', _('System monitor command'),
+                    _('The program that the System Monitor button at the bottom of the menu starts.'), 'gnome-system-monitor')),
+            this._group(_('Categories'),
+                this._toggleRow('category-order', _('Order'), _('Manual is the order given by dragging categories in the menu.'),
+                    [_('Alphabetical'), _('Manual')]),
+                this._usableWhile('category-order', order => order == MANUAL_CATEGORY_ORDER,
+                    this._switchRow('allow-category-dragging', _('Reorder by drag and drop'), _('Only in the manual order.'))),
+                this._switchRow('animate-categories', _('Slide open and shut'))),
+            this._group(_('Sensors'),
+                this._switchRow('include-aggregates', _('Show average, minimum and maximum'),
+                    _('In the temperature and fan categories, below the sensors.'))));
 
-        // Threshold color editors are built lazily when each page is first shown,
-        // so we do not construct dozens of Gtk.ColorButtons up front.
-        // pageName -> { settingsKey, page, addGroup, palettes, addColorsDropdown, ... }
-        this._thresholdColorPages = {};
-        // pageName -> the sensors that can get a colour scale of their own on that page: colour target -> label.
-        this._sensorLabelsByPage = this._read_sensor_labels();
-        this._bind_sensor_page_gates();
-        this._bind_settings();
+        this._categoryPage('temperature', _('Monitor temperature'), '', [
+            this._toggleRow('unit', _('Unit'), '', [_('°C'), _('°F')]),
+            this._switchRow('hide-zeros', _('Skip sensors that read zero'),
+                _('A sensor that reads zero when it is found is left out. One that reads zero later stays.'))]);
+
+        this._categoryPage('voltage', _('Monitor voltage'));
+
+        this._categoryPage('fan', _('Monitor fan'));
+
+        this._categoryPage('memory', _('Monitor memory'), '', [
+            this._toggleRow('memory-measurement', _('Units'), _('Binary is KiB, MiB, GiB. Decimal is kB, MB, GB.'), [_('Binary'), _('Decimal')])]);
+
+        this._categoryPage('processor', _('Monitor processor'), '', [
+            this._switchRow('include-static-info', _('Include static information'), _('Values that never change, such as vendor and cache size.'))]);
+
+        this._categoryPage('system', _('Monitor system'));
+
+        this._categoryPage('network', _('Monitor network'), '', [
+            this._switchRow('network-hardware-only', _('Only show hardware interfaces'), _('Hide bridges, container, VPN and loopback interfaces.'))],
+            this._group(_('Speeds'),
+                this._toggleRow('network-speed-format', _('Measure in'), '', [_('Bytes'), _('Bits')]),
+                this._comboRow('network-speed-unit', _('Unit'), '', [_('Automatic'), _('kB/s or kbit/s'), _('MB/s or Mbit/s')])),
+            this._group(_('Public IP Address'),
+                this._switchRow('include-public-ip', _('Show public IP address'), _('Looked up over the internet from the provider below.')),
+                this._toggleRow('network-public-ip-provider', _('Provider'), '', [_('Core Coding'), _('MyIP.com'), _('ipify')]),
+                this._numberRow('network-public-ip-interval', _('Minutes between lookups'), 15, 1440),
+                // ipify is the third provider, and it gives no country.
+                this._usableWhile('network-public-ip-provider', provider => provider != 2,
+                    this._switchRow('network-public-ip-show-flag', _('Show country flag'), _('Not available with ipify.')))));
+
+        this._categoryPage('storage', _('Monitor storage'), '', [
+            this._textRow('storage-path', _('Path'), _('The filesystem that holds this path is monitored.'), '/'),
+            this._toggleRow('storage-measurement', _('Units'), _('Binary is KiB, MiB, GiB. Decimal is kB, MB, GB.'), [_('Binary'), _('Decimal')])]);
+
+        this._categoryPage('battery', _('Monitor battery'));
+
+        this._categoryPage('gpu', _('Monitor GPU'), _('NVIDIA cards are read with the nvidia-smi tool.'), [
+            this._switchRow('include-static-gpu-info', _('Include static information'),
+                _('Values that never change, such as driver version and power limit.'))]);
+
+        this._orderCategoryPages();
+        this._settings.connect('changed::catalog', () => this._orderCategoryPages());
+        this._settings.connect('changed::category-order', () => this._orderCategoryPages());
     }
 
-    _flatButton({icon_name, label, tooltip_text}) {
-        let props = {
-            valign: Gtk.Align.CENTER,
-            css_classes: ['flat'],
-        };
-        if (icon_name)
-            props.icon_name = icon_name;
-        if (label)
-            props.label = label;
-        if (tooltip_text)
-            props.tooltip_text = tooltip_text;
-        return new Gtk.Button(props);
-    }
-
-    // The sensors on this machine, from the catalog the extension saved. A sensor is named in the colour settings
-    // by its category and key.
-    _read_sensor_labels() {
-        let labelsByPage = {};
-        for (let [categoryName, category] of Object.entries(readCatalog(this._settings))) {
-            if (categoryName == 'panel') continue;
-            for (let sensor of category.sensors || []) {
-                let page = colorPageForSensor(categoryName, sensor.format);
-                if (!page || !sensorPresent(category, sensor)) continue;
-                if (!labelsByPage[page])
-                    labelsByPage[page] = new Map();
-                // A GPU temperature is on the temperature page; its label says where it belongs.
-                // The name the user gave the sensor in the menu, or its own label.
-                let label = sensor.customLabel ?? sensor.label;
-                labelsByPage[page].set(categoryName + '/' + sensor.key,
-                    page == categoryName ? label : `${label} (${categoryName})`);
-            }
-        }
-        return labelsByPage;
-    }
-
-    // The label of a sensor named in the colour settings. One that is not on this machine is shown by that name.
-    _sensor_label(pageName, sensorKey) {
-        return this._sensorLabelsByPage[pageName]?.get(sensorKey) ?? sensorKey;
-    }
-
-    _apply_icon_style() {
+    // The icons of the categories are the extension's own, in the style the user chose.
+    _applyIconStyle() {
         let iconTheme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default());
-        let styles = ['original', 'gnome'];
-        let dir = styles[this._settings.get_int('icon-style')] || 'original';
-        let vitalsPath = `${this._extensionObject.path}/icons/${dir}`;
-        let iconsRoot = `${this._extensionObject.path}/icons/`;
-        let others = (iconTheme.get_search_path() || []).filter(p => !p.startsWith(iconsRoot));
-        iconTheme.set_search_path([vitalsPath].concat(others));
-        return iconTheme;
+        let ownIcons = `${this.path}/icons/`;
+        let style = ['original', 'gnome'][this._settings.get_int('icon-style')];
+        iconTheme.set_search_path([ownIcons + style, ...iconTheme.get_search_path().filter(directory => !directory.startsWith(ownIcons))]);
     }
 
-    _connect_icon_style_refresh(refresh) {
-        this.builder.get_object('icon-style').connect('changed', refresh);
-
-        let styleManager = Adw.StyleManager.get_default();
-        styleManager.connect('notify::dark', refresh);
-        styleManager.connect('notify::color-scheme', refresh);
+    _underHeaderBar(content, headerBarProperties) {
+        let view = new Adw.ToolbarView({ content });
+        view.add_top_bar(new Adw.HeaderBar(headerBarProperties));
+        return view;
     }
 
-    // ListBox rows use icon-name so GTK can recolor with the theme fg after
-    // icon-style / dark changes. set_from_paintable often leaves #bebebe unmapped.
-    refresh_sidebar_icons() {
-        this._apply_icon_style();
+    _page(name, title, iconName, ...groups) {
+        let page = new Adw.PreferencesPage();
+        for (let group of groups)
+            page.add(group);
+        this._pages.add_titled_with_icon(page, name, title, iconName);
+        return page;
+    }
 
-        for (let name of Object.keys(sensorCategories)) {
-            let image = this.builder.get_object('sidebar-icon-' + name);
-            if (!image)
+    _group(title, ...rows) {
+        let group = new Adw.PreferencesGroup({ title });
+        for (let row of rows)
+            group.add(row);
+        return group;
+    }
+
+    // The page of a category: the switch that turns the category on, and what can only be set while it is on,
+    // `rows` next to the switch and `groups` below.
+    _categoryPage(name, switchTitle, switchSubtitle = '', rows = [], ...groups) {
+        // Whether a category is switched on is part of the saved catalog.
+        let categorySwitch = new Adw.SwitchRow({ title: switchTitle, subtitle: switchSubtitle, active: readCatalog(this._settings)[name].enabled });
+        categorySwitch.connect('notify::active', () => writeCategoryEnabled(this._settings, name, categorySwitch.active));
+        for (let dependent of [...rows, ...groups])
+            categorySwitch.bind_property('active', dependent, 'sensitive', GObject.BindingFlags.SYNC_CREATE);
+        // A category has one name and one icon, those of the menu.
+        let page = this._page(name, _(sensorCategories[name].name), sensorCategories[name].icon.replace('.svg', ''),
+            this._group('', categorySwitch, ...rows), ...groups);
+        this._colorScales(name, page, categorySwitch);
+    }
+
+    // The colour scales of a category, below the settings on its page. A scale is a list of breakpoints: from this
+    // value on, or up to it for a sensor whose low values are the bad ones, the value is shown in this colour.
+    _colorScales(name, page, categorySwitch) {
+        let key = name + '-colors';
+        // The breakpoints of all scales, as they are saved. A change is made here and saved; adding or removing
+        // something draws the scales again from here.
+        let breakpoints = sanitizeAndSortColorEntries(this._settings.get_strv(key));
+        let save = () => this._settings.set_strv(key, breakpoints.sort(compareColorEntries).map(formatColorEntry));
+        let restructure = change => {
+            change();
+            save();
+            draw();
+        };
+        let groups = [];
+        let draw = () => {
+            for (let group of groups)
+                page.remove(group);
+            let targets = this._colorTargets(name);
+            let withScale = new Set(breakpoints.map(breakpoint => breakpoint.target));
+            // The scales stand in the order in which they are offered, then those of sensors that are gone.
+            let scaleTargets = [...[...targets.keys()].filter(target => withScale.has(target)), ...[...withScale].filter(target => !targets.has(target)).sort()];
+            groups = scaleTargets.map(target => {
+                let scale = breakpoints.filter(breakpoint => breakpoint.target == target);
+                let {label, unit, decimals, lowIsBad} = targets.get(target) ??
+                    {label: _('%s (unavailable)').format(target.slice(target.indexOf(':') + 1)), unit: '', decimals: 1};
+                let group = this._group(label, ...scale.map(breakpoint => {
+                    let threshold = this._numberField(-1000000, 1000000, decimals);
+                    threshold.value = breakpoint.threshold;
+                    threshold.connect('value-changed', () => {
+                        breakpoint.threshold = threshold.value;
+                        save();
+                    });
+                    let color = new Gtk.ColorDialogButton({
+                        valign: Gtk.Align.CENTER,
+                        dialog: new Gtk.ColorDialog({ with_alpha: false }),
+                        // A colour component is saved as a share of 1 or, by hand, as a number up to 255.
+                        rgba: new Gdk.RGBA({ ...Object.fromEntries(['red', 'green', 'blue'].map(component =>
+                            [component, breakpoint[component] > 1 ? breakpoint[component] / 255 : breakpoint[component]])), alpha: 1 }),
+                    });
+                    color.connect('notify::rgba', () => {
+                        ({ red: breakpoint.red, green: breakpoint.green, blue: breakpoint.blue } = color.rgba);
+                        save();
+                    });
+                    let row = new Adw.ActionRow({ title: lowIsBad ? _('Up to') : _('From'), activatable_widget: threshold });
+                    row.add_suffix(threshold);
+                    row.add_suffix(new Gtk.Label({ label: unit }));
+                    row.add_suffix(color);
+                    row.add_suffix(this._iconButton('edit-delete-symbolic', _('Remove breakpoint'),
+                        () => restructure(() => breakpoints.splice(breakpoints.indexOf(breakpoint), 1))));
+                    return row;
+                }));
+                let addBreakpoint = new Adw.ButtonRow({ title: _('Add breakpoint'), start_icon_name: 'list-add-symbolic' });
+                // The new breakpoint is the highest of its scale.
+                addBreakpoint.connect('activated', () => restructure(() => breakpoints.push(
+                    { ...DEFAULT_THRESHOLD_RGBA, target, threshold: Math.max(...scale.map(breakpoint => breakpoint.threshold)) + 10 ** (1 - decimals) })));
+                group.add(addBreakpoint);
+                group.set_header_suffix(this._iconButton('user-trash-symbolic', _('Remove color scale'),
+                    () => restructure(() => breakpoints = breakpoints.filter(breakpoint => breakpoint.target != target))));
+                return group;
+            });
+            let withoutScale = [...targets.keys()].filter(target => !withScale.has(target));
+            if (withoutScale.length > 0) {
+                let targetChoice = new Gtk.DropDown({
+                    valign: Gtk.Align.CENTER,
+                    model: Gtk.StringList.new(withoutScale.map(target => targets.get(target).label)),
+                });
+                let add = new Gtk.Button({ valign: Gtk.Align.CENTER, label: _('Add') });
+                add.connect('clicked', () => restructure(() => breakpoints.push(
+                    { ...DEFAULT_THRESHOLD_RGBA, target: withoutScale[targetChoice.selected], threshold: 0 })));
+                let addScale = new Adw.ActionRow({ title: _('Add color scale') });
+                addScale.add_suffix(targetChoice);
+                addScale.add_suffix(add);
+                groups.push(this._group(groups.length > 0 ? '' : _('Threshold Colors'), addScale));
+            }
+            for (let group of groups) {
+                page.add(group);
+                categorySwitch.bind_property('active', group, 'sensitive', GObject.BindingFlags.SYNC_CREATE);
+            }
+        };
+        // The scales are drawn each time the page comes into view, so they are in order again after a value was
+        // changed, and a page that is never looked at creates none. They are drawn again when another setting
+        // changes while they are in view: a unit they show, or the sensors of the machine.
+        page.connect('map', draw);
+        this._settings.connect('changed', (settings, changedKey) => {
+            if (changedKey != key && page.get_mapped())
+                draw();
+        });
+    }
+
+    // Whose colour scale the page of a category offers, by what a breakpoint calls it (see helpers/colors.js), in
+    // the order of the list: first all sensors of one kind of value, then each sensor, in the alphabetical order of
+    // the labels the menu shows, with numbers in them counted ("Core 2" before "Core 10"). Each has the label of
+    // its scale, the unit and the decimals of its breakpoints, and whether its low values are the bad ones.
+    _colorTargets(name) {
+        let category = readCatalog(this._settings)[name];
+        let formatter = new Formatter(this._settings);
+        let byLabel = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+        // A category has no sensors before the extension has looked for hardware once. A sensor whose value is
+        // text cannot be coloured.
+        let sensors = (category.sensors ?? [])
+            .filter(sensor => sensorPresent(category, sensor) && formatter.colorScale(sensor.format))
+            .map(sensor => ({ ...sensor, label: sensor.customLabel ?? sensor.label }))
+            .sort((sensor, other) => byLabel.compare(sensor.label, other.label));
+        let targets = new Map();
+        for (let format of new Set(sensors.map(sensor => sensor.format))) {
+            let alike = sensors.filter(sensor => sensor.format == format);
+            // One scale for all sensors of a kind is offered when there are several and their bad end is the same.
+            if (alike.length < 2 || alike.some(sensor => sensor.lowIsBad != alike[0].lowIsBad))
                 continue;
-
-            let iconName = image.icon_name;
-            image.clear();
-            image.set_from_icon_name(iconName);
+            let [, unit, decimals] = formatter.colorScale(format);
+            targets.set('kind:' + format, { label: unit ? _('All values in %s').format(unit) : _('All values without a unit'), unit, decimals, lowIsBad: alike[0].lowIsBad });
         }
+        for (let sensor of sensors) {
+            let [, unit, decimals] = formatter.colorScale(sensor.format);
+            targets.set(`sensor:${name}/${sensor.key}`, { label: sensor.label, unit, decimals, lowIsBad: sensor.lowIsBad });
+        }
+        return targets;
     }
 
-    ensure_threshold_colors_for_page(pageName) {
-        if (this._thresholdColorPages[pageName] || !sensorCategories[pageName]?.colorFormats)
-            return;
-
-        this._add_threshold_colors_group(
-            `${pageName}-page`,
-            `${pageName}-colors`,
-            pageName);
+    _iconButton(iconName, tooltip, clicked) {
+        let button = new Gtk.Button({ icon_name: iconName, tooltip_text: tooltip, valign: Gtk.Align.CENTER, css_classes: ['flat'] });
+        button.connect('clicked', clicked);
+        return button;
     }
 
-    _action_row_for(widget) {
-        let current = widget;
-        while (current) {
-            if (current instanceof Adw.ActionRow)
-                return current;
-            current = current.get_parent();
+    // The categories are listed in the order of the menu, also when the user rearranges it there while this window
+    // is open. A stack cannot move a page, so the pages are taken out and added again.
+    _orderCategoryPages() {
+        let shown = this._pages.visible_child_name;
+        let names = categoriesInOrder(readCatalog(this._settings), name => _(sensorCategories[name].name),
+            this._settings.get_int('category-order') == MANUAL_CATEGORY_ORDER);
+        for (let name of names) {
+            let page = this._pages.get_child_by_name(name);
+            let {title, icon_name} = this._pages.get_page(page);
+            this._pages.remove(page);
+            let entry = this._pages.add_titled_with_icon(page, name, title, icon_name);
+            // The categories are a section of the sidebar, headed by the first of them.
+            entry.starts_section = name == names[0];
+            entry.section_title = name == names[0] ? _('Sensors') : '';
         }
+        this._pages.visible_child_name = shown;
+    }
+
+    _bound(key, widget, property) {
+        this._settings.bind(key, widget, property, Gio.SettingsBindFlags.DEFAULT);
         return widget;
     }
 
-    _set_dependent_widgets_sensitive(widgetIds, sensitive) {
-        for (let id of widgetIds) {
-            let widget = this.builder.get_object(id);
-            if (!widget)
-                continue;
-            this._action_row_for(widget).set_sensitive(sensitive);
-        }
+    _switchRow(key, title, subtitle = '') {
+        return this._bound(key, new Adw.SwitchRow({ title, subtitle }), 'active');
     }
 
-    _sync_sensor_page_sensitivity(pageName) {
-        let gate = this._sensorPageGates[pageName];
-        if (!gate)
-            return;
-
-        let enabled = this.builder.get_object(gate.toggle).get_active();
-        this._set_dependent_widgets_sensitive(gate.widgets, enabled);
-
-        let state = this._thresholdColorPages[pageName];
-        if (state) {
-            for (let group of [state.addGroup, ...state.palettes.map(p => p.group)])
-                group.set_sensitive(enabled);
-        }
-
-        if (gate.afterSync)
-            gate.afterSync(enabled);
+    // A list to choose from. The setting holds the position of the chosen entry.
+    _comboRow(key, title, subtitle, entries) {
+        return this._bound(key, new Adw.ComboRow({ title, subtitle, model: Gtk.StringList.new(entries) }), 'selected');
     }
 
-    _bind_sensor_page_gates() {
-        let providerWidget = this.builder.get_object('network-public-ip-provider');
-        let flagWidget = this.builder.get_object('network-public-ip-show-flag');
-
-        this._sensorPageGates = {
-            'temperature': { toggle: 'show-temperature', widgets: ['unit', 'hide-zeros'] },
-            'voltage': { toggle: 'show-voltage', widgets: [] },
-            'fan': { toggle: 'show-fan', widgets: [] },
-            'memory': { toggle: 'show-memory', widgets: ['memory-measurement'] },
-            'processor': { toggle: 'show-processor', widgets: ['include-static-info'] },
-            'system': { toggle: 'show-system', widgets: ['monitor-cmd'] },
-            'network': {
-                toggle: 'show-network',
-                widgets: [
-                    'network-hardware-only',
-                    'include-public-ip',
-                    'network-public-ip-interval',
-                    'network-public-ip-provider',
-                    'network-public-ip-show-flag',
-                    'network-speed-format',
-                    'network-speed-unit',
-                ],
-                afterSync: (networkEnabled) => {
-                    // Keep flag disabled for ipify even when network monitoring is on.
-                    this._action_row_for(flagWidget).set_sensitive(
-                        networkEnabled && providerWidget.get_active() !== 2);
-                },
-            },
-            'storage': { toggle: 'show-storage', widgets: ['storage-path', 'storage-measurement'] },
-            'battery': { toggle: 'show-battery', widgets: [] },
-            'gpu': { toggle: 'show-gpu', widgets: ['include-static-gpu-info'] },
-        };
-
-        for (let pageName in this._sensorPageGates) {
-            let gate = this._sensorPageGates[pageName];
-            let toggle = this.builder.get_object(gate.toggle);
-            toggle.connect('notify::active', () => {
-                this._sync_sensor_page_sensitivity(pageName);
-            });
-            this._sync_sensor_page_sensitivity(pageName);
-        }
-    }
-
-    // Bind the gtk window to the schema settings
-    _bind_settings() {
-        let widget;
-
-        // process sensor toggles
-        let sensors = [ 'use-higher-precision',
-                        'include-aggregates', 'hide-zeros', 'include-public-ip', 'network-hardware-only',
-                        'network-public-ip-show-flag', 'fixed-widths', 'emphasize-values', 'animate-categories',
-                        'hide-icons', 'menu-centered', 'include-static-info',
-                        'include-static-gpu-info', 'allow-panel-dragging' ];
-
-        for (let key in sensors) {
-            let sensor = sensors[key];
-
-            widget = this.builder.get_object(sensor);
-            widget.set_active(this._settings.get_boolean(sensor));
-            widget.connect('state-set', (_, val) => {
-                this._settings.set_boolean(sensor, val);
-            });
-        }
-
-        // Whether a category is switched on is part of the saved catalog.
-        let catalog = readCatalog(this._settings);
-        for (let categoryName of Object.keys(sensorCategories)) {
-            widget = this.builder.get_object('show-' + categoryName);
-            widget.set_active(catalog[categoryName].enabled);
-            widget.connect('state-set', (_, enabled) => {
-                writeCategoryEnabled(this._settings, categoryName, enabled);
-            });
-        }
-
-        // process individual drop down sensor preferences
-        sensors = [
-            'position-in-panel', 'unit', 'network-speed-format', 'network-speed-unit',
-            'memory-measurement', 'storage-measurement', 'icon-style',
-            'network-public-ip-provider'
-        ];
-        for (let key in sensors) {
-            let sensor = sensors[key];
-
-            widget = this.builder.get_object(sensor);
-            widget.set_active(this._settings.get_int(sensor));
-            widget.connect('changed', (widget) => {
-                this._settings.set_int(sensor, widget.get_active());
-            });
-        }
-
-        let providerWidget = this.builder.get_object('network-public-ip-provider');
-        providerWidget.connect('changed', () => {
-            this._sync_sensor_page_sensitivity('network');
-        });
-
-        // The update interval is chosen from these, in the order of the drop-down's entries in prefs.ui.
-        // A value that was set another way and is not among them is shown as the nearest one.
-        let updateTime = this.builder.get_object('update-time');
-        let savedSeconds = this._settings.get_int('update-time');
-        let nearestSeconds = UPDATE_SECONDS.reduce((nearest, seconds) =>
-            Math.abs(seconds - savedSeconds) < Math.abs(nearest - savedSeconds) ? seconds : nearest);
-        updateTime.set_active(UPDATE_SECONDS.indexOf(nearestSeconds));
-        updateTime.connect('changed', (widget) => {
-            this._settings.set_int('update-time', UPDATE_SECONDS[widget.get_active()]);
-        });
-
-        this._settings.bind('network-public-ip-interval', this.builder.get_object('network-public-ip-interval'),
-            'value', Gio.SettingsBindFlags.DEFAULT);
-
-        // process individual text entry sensor preferences
-        sensors = [ 'storage-path', 'monitor-cmd' ];
-        for (let key in sensors) {
-            let sensor = sensors[key];
-
-            widget = this.builder.get_object(sensor);
-            widget.set_text(this._settings.get_string(sensor));
-
-            widget.connect('changed', (widget) => {
-                let text = widget.get_text();
-                if (!text) text = widget.get_placeholder_text();
-                this._settings.set_string(sensor, text);
-            });
-        }
-
-    }
-
-    // Runtime matching is `value >= threshold` (see formatter.js), so each band is
-    // [low, high). Integer breakpoints use high-1 in the label (0–39, 40–59, …).
-    // Float breakpoints keep an explicit half-open label (0 – <0.5).
-    _band_title(low, high) {
-        if (high === null || high === undefined)
-            return _('%s and above').format(low);
-
-        if (!(high > low))
-            return `${low}`;
-
-        if (Number.isInteger(low) && Number.isInteger(high))
-            return `${low} – ${high - 1}`;
-
-        return `${low} – <${high}`;
-    }
-
-    _threshold_for_row(row) {
-        let text = row._thresholdEntry.text.trim();
-        let value = Number.parseFloat(text);
-        if (text === '' || !Number.isFinite(value))
-            return row._committedThreshold;
-        return value;
-    }
-
-    _commit_threshold_entry(row) {
-        let text = row._thresholdEntry.text.trim();
-        let value = Number.parseFloat(text);
-        if (text === '' || !Number.isFinite(value)) {
-            row._thresholdEntry.text = `${row._committedThreshold}`;
-            return row._committedThreshold;
-        }
-
-        row._committedThreshold = value;
-        return value;
-    }
-
-    // Band pairing stays on committed order so mid-edit typing does not move
-    // "and above" between rows; label numbers use the live entry text.
-    _refresh_band_titles(rows) {
-        let items = rows.map(row => ({
-            row: row,
-            orderKey: row._committedThreshold,
-            value: this._threshold_for_row(row),
-        }));
-        items.sort((a, b) => a.orderKey - b.orderKey || a.value - b.value);
-
-        for (let i = 0; i < items.length; i++) {
-            let low = items[i].value;
-            let high = (i < items.length - 1) ? items[i + 1].value : null;
-            // ActionRow titles are Pango markup; unescaped `<` in float labels
-            // (e.g. "0 – <0.5") fails to apply and leaves the old "and above" title.
-            items[i].row.set_title(
-                GLib.markup_escape_text(this._band_title(low, high), -1));
-        }
-    }
-
-    _reorder_threshold_rows(palette) {
-        let rows = palette.rows;
-        let sorted = rows.slice().sort(
-            (a, b) => a._committedThreshold - b._committedThreshold);
-        if (sorted.every((row, i) => row === rows[i]))
-            return;
-
-        for (let row of rows)
-            palette.group.remove(row);
-
-        rows.length = 0;
-        for (let row of sorted) {
-            palette.group.add(row);
-            rows.push(row);
-        }
-    }
-
-    _sync_all_threshold_colors(pageName) {
-        let state = this._thresholdColorPages[pageName];
-        if (!state)
-            return;
-
-        let items = [];
-        for (let palette of state.palettes) {
-            for (let row of palette.rows) {
-                let rgba = row._colorButton.get_rgba();
-                items.push({
-                    threshold: this._threshold_for_row(row),
-                    red: rgba.red,
-                    green: rgba.green,
-                    blue: rgba.blue,
-                    sensorKey: palette.sensorKey || null,
-                });
-            }
-        }
-        items.sort(compareColorEntries);
-        this._settings.set_strv(state.settingsKey, items.map(entry => formatColorEntry(entry)));
-
-        for (let palette of state.palettes) {
-            this._reorder_threshold_rows(palette);
-            this._refresh_band_titles(palette.rows);
-        }
-        this._sync_add_colors_row(pageName);
-    }
-
-    _color_sensor_options(pageName, settingsKey, excludeKeys = null) {
-        let excluded = new Set(excludeKeys || []);
-        let liveSet = new Set(this._sensorLabelsByPage[pageName]?.keys());
-        let live = [...liveSet].filter(key => !excluded.has(key)).sort();
-
-        let orphans = [];
-        let orphanSet = new Set();
-        for (let entry of sanitizeAndSortColorEntries(this._settings.get_strv(settingsKey))) {
-            if (!entry.sensorKey || excluded.has(entry.sensorKey) ||
-                liveSet.has(entry.sensorKey) || orphanSet.has(entry.sensorKey))
-                continue;
-            orphanSet.add(entry.sensorKey);
-            orphans.push(entry.sensorKey);
-        }
-        orphans.sort();
-        return {live, orphans};
-    }
-
-    _palette_targets_in_use(pageName) {
-        let state = this._thresholdColorPages[pageName];
-        if (!state)
-            return [];
-        return state.palettes.map(palette => palette.sensorKey || null);
-    }
-
-    _sensor_key_is_live(pageName, sensorKey) {
-        return this._sensorLabelsByPage[pageName]?.has(sensorKey) ?? false;
-    }
-
-    _available_add_color_targets(pageName, settingsKey) {
-        let inUse = this._palette_targets_in_use(pageName);
-        let excludeSensors = inUse.filter(key => key !== null);
-        let {live, orphans} = this._color_sensor_options(pageName, settingsKey, excludeSensors);
-        let keys = [];
-        let labels = [];
-
-        if (!inUse.some(key => key === null)) {
-            keys.push(null);
-            labels.push(_('All sensors'));
-        }
-        for (let key of live) {
-            keys.push(key);
-            labels.push(this._sensor_label(pageName, key));
-        }
-        for (let key of orphans) {
-            keys.push(key);
-            labels.push(_('%s (unavailable)').format(this._sensor_label(pageName, key)));
-        }
-        return {keys, labels};
-    }
-
-    _populate_add_colors_dropdown_model(dropdown, pageName, settingsKey) {
-        let {keys, labels} = this._available_add_color_targets(pageName, settingsKey);
-        let model = new Gtk.StringList();
-        for (let label of labels)
-            model.append(label);
-
-        dropdown.set_model(model);
-        dropdown._sensorKeys = keys;
-        if (keys.length > 0)
-            dropdown.set_selected(0);
-    }
-
-    _sync_add_colors_row(pageName) {
-        let state = this._thresholdColorPages[pageName];
-        if (!state || !state.addColorsRow || !state.addGroup)
-            return;
-
-        let {keys} = this._available_add_color_targets(pageName, state.settingsKey);
-        let row = state.addColorsRow;
-
-        // Title belongs on this group only when it is the sole Threshold Colors
-        // block (no scales yet); otherwise scales carry their own titles.
-        state.addGroup.set_title(
-            state.palettes.length === 0 ? _('Threshold Colors') : '');
-
-        if (keys.length === 0) {
-            if (row.get_parent())
-                state.addGroup.remove(row);
-            if (state.addGroup.get_parent())
-                state.page.remove(state.addGroup);
-            return;
-        }
-
-        this._populate_add_colors_dropdown_model(
-            state.addColorsDropdown, pageName, state.settingsKey);
-        if (!row.get_parent())
-            state.addGroup.add(row);
-        if (!state.addGroup.get_parent()) {
-            state.page.add(state.addGroup);
-        } else {
-            state.page.remove(state.addGroup);
-            state.page.add(state.addGroup);
-        }
-    }
-
-    _palette_title(sensorKey, pageName) {
-        if (!sensorKey)
-            return _('All sensors colors');
-
-        let label = this._sensor_label(pageName, sensorKey);
-        if (this._sensor_key_is_live(pageName, sensorKey))
-            return _('%s colors').format(label);
-        return _('%s colors (unavailable)').format(label);
-    }
-
-    // New breakpoints sort after the current max so they become the new
-    // "and above" row. Prefer a whole-number step to avoid decimal creep.
-    _next_breakpoint_threshold(palette) {
-        if (!palette.rows.length)
-            return 0;
-
-        let values = palette.rows.map(row => row._committedThreshold)
-            .filter(value => Number.isFinite(value));
-        let max = Math.max(...values);
-        if (values.every(value => Number.isInteger(value)))
-            return max + 10;
-        return max + 1;
-    }
-
-    _make_color_row(pageName, palette, text = '0.0',
-        red = DEFAULT_THRESHOLD_RGBA.red,
-        green = DEFAULT_THRESHOLD_RGBA.green,
-        blue = DEFAULT_THRESHOLD_RGBA.blue,
-        refreshTitles = true) {
-        let initial = Number.parseFloat(text);
-        if (!Number.isFinite(initial))
-            initial = 0;
-
-        let entry = new Gtk.Entry({
-            input_purpose: Gtk.InputPurpose.NUMBER,
-            text: `${initial}`,
-            width_chars: 7,
+    // A number, in a field that takes digits only. Adw.SpinRow is not used: it shows the number without a field.
+    _numberField(lowest, highest, decimals) {
+        return new Gtk.SpinButton({
             valign: Gtk.Align.CENTER,
-            tooltip_text: _('Color applies at this value and up to the next breakpoint'),
-        });
-
-        let colorButton = new Gtk.ColorButton({
-            rgba: new Gdk.RGBA({red, green, blue, alpha: 1.0}),
-            valign: Gtk.Align.CENTER,
-            tooltip_text: _('Band color'),
-        });
-
-        let deleteButton = this._flatButton({
-            icon_name: 'edit-delete-symbolic',
-            tooltip_text: _('Remove breakpoint'),
-        });
-
-        let row = new Adw.ActionRow({
-            title: '',
-            activatable: false,
-        });
-        row._thresholdEntry = entry;
-        row._colorButton = colorButton;
-        row._committedThreshold = initial;
-        row.add_suffix(entry);
-        row.add_suffix(colorButton);
-        row.add_suffix(deleteButton);
-        palette.group.add(row);
-        palette.rows.push(row);
-        if (refreshTitles)
-            this._refresh_band_titles(palette.rows);
-
-        let commitAndSync = () => {
-            this._commit_threshold_entry(row);
-            this._sync_all_threshold_colors(pageName);
-        };
-
-        entry.connect('changed', () => {
-            this._refresh_band_titles(palette.rows);
-        });
-        entry.connect('activate', commitAndSync);
-        entry.connect('notify::has-focus', () => {
-            if (!entry.has_focus)
-                commitAndSync();
-        });
-        colorButton.connect('color-set', () => {
-            this._sync_all_threshold_colors(pageName);
-        });
-        deleteButton.connect('clicked', () => {
-            let index = palette.rows.indexOf(row);
-            if (index < 0)
-                return;
-
-            palette.group.remove(row);
-            palette.rows.splice(index, 1);
-            if (palette.rows.length === 0)
-                this._remove_threshold_palette(pageName, palette);
-            else
-                this._sync_all_threshold_colors(pageName);
+            numeric: true,
+            digits: decimals,
+            adjustment: new Gtk.Adjustment({ lower: lowest, upper: highest, step_increment: 10 ** -decimals }),
         });
     }
 
-    _add_threshold_palette(pageName, sensorKey, entries, options = null) {
-        let seedDefault = !!(options && options.seedDefault);
-        let state = this._thresholdColorPages[pageName];
-        let targetKey = sensorKey || null;
-        let group = new Adw.PreferencesGroup({
-            title: this._palette_title(targetKey, pageName),
-            margin_start: 10,
-            margin_end: 10,
-        });
-
-        let palette = {
-            sensorKey: targetKey,
-            group,
-            rows: [],
-        };
-
-        let addButton = this._flatButton({
-            icon_name: 'list-add-symbolic',
-            tooltip_text: _('Add breakpoint'),
-        });
-        addButton.connect('clicked', () => {
-            this._make_color_row(
-                pageName, palette, `${this._next_breakpoint_threshold(palette)}`);
-            this._sync_all_threshold_colors(pageName);
-        });
-
-        let removeButton = this._flatButton({
-            icon_name: 'user-trash-symbolic',
-            tooltip_text: _('Remove color scale'),
-        });
-        removeButton.connect('clicked', () => {
-            this._remove_threshold_palette(pageName, palette);
-        });
-
-        let actions = new Gtk.Box({
-            orientation: Gtk.Orientation.HORIZONTAL,
-            spacing: 0,
-            valign: Gtk.Align.CENTER,
-        });
-        actions.append(addButton);
-        actions.append(removeButton);
-        group.set_header_suffix(actions);
-
-        state.page.add(group);
-        if (state.addGroup.get_parent()) {
-            state.page.remove(state.addGroup);
-            state.page.add(state.addGroup);
-        }
-        state.palettes.push(palette);
-        this._sync_add_colors_row(pageName);
-
-        let rows = entries;
-        if (seedDefault && rows.length === 0)
-            rows = [{threshold: 0, ...DEFAULT_THRESHOLD_RGBA}];
-
-        for (let entry of rows) {
-            this._make_color_row(
-                pageName, palette,
-                `${entry.threshold}`, entry.red, entry.green, entry.blue,
-                false);
-        }
-        this._refresh_band_titles(palette.rows);
-        return palette;
+    _numberRow(key, title, lowest, highest) {
+        let field = this._bound(key, this._numberField(lowest, highest, 0), 'value');
+        let row = new Adw.ActionRow({ title, activatable_widget: field });
+        row.add_suffix(field);
+        return row;
     }
 
-    _remove_threshold_palette(pageName, palette) {
-        let state = this._thresholdColorPages[pageName];
-        if (!state)
-            return;
-
-        let index = state.palettes.indexOf(palette);
-        if (index < 0)
-            return;
-
-        state.page.remove(palette.group);
-        state.palettes.splice(index, 1);
-        this._sync_all_threshold_colors(pageName);
+    // A choice with all its entries in view. The setting holds the position of the chosen entry.
+    _toggleRow(key, title, subtitle, entries) {
+        let toggles = new Adw.ToggleGroup({ valign: Gtk.Align.CENTER, homogeneous: true, can_shrink: false });
+        for (let label of entries)
+            toggles.add(new Adw.Toggle({ label }));
+        let row = new Adw.ActionRow({ title, subtitle });
+        row.add_suffix(this._bound(key, toggles, 'active'));
+        return row;
     }
 
-    _add_threshold_colors_group(pageId, settingsKey, pageName) {
-        let page = this.builder.get_object(pageId);
-        let sorted = sanitizeAndSortColorEntries(this._settings.get_strv(settingsKey));
-        this._settings.set_strv(settingsKey, sorted.map(entry => formatColorEntry(entry)));
-
-        let byKey = new Map();
-        for (let entry of sorted) {
-            let key = entry.sensorKey || null;
-            if (!byKey.has(key))
-                byKey.set(key, []);
-            byKey.get(key).push(entry);
-        }
-
-        let addGroup = new Adw.PreferencesGroup({
-            title: _('Threshold Colors'),
-            margin_start: 10,
-            margin_end: 10,
-        });
-
-        let state = {
-            settingsKey,
-            page,
-            addGroup,
-            palettes: [],
-            addColorsDropdown: null,
-            addColorsRow: null,
-        };
-        this._thresholdColorPages[pageName] = state;
-
-        if (byKey.has(null))
-            this._add_threshold_palette(pageName, null, byKey.get(null));
-        let sensorKeys = [...byKey.keys()].filter(key => key !== null).sort();
-        for (let key of sensorKeys)
-            this._add_threshold_palette(pageName, key, byKey.get(key) || []);
-
-        let addColorsDropdown = new Gtk.DropDown({
-            valign: Gtk.Align.CENTER,
-            hexpand: true,
-            tooltip_text: _('Apply a color scale to all sensors or one sensor'),
-        });
-        this._populate_add_colors_dropdown_model(addColorsDropdown, pageName, settingsKey);
-
-        let addColorsButton = this._flatButton({
-            icon_name: 'list-add-symbolic',
-            label: _('Add'),
-        });
-        let addColorsRow = new Adw.ActionRow({
-            title: _('Add Color Scale'),
-            activatable_widget: addColorsButton,
-        });
-        addColorsRow.add_suffix(addColorsDropdown);
-        addColorsRow.add_suffix(addColorsButton);
-        addGroup.add(addColorsRow);
-        page.add(addGroup);
-
-        state.addColorsDropdown = addColorsDropdown;
-        state.addColorsRow = addColorsRow;
-        this._sync_add_colors_row(pageName);
-
-        addColorsButton.connect('clicked', () => {
-            let selected = addColorsDropdown.get_selected();
-            let keys = addColorsDropdown._sensorKeys || [];
-            if (selected >= keys.length)
-                return;
-            let sensorKey = keys[selected];
-            if (sensorKey === undefined)
-                return;
-            let target = sensorKey || null;
-            if (state.palettes.some(palette => (palette.sensorKey || null) === target))
-                return;
-
-            this._add_threshold_palette(pageName, sensorKey, [], {seedDefault: true});
-            this._sync_all_threshold_colors(pageName);
-            this._sync_sensor_page_sensitivity(pageName);
-        });
-
-        this._sync_sensor_page_sensitivity(pageName);
+    // A text. An emptied field saves `emptyText`, which it then shows in grey.
+    _textRow(key, title, subtitle, emptyText) {
+        let field = new Gtk.Entry({ valign: Gtk.Align.CENTER, width_chars: 24, placeholder_text: emptyText, text: this._settings.get_string(key) });
+        field.connect('changed', () => this._settings.set_string(key, field.text || emptyText));
+        let row = new Adw.ActionRow({ title, subtitle, activatable_widget: field });
+        row.add_suffix(field);
+        return row;
     }
-}
 
-export default class VitalsPrefs extends ExtensionPreferences {
-    fillPreferencesWindow(window) {
-        window._settings = this.getSettings();
-
-        let settings = new Settings(this);
-        window._vitalsSettings = settings;
-        window.connect('close-request', () => {
-            window._vitalsSettings = null;
+    // The update interval is a number of seconds, chosen from these.
+    _updateRow() {
+        let choices = [[1, _('1 second')], [2, _('2 seconds')], [3, _('3 seconds')], [5, _('5 seconds')], [10, _('10 seconds')],
+            [15, _('15 seconds')], [30, _('30 seconds')], [60, _('60 seconds')]];
+        let row = new Adw.ComboRow({
+            title: _('Update every'),
+            subtitle: _('Only sensors on screen are read: those in the top bar and in the open menu.'),
+            model: Gtk.StringList.new(choices.map(([, label]) => label)),
+            // An interval that was set another way and is not offered here shows no choice.
+            selected: choices.findIndex(([seconds]) => seconds == this._settings.get_int('update-time')) >>> 0,
         });
+        row.connect('notify::selected', () => this._settings.set_int('update-time', choices[row.selected][0]));
+        return row;
+    }
 
-        window.set_search_enabled(false);
-        window.set_default_size(720, 620);
-
-        let root = settings.builder.get_object('prefs-root');
-        let stack = settings.builder.get_object('prefs-stack');
-        let list = settings.builder.get_object('prefs-sidebar');
-        let contentPage = settings.builder.get_object('prefs-content-page');
-
-        // Replace PreferencesWindow's bottom-tab navigation with the sidebar shell.
-        window.get_content().set_child(root);
-
-        let pages = [{ name: 'general' }];
-        for (let name of Object.keys(sensorCategories))
-            pages.push({ name });
-        for (let info of pages) {
-            let page = settings.builder.get_object(info.name + '-page');
-            let title = page.get_title();
-            let iconName = page.get_icon_name();
-            // Header bar already shows the section title; hide the page banner.
-            page.set_title('');
-            stack.add_titled_with_icon(page, info.name, title, iconName);
-        }
-
-        let selectRowForVisible = () => {
-            let name = stack.get_visible_child_name();
-            for (let i = 0; ; i++) {
-                let row = list.get_row_at_index(i);
-                if (!row)
-                    break;
-                if (row.name === name) {
-                    list.select_row(row);
-                    break;
-                }
-            }
-        };
-
-        list.connect('row-activated', (_list, row) => {
-            if (!row?.name || !stack.get_child_by_name(row.name))
-                return;
-            stack.set_visible_child_name(row.name);
-            root.set_show_content(true);
-        });
-        list.connect('row-selected', (_list, row) => {
-            if (!row?.name || !stack.get_child_by_name(row.name))
-                return;
-            if (stack.get_visible_child_name() !== row.name)
-                stack.set_visible_child_name(row.name);
-        });
-
-        let syncVisiblePage = () => {
-            let name = stack.get_visible_child_name();
-            selectRowForVisible();
-
-            let visible = stack.get_visible_child();
-            if (visible) {
-                let title = stack.get_page(visible).get_title();
-                if (name && name !== 'general')
-                    title = title + ' ' + _('Preferences');
-                contentPage.set_title(title);
-            }
-            if (name)
-                settings.ensure_threshold_colors_for_page(name);
-        };
-
-        stack.connect('notify::visible-child', syncVisiblePage);
-        syncVisiblePage();
-
-        settings.refresh_sidebar_icons();
-        settings._connect_icon_style_refresh(() => {
-            settings.refresh_sidebar_icons();
-        });
-
-        // GNOME Shell's prefs host requires visible_page after fillPreferencesWindow
-        // (extensionPrefsDialog.js). The sidebar replaces the window content, so
-        // register an unused page to satisfy that check.
-        window.add(new Adw.PreferencesPage());
+    // `row` can only be used while the setting `key` has a value that `usable` accepts.
+    _usableWhile(key, usable, row) {
+        let sync = () => row.set_sensitive(usable(this._settings.get_int(key)));
+        this._settings.connect('changed::' + key, sync);
+        sync();
+        return row;
     }
 }

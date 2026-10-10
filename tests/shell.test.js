@@ -628,7 +628,7 @@ export async function run() {
     // The categories are in the alphabetical order of their names.
     let categoryNames = button.menu._getMenuItems().filter(item => item instanceof PopupMenu.PopupSubMenuMenuItem).map(item => item.label.text);
     equal(categoryNames.join(', '), [...categoryNames].sort((a, b) => a.localeCompare(b)).join(', '), 'categories in alphabetical order');
-    equal(categoryNames.includes('Graphics') && categoryNames.includes('Temperature'), true, 'under the names the menu shows: ' + categoryNames);
+    equal(categoryNames.includes('GPU') && categoryNames.includes('Temperature'), true, 'under the names the menu shows: ' + categoryNames);
     // The menu's sections: the machine's speeds first, the virtual interfaces last, below a line.
     let networkItems = button._groups.network.menu._getMenuItems();
     let separatorIndex = networkItems.findIndex(item => item instanceof PopupMenu.PopupSeparatorMenuItem);
@@ -784,6 +784,36 @@ export async function run() {
     pressHiddenButton();
     button._closeRowActions();
     button.menu.close();
+    // A category that is dropped onto another one takes its place, and its rows go with it.
+    let categoriesInMenu = () => button.menu._getMenuItems().filter(item => item instanceof PopupMenu.PopupSubMenuMenuItem);
+    let orderBefore = categoriesInMenu();
+    let lastCategory = orderBefore.at(-1), firstCategory = orderBefore[0];
+    equal(firstCategory.handleDragOver(lastCategory) == firstCategory.handleDragOver(firstCategory), false,
+        'a category takes the drop of another category, not of itself');
+    equal(firstCategory.acceptDrop(lastCategory), true, 'the drop is taken');
+    equal(categoriesInMenu().indexOf(lastCategory), 0, 'the dropped category is where the other one was');
+    equal(categoriesInMenu().indexOf(firstCategory), 1, 'which moved on by one');
+    let menuActors = button.menu.box.get_children();
+    equal(menuActors.indexOf(lastCategory.menu.actor), menuActors.indexOf(lastCategory) + 1, 'its rows are right below it');
+    equal(sensors.categories().filter(([, category]) => category.position === undefined).length, 0, 'every category has its position saved');
+    orderBefore.at(-2).acceptDrop(lastCategory);
+    equal(categoriesInMenu().map(category => category.label.text).join(', '), orderBefore.map(category => category.label.text).join(', '),
+        'dropped onto the one that is last now, it is the last again and the order is as before');
+    // In the alphabetical category order the categories are sorted by name and cannot be dragged; back in the manual
+    // one they are as arranged. Both take effect at once: the categories are built again, with their rows.
+    let rowCountBeforeRebuild = button._rows.size;
+    let names = () => categoriesInMenu().map(category => category.label.text);
+    firstCategory.acceptDrop(lastCategory);
+    let arrangedNames = names().join(', ');
+    settings.set_int('category-order', 0);
+    equal(names().join(', '), [...names()].sort((a, b) => a.localeCompare(b)).join(', '), 'alphabetical: ' + names());
+    equal(names().join(', ') == arrangedNames, false, 'which is not how they were arranged');
+    equal(button._rows.size, rowCountBeforeRebuild, 'with all their rows');
+    settings.set_int('category-order', 1);
+    equal(names().join(', '), arrangedNames, 'manual again, they are as arranged');
+    categoriesInMenu().at(-1).acceptDrop(categoriesInMenu()[0]);
+    settings.reset('category-order');
+    systemGroup = button._groups.system;
     // The made-up interfaces are not hardware. With the option on they have no rows; the totals keep theirs.
     let fixtureUpload = find('network', 'fixture0/tx');
     let networkTotal = find('network', 'device-rx');

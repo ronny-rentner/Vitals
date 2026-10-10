@@ -5,7 +5,7 @@ Vitals is a GNOME Shell extension for displaying your computer's temperature, vo
 
 Vitals collects the inputs needed by pinned values, visible category summaries and expanded menu rows. With the menu closed, only pinned values require updates. A pinned aggregate still needs all of its inputs.
 
-Temperature’s “Hide initially zero sensors” option excludes sensors that read zero during discovery from collection and averages. Excluded sensors are retried on rediscovery. Accepted sensors remain valid if they later reach zero. With the option off, readable zero temperatures are included. Zero readings in other categories remain visible.
+Temperature’s “Skip sensors that read zero” option excludes sensors that read zero during discovery from collection and averages. Excluded sensors are retried on rediscovery. Accepted sensors remain valid if they later reach zero. With the option off, readable zero temperatures are included. Zero readings in other categories remain visible.
 
 [Screenshots](docs/screenshots/README.md)
 

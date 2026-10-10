@@ -13,7 +13,8 @@ function indent() {
 
 // The mark of the sensor whose value its category's header shows: after its name in the list, and in front of the
 // action that pins a sensor there, so that the action shows what the mark in the list means.
-export const CATEGORY_PIN_ICON = 'starred-symbolic';
+// It is the outline of a star: one row of every category has it, so it is kept lighter than a filled one.
+export const CATEGORY_PIN_ICON = 'non-starred-symbolic';
 
 // How strongly the row of a hidden sensor is drawn. 255 is full strength.
 const HIDDEN_ROW_OPACITY = 120;

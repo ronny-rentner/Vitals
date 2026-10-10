@@ -46,6 +46,7 @@ catalog = {
 
 ### A category
 
+- `position`: the category's place in the menu, once the user has arranged the categories. Without it the categories are in the alphabetical order of their names.
 - `enabled`: whether the category is switched on. This replaced the ten `show-*` settings.
 - `discovered`: the timestamp of the last discovery run that completed this category. See "Discovery".
 - `header`: a link to the sensor of this category whose value is shown in the category's menu header. It is a link of the same kind as the panel's; on disk it is that sensor's key. The collector chooses it after every discovery run. For voltage it is the battery's, then the system's, then a USB supply's. A sensor the user pinned to the category (`categoryDefault`) comes before any of these rules.
@@ -65,6 +66,7 @@ catalog = {
 - `file`: the file the sensor is read from. A temperature has a file of its own; the memory sensors all name `/proc/meminfo`. A few sensors are read from something that is not a file and have no `file`: a card read through `nvidia-smi` has `nvidia`, and the storage space, the public IP, the refresh rate and, on some machines, the CPU frequencies are known by their key. A sensor whose value discovery wrote, such as the kernel version, has none either, and neither has an average, minimum or maximum.
 - Fields that say which part of the file is the sensor's: the interface name for a network rate (with `hardware`, whether that interface is a hardware device), the core for a CPU core.
 
+- `lowIsBad`: set by discovery on a sensor whose low values are the ones to watch, such as free memory, a battery's charge or the WiFi link quality (`LOW_IS_BAD` in `sensors.js`). A colour scale on such a sensor colours downwards from its breakpoints; on every other sensor, upwards.
 - `customLabel`, `hidden` and `categoryDefault`: what the user set for the sensor in the menu: another name, that it has no row, and that it is the sensor its category shows in its header. Discovery does not touch them.
 
 Any further field can be added to a sensor later without changing the structure.
@@ -100,7 +102,7 @@ The `file` field holds the path as it is today. Discovery writes the current pat
 
 Graphics cards get keys like every other device, from the device's name and the name of the value: `NVIDIA GeForce RTX 3080/utilization.gpu` for a card read through `nvidia-smi`, and `0x1002/gpu_busy_percent` for a card read from `/sys/class/drm`, whose name is its vendor id. All cards are in the one category `gpu`.
 
-The threshold-colour settings name a sensor by its category and key, as `temperature/thinkpad/temp1`. That text is only compared; no sensor is looked up with it.
+The colour settings name a sensor by its category and key, as `sensor:temperature/thinkpad/temp1`, and all sensors of a category with one kind of value by that kind, the sensors' `format`, as `kind:temp`. That text is only compared; no sensor is looked up with it.
 
 ## The panel
 

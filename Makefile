@@ -15,7 +15,7 @@ preview test-shell screenshots:
 	glib-compile-schemas --strict schemas
 	$(RESET_SETTINGS)
 	mkdir -p "$(XDG_DATA_HOME)/gnome-shell/extensions/Vitals@CoreCoding.com"
-	cp -r extension.js metadata.json prefs.js prefs.ui stylesheet.css sensors.js formatter.js menuItem.js panelValue.js helpers icons locale schemas "$(XDG_DATA_HOME)/gnome-shell/extensions/Vitals@CoreCoding.com/"
+	cp -r extension.js metadata.json prefs.js stylesheet.css sensors.js formatter.js menuItem.js panelValue.js helpers icons locale schemas "$(XDG_DATA_HOME)/gnome-shell/extensions/Vitals@CoreCoding.com/"
 	gsettings set org.gnome.shell enabled-extensions "['Vitals@CoreCoding.com']"
 	GDK_DEBUG=no-portals ADW_DISABLE_PORTAL=1 dbus-run-session -- gnome-shell --wayland $(SHELL_ARGS)
 

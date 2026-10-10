@@ -24,8 +24,7 @@
   SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-import {colorsKeyForSensor} from './helpers/categories.js';
-import {getUsageColor} from './helpers/colors.js';
+import {colorStyle} from './helpers/colors.js';
 
 // Units as the standards write them (SI, and IEC 80000-13 for bits and bytes): the prefix for a thousand is a
 // lowercase "k", the one for 1024 is "Ki", and a rate is the unit with "/s".
@@ -38,22 +37,47 @@ export class Formatter {
         this._settings = settings;
     }
 
-    // `colorTarget` names the sensor in the threshold-colour settings: its category and key, as `category/key`.
-    // Returns the text, its colour style, and the unit the text ends with ('' when it has none), so that the unit
-    // can be drawn differently from the number.
-    format(value, format, categoryName, colorTarget) {
+    // What a colour breakpoint means for a kind of value: the number of `value` that a breakpoint is compared with,
+    // the unit that number is in, and how many decimals a breakpoint has. A value that is shown scaled, such as a
+    // size, has one fixed unit here, so that a breakpoint means the same for a small value and a large one.
+    // Nothing for a kind of value that is text.
+    colorScale(format, value = 0) {
+        let thousand = this._settings.get_int((format == 'memory' ? 'memory' : 'storage') + '-measurement') ? 1000 : 1024;
+        let bits = this._settings.get_int('network-speed-format') == 1;
+        switch (format) {
+            case 'percent': return [Math.min(value * 100, 100), '%', 0];
+            case 'temp': return this._settings.get_int('unit') == 1 ? [value * 9 / 5 + 32, '°F', 0] : [value, '°C', 0];
+            case 'in': return [value, 'V', 1];
+            case 'fan': return [value, 'RPM', 0];
+            case 'watt':
+            case 'watt-gpu':
+            case 'watt-limit': return [value, 'W', 1];
+            case 'watt-hour': return [value, 'Wh', 1];
+            case 'load': return [value, '', 1];
+            case 'hertz': return [value / 1e9, 'GHz', 1];
+            case 'memory':
+            case 'storage': return [value / thousand ** 3, thousand == 1000 ? 'GB' : 'GiB', 1];
+            case 'storage-rate': return [value / thousand ** 2, thousand == 1000 ? 'MB/s' : 'MiB/s', 1];
+            case 'speed': return bits ? [value * 8 / 1e6, 'Mbit/s', 1] : [value / 1e6, 'MB/s', 1];
+            case 'runtime':
+            case 'uptime': return [value / 60, 'min', 0];
+        }
+    }
+
+    // `colorTarget` names the sensor in the colour settings: its category and key, as `category/key`. `lowIsBad`
+    // is the sensor's field of that name. Returns the text, its colour style, and the unit the text ends with
+    // ('' when it has none), so that the unit can be drawn differently from the number.
+    format(value, format, categoryName, colorTarget, lowIsBad) {
         let precise = this._settings.get_boolean('use-higher-precision');
-        let numeric = typeof value == 'number' ? value : null;
+        let numeric = typeof value == 'number' ? this.colorScale(format, value)?.[0] : undefined;
         let text;
         let unit = '';
         switch (format) {
             case 'percent':
-                numeric = Math.min(value * 100, 100);
                 unit = '%';
                 text = (precise ? numeric.toFixed(1) : String(Math.trunc(numeric))) + unit;
                 break;
             case 'temp':
-                numeric = this._settings.get_int('unit') == 1 ? value * 9 / 5 + 32 : value;
                 unit = this._settings.get_int('unit') == 1 ? '°F' : '°C';
                 text = (precise ? numeric.toFixed(1) : String(Math.trunc(numeric))) + unit;
                 break;
@@ -134,9 +158,8 @@ export class Formatter {
             default:
                 text = String(value);
         }
-        let colors = colorsKeyForSensor(categoryName, format);
-        let style = colors && numeric !== null
-            ? getUsageColor(numeric, this._settings.get_strv(colors), colorTarget) : '';
+        let style = numeric === undefined ? ''
+            : colorStyle(numeric, this._settings.get_strv(categoryName + '-colors'), 'sensor:' + colorTarget, 'kind:' + format, lowIsBad);
         return {text, unit, style};
     }
 }

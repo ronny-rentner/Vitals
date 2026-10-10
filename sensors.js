@@ -138,14 +138,18 @@ function hardwareSpeed(sample, sensors, directions) {
     return speeds.reduce((total, speed) => total + speed, 0);
 }
 
+// The field of a sensor whose low values are the ones to watch, such as what is left of something. A colour scale
+// on such a sensor colours downwards from its breakpoints; on every other sensor, upwards.
+const LOW_IS_BAD = {lowIsBad: true};
+
 const FIXED = {
     memory: {
         'physical': fixed('Physical', 'memory', MEMINFO, s => s.value.MemTotal),
-        'available': fixed('Available', 'memory', MEMINFO, s => s.value.MemAvailable),
+        'available': fixed('Available', 'memory', MEMINFO, s => s.value.MemAvailable, LOW_IS_BAD),
         'cached': fixed('Cached', 'memory', MEMINFO, s => s.value.Cached),
-        'free': fixed('Free', 'memory', MEMINFO, s => s.value.MemFree),
+        'free': fixed('Free', 'memory', MEMINFO, s => s.value.MemFree, LOW_IS_BAD),
         'swap-total': fixed('Swap Total', 'memory', MEMINFO, s => s.value.SwapTotal),
-        'swap-free': fixed('Swap Free', 'memory', MEMINFO, s => s.value.SwapFree),
+        'swap-free': fixed('Swap Free', 'memory', MEMINFO, s => s.value.SwapFree, LOW_IS_BAD),
         'allocated': fixed('Allocated', 'memory', MEMINFO, s => s.value.MemTotal - s.value.MemAvailable),
         'usage': fixed('Usage', 'percent', MEMINFO, s => (s.value.MemTotal - s.value.MemAvailable) / s.value.MemTotal),
         'swap-used': fixed('Swap Used', 'memory', MEMINFO, s => s.value.SwapTotal - s.value.SwapFree),
@@ -185,7 +189,7 @@ const FIXED = {
             {section: NETWORK_SECTION.machineSpeed}),
         // The two WiFi values are with the hardware interfaces, next to the WiFi interface's speeds.
         'wifi-link-quality': fixed('WiFi Link Quality', 'percent', WIRELESS, s => s.value.quality,
-            {section: NETWORK_SECTION.hardwareInterfaces}),
+            {section: NETWORK_SECTION.hardwareInterfaces, ...LOW_IS_BAD}),
         'wifi-signal-level': fixed('WiFi Signal Level', 'string', WIRELESS, s => s.value.signal,
             {section: NETWORK_SECTION.hardwareInterfaces}),
         'public-ip': fixed('Public IP', 'string', PUBLIC_IP, (s, sensor) => {
@@ -197,10 +201,10 @@ const FIXED = {
     storage: {
         'total': fixed('Total', 'storage', FILESYSTEM, s => s.value.total),
         'used': fixed('Used', 'storage', FILESYSTEM, s => s.value.used),
-        'free': fixed('Free', 'storage', FILESYSTEM, s => s.value.free),
+        'free': fixed('Free', 'storage', FILESYSTEM, s => s.value.free, LOW_IS_BAD),
         'reserved': fixed('Reserved', 'storage', FILESYSTEM, s => s.value.total - s.value.used - s.value.free),
         'used-percent': fixed('Used %', 'percent', FILESYSTEM, s => s.value.used / s.value.total),
-        'free-percent': fixed('Free %', 'percent', FILESYSTEM, s => (s.value.total - s.value.used) / s.value.total),
+        'free-percent': fixed('Free %', 'percent', FILESYSTEM, s => (s.value.total - s.value.used) / s.value.total, LOW_IS_BAD),
         'read-total': fixed('Read total', 'storage', DISKSTATS, (s, sensor) => s.value.get(sensor.device)?.read),
         'read-rate': fixed('Read rate', 'storage-rate', DISKSTATS, (s, sensor) =>
             SensorMath.counterRate(s, disks => disks.get(sensor.device)?.read)),
@@ -216,13 +220,13 @@ const FIXED = {
         'cycles': fixed('Cycles', 'string', undefined, s => s.value.cycles),
         'voltage': fixed('Voltage', 'in', undefined, s => s.value.voltage),
         'level': fixed('Level', 'string', undefined, s => s.value.level),
-        'percentage': fixed('Percentage', 'percent', undefined, s => s.value.percentage),
+        'percentage': fixed('Percentage', 'percent', undefined, s => s.value.percentage, LOW_IS_BAD),
         'power-rate': fixed('Power Rate', 'watt', undefined, s => s.value.power),
         'energy-full': fixed('Energy (full)', 'watt-hour', undefined, s => s.value.full),
         'energy-design': fixed('Energy (design)', 'watt-hour', undefined, s => s.value.design),
-        'energy-now': fixed('Energy (now)', 'watt-hour', undefined, s => s.value.now),
-        'capacity': fixed('Capacity', 'percent', undefined, s => s.value.full / s.value.design),
-        'time-left': fixed('Time left', 'runtime', undefined, (s, sensor, sensors) => sensors._batteryTimeLeft(s, sensor.file))
+        'energy-now': fixed('Energy (now)', 'watt-hour', undefined, s => s.value.now, LOW_IS_BAD),
+        'capacity': fixed('Capacity', 'percent', undefined, s => s.value.full / s.value.design, LOW_IS_BAD),
+        'time-left': fixed('Time left', 'runtime', undefined, (s, sensor, sensors) => sensors._batteryTimeLeft(s, sensor.file), LOW_IS_BAD)
     },
     gpu: {
         'refresh-rate': fixed('Refresh Rate', 'hertz', FRAMES, s => s.value)
@@ -385,6 +389,13 @@ export class Sensors {
         category.header = this._chooseHeader(categoryName);
         this._save();
         this.catalogChanged();
+    }
+
+    // Saves the order the user gave the categories in the menu.
+    setCategoryOrder(categoryNames) {
+        for (let [position, name] of categoryNames.entries())
+            this.catalog[name].position = position;
+        this._save();
     }
 
     // Moves a panel link in front of another one, or to the end when no other is given.
@@ -1279,7 +1290,7 @@ export class Sensors {
                 ['Power', 'power.draw.instant', 'watt-gpu'], ['Average Power', 'power.draw.average', 'watt-gpu']
             ]) {
                 let found = await this._foundWithHideZeros(run, 'gpu', {key: cardName + '/' + field, label: labelPrefix() + label, format,
-                    nvidia: uuid, field}, () => Number(part(field)));
+                    nvidia: uuid, field, ...(field == 'memory.free' && LOW_IS_BAD)}, () => Number(part(field)));
                 if (field == 'temperature.gpu')
                     hasTemperature = found;
             }

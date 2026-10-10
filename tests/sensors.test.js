@@ -1062,6 +1062,20 @@ test('the sensor the user makes the category default is what the header shows, a
     sensors.destroy();
 });
 
+test('the order the user gives the categories is saved with the catalog', async () => {
+    let first = setup();
+    await first.sensors.discover();
+    let order = ['voltage', ...first.sensors.categories().map(([name]) => name).filter(name => name != 'voltage')];
+    first.sensors.setCategoryOrder(order);
+    await first.sensors.discover();
+    first.sensors.destroy();
+
+    let second = setup({configuration: first.configuration});
+    equal(second.sensors.categories().sort(([, a], [, b]) => a.position - b.position).map(([name]) => name).join(', '),
+        order.join(', '), 'kept across discovery and a restart');
+    second.sensors.destroy();
+});
+
 test('panel links are shown, hidden and moved through Sensors, which saves them', async () => {
     let configuration = settings();
     let saved = readCatalog(configuration);

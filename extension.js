@@ -134,6 +134,8 @@ var VitalsMenuButton = GObject.registerClass({
             'changed::update-time', this._initializeTimer.bind(this),
             'changed::position-in-panel', this._positionInPanelChanged.bind(this),
             'changed::allow-panel-dragging', this._redrawPanelItems.bind(this),
+            'changed::allow-category-dragging', this._rebuildCategories.bind(this),
+            'changed::category-order', this._rebuildCategories.bind(this),
             'changed::emphasize-values', () => {
                 // The texts get another width with another font.
                 this._widths.clear();
@@ -166,9 +168,8 @@ var VitalsMenuButton = GObject.registerClass({
         this.menu.box.add_style_class_name('vitals-menu');
 
         // display sensor categories, in the alphabetical order of their names in the menu
-        let menuName = name => _(this._ucFirst(name));
-        for (let [name, category] of this._sensors.categories().sort(([a], [b]) => LABEL_ORDER.compare(menuName(a), menuName(b))))
-            this._initializeMenuGroup(name, category);
+        for (let name of this._categoriesInMenuOrder())
+            this._initializeMenuGroup(name, this._sensors.catalog[name]);
 
         // add separator
         this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
@@ -262,8 +263,9 @@ var VitalsMenuButton = GObject.registerClass({
         this.menu.setSourceAlignment((this._menuAnchorX - itemX - content.x1) / (content.x2 - content.x1));
     }
 
-    _initializeMenuGroup(groupName, category) {
-        this._groups[groupName] = new PopupMenu.PopupSubMenuMenuItem(_(this._ucFirst(groupName)), true);
+    // `position` is the category's place among the items of the menu; without one it is added at the end.
+    _initializeMenuGroup(groupName, category, position) {
+        this._groups[groupName] = new PopupMenu.PopupSubMenuMenuItem(_(SensorCategories.sensorCategories[groupName].name), true);
         this._groups[groupName].icon.gicon = Gio.icon_new_for_string(this._sensorIconPath(groupName));
 
         // hide menu items that user has requested to not include
@@ -345,7 +347,69 @@ var VitalsMenuButton = GObject.registerClass({
             this._render();
         }, this);
 
-        this.menu.addMenuItem(this._groups[groupName]);
+        // A category is dragged onto another one to take that one's place. The Shell's drag and drop asks the
+        // dragged actor's delegate, which for a menu item is the item itself, for what is dragged, and the item
+        // under the pointer whether it takes the drop.
+        let group = this._groups[groupName];
+        group.getDragActor = () => new Clutter.Clone({source: group, width: group.width, height: group.height});
+        group.getDragActorSource = () => group;
+        let draggedCategory = source => Object.keys(this._groups).find(name => this._groups[name] == source);
+        group.handleDragOver = source => draggedCategory(source) && source != group
+            ? DND.DragMotionResult.MOVE_DROP : DND.DragMotionResult.CONTINUE;
+        group.acceptDrop = source => {
+            let draggedName = draggedCategory(source);
+            if (!draggedName || source == group) return false;
+            this._moveCategory(draggedName, groupName);
+            return true;
+        };
+        // Dragging arranges the manual order, so there is none in the alphabetical one.
+        if (this._settings.get_boolean('allow-category-dragging') &&
+            this._settings.get_int('category-order') == SensorCategories.MANUAL_CATEGORY_ORDER)
+            DND.makeDraggable(group);
+
+        this.menu.addMenuItem(group, position);
+    }
+
+    // Builds the categories again, with their rows, in the order that holds now. This is how the two options for the
+    // categories take effect while the menu exists: one changes their order, and the other whether they can be
+    // dragged, which cannot be taken back from an actor.
+    _rebuildCategories() {
+        this._closeRowActions();
+        for (let row of this._rows.values())
+            row.destroy();
+        this._rows.clear();
+        for (let categoryName of [...this._separators.keys()])
+            this._removeSeparator(categoryName);
+        for (let group of Object.values(this._groups)) {
+            // An open category closes when it is destroyed, and says so; by then other categories are gone.
+            group.menu.disconnectObject(this);
+            group.destroy();
+        }
+        this._groups = {};
+        this._headerSensors.clear();
+        for (let [position, name] of this._categoriesInMenuOrder().entries())
+            this._initializeMenuGroup(name, this._sensors.catalog[name], position);
+        this._syncCatalog();
+    }
+
+    // The names of the categories from the top of the menu to its end.
+    _categoriesInMenuOrder() {
+        return SensorCategories.categoriesInOrder(this._sensors.catalog, name => _(SensorCategories.sensorCategories[name].name),
+            this._settings.get_int('category-order') == SensorCategories.MANUAL_CATEGORY_ORDER);
+    }
+
+    // Puts a category into the place of another one, which with those between moves one place on, and saves the order.
+    _moveCategory(movedName, targetName) {
+        let names = this._categoriesInMenuOrder();
+        let targetPosition = names.indexOf(targetName);
+        names.splice(names.indexOf(movedName), 1);
+        names.splice(targetPosition, 0, movedName);
+        this._sensors.setCategoryOrder(names);
+        for (let [position, name] of names.entries()) {
+            this.menu.moveMenuItem(this._groups[name], position);
+            // The Shell moves a category without its rows, which are an actor of their own after it.
+            this.menu.box.set_child_above_sibling(this._groups[name].menu.actor, this._groups[name]);
+        }
     }
 
     // `name` is what a screen reader says for the button, which shows an icon only.
@@ -750,8 +814,7 @@ var VitalsMenuButton = GObject.registerClass({
         // renamed row moves to its new place with its panel. The category scrolls just far enough to show the
         // whole panel, also while the panel slides open. The panel's head says which sensor it is for, so the
         // row above it need not be on screen.
-        // St.ScrollView has `vadjustment` from GNOME Shell 46 on; in 45 the scrollbar holds it.
-        let scrolling = menu.actor.vadjustment ?? menu.actor.vscroll.adjustment;
+        let scrolling = menu.actor.vadjustment;
         let reveal = () => {
             let {y1: start, y2: end} = panel.actor.get_allocation_box();
             if (end > scrolling.value + scrolling.page_size)
@@ -821,9 +884,9 @@ var VitalsMenuButton = GObject.registerClass({
     }
 
     _formatted(categoryName, sensor) {
-        // Threshold colours for one sensor name it by its category and key.
+        // A colour scale for one sensor names it by its category and key.
         return sensor.status == 'ready' || sensor.status == 'saved'
-            ? this._formatter.format(sensor.value, sensor.format, categoryName, categoryName + '/' + sensor.key)
+            ? this._formatter.format(sensor.value, sensor.format, categoryName, categoryName + '/' + sensor.key, sensor.lowIsBad)
             : {text: '…', style: ''};
     }
 
@@ -914,11 +977,6 @@ var VitalsMenuButton = GObject.registerClass({
 
         const iconPathPrefixIndex = this._settings.get_int('icon-style');
         return this._extensionObject.path + this._sensorsIconPathPrefix[iconPathPrefixIndex] + icons[icon];
-    }
-
-    _ucFirst(string) {
-        if (string == 'gpu') return 'Graphics';
-        return string.charAt(0).toUpperCase() + string.slice(1);
     }
 
     _positionInPanel() {

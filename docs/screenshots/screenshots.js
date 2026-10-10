@@ -11,9 +11,9 @@ const MARGIN = 12;
 // Colour rules for the pictures of threshold colours: green, then yellow from the second number on, then red.
 const GREEN = '38 162 105', YELLOW = '229 165 10', RED = '224 27 36';
 const COLOR_RULES = {
-    'temperature-colors': ['0 ' + GREEN, '50 ' + YELLOW, '60 ' + RED],
-    'memory-colors': ['0 ' + GREEN, '50 ' + YELLOW, '80 ' + RED],
-    'processor-colors': ['0 ' + GREEN, '25 ' + YELLOW, '75 ' + RED]
+    'temperature-colors': ['0 ' + GREEN, '50 ' + YELLOW, '60 ' + RED].map(breakpoint => breakpoint + ' kind:temp'),
+    'memory-colors': ['0 ' + GREEN, '50 ' + YELLOW, '80 ' + RED].map(breakpoint => breakpoint + ' kind:percent'),
+    'processor-colors': ['0 ' + GREEN, '25 ' + YELLOW, '75 ' + RED].map(breakpoint => breakpoint + ' kind:percent')
 };
 
 // Saves the part of the screen that holds the given actors, with some room around it.
