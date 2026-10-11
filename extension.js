@@ -40,10 +40,8 @@ const CATEGORY_SLIDE_MILLISECONDS = 250;
 const LABEL_ORDER = new Intl.Collator(undefined, {numeric: true, sensitivity: 'base'});
 
 // The "emphasize values" option draws top-bar icons and units lighter and smaller than the numbers, which are
-// what is read. Each pair below is the value with the option on and with it off.
-// The size of a top-bar icon, in em: a step smaller than the Shell's own status icons, or their size.
-const PANEL_ICON_EM = {true: 1, false: 1.091};
-// How strongly a top-bar icon is drawn. 255 is fully opaque.
+// what is read. The stylesheet makes the icons smaller and brings them closer (.vitals-panel-item-emphasized).
+// How strongly a top-bar icon is drawn, with the option on and with it off. 255 is fully opaque.
 const PANEL_ICON_OPACITY = {true: 165, false: 255};
 
 var VitalsMenuButton = GObject.registerClass({
@@ -97,7 +95,7 @@ var VitalsMenuButton = GObject.registerClass({
             y_align: Clutter.ActorAlign.CENTER,
             reactive: true,
             x_expand: true,
-            style_class: 'panel-status-indicators-box'
+            style_class: 'vitals-panel-sensors'
         });
         this._menuLayout._delegate = this;
 
@@ -454,19 +452,16 @@ var VitalsMenuButton = GObject.registerClass({
 
     _createPanelItem(link, gicon) {
         let sensor = link.sensor;
+        let emphasizeValues = this._settings.get_boolean('emphasize-values');
         let item = new St.BoxLayout({
-            // An icon with its value is put together as GNOME Shell does it for the battery and its percentage.
-            style_class: 'panel-status-indicators-box power-status vitals-panel-item' +
-                (this._settings.get_boolean('hide-icons') ? ' vitals-panel-item-plain' : ''),
+            style_class: 'vitals-panel-item' + (emphasizeValues ? ' vitals-panel-item-emphasized' : ''),
             reactive: true,
         });
         this._menuLayout.add_child(item);
 
-        let emphasizeValues = this._settings.get_boolean('emphasize-values');
         if (!this._settings.get_boolean('hide-icons')) {
             item.add_child(new St.Icon({
                 style_class: 'system-status-icon',
-                style: 'icon-size: ' + PANEL_ICON_EM[emphasizeValues] + 'em;',
                 opacity: PANEL_ICON_OPACITY[emphasizeValues],
                 reactive: true,
                 gicon: gicon || Gio.icon_new_for_string(this._sensorIconPath(link.category, this._iconName(sensor)))
@@ -526,13 +521,18 @@ var VitalsMenuButton = GObject.registerClass({
 
     // support for fixed widths #55: gives a top-bar value the width kept free for it.
     _reserveWidth(sensor, value) {
+        // With the option off no width is remembered, so a width is kept from the moment the option is switched on.
+        if (!this._settings.get_boolean('fixed-widths')) {
+            this._widths.delete(sensor);
+            return;
+        }
         // A value has the font of the theme, and so its real width, only while it is on the stage. Items are
         // also built before the extension's button is in the top bar.
         if (!value.get_stage()) return;
         // The width the text needs, whatever width is set on the value. It has the theme's font once it is styled.
         value.ensure_style();
         let reservedWidth = this._reservedWidth(sensor, value.clutter_text.get_preferred_width(-1)[1]);
-        if (this._settings.get_boolean('fixed-widths') && value.width != reservedWidth)
+        if (value.width != reservedWidth)
             value.set_width(reservedWidth);
     }
 

@@ -1,9 +1,12 @@
-/* A top-bar sensor is put together from GNOME Shell's own parts, and its distances are the Shell theme's: the row and
-   every sensor are a .panel-status-indicators-box, an icon is a .system-status-icon, and a sensor has the Shell's
-   class for a status icon with a number beside it, .power-status. That gives 4 pixels between an icon and its
-   value and 8 between two sensors. A user's own stylesheet can change them through .vitals-panel-item.
-   Without icons there is nothing between two values but the row's spacing, so this stands in front of each. */
-.vitals-panel-item-plain { margin-left: 8px; }
+/* Top bar: the distance between two sensors, and between an icon and its value. The Shell's theme gives a status
+   icon a margin and a padding, which would add to both. The padding is the room at both ends that the Shell's own
+   buttons have inside the button's padding. */
+.vitals-panel-sensors { spacing: 10px; padding: 0 3px; }
+.vitals-panel-item { spacing: 4px; }
+#panel .panel-button .vitals-panel-item > .system-status-icon { margin: 0; padding: 0; }
+/* "Emphasize values": the icon at 80 % of the Shell's size (1.091em), and closer to its value. */
+.vitals-panel-item-emphasized { spacing: 3px; }
+#panel .panel-button .vitals-panel-item-emphasized > .system-status-icon { icon-size: 0.873em; }
 .vitals-button-action { -st-icon-style: symbolic; border-radius: 32px; margin: 0px; min-height: 22px; min-width: 22px; padding: 10px; font-size: 100%; border: 1px solid transparent; }
 .vitals-button-action:hover, .vitals-button-action:focus { border-color: #777; }
 .vitals-button-action > StIcon { icon-size: 16px; }
