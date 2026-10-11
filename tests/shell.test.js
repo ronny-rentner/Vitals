@@ -253,7 +253,7 @@ async function checkPanelVisibility(button, fixtures) {
                 await button._querySensors();
                 await Scripting.sleep(50);
                 check(label(fixture).width < width, true, name + ' fixed width shrinks after a minute of shorter text');
-                check(label(fixture).width, label(fixture).textWidth,
+                check(label(fixture).width, label(fixture).clutter_text.get_preferred_width(-1)[1],
                     name + ' to the width of the text');
                 button._clock = rendererClock;
                 width = label(fixture).width;
@@ -351,8 +351,8 @@ export async function run() {
         'every default panel sensor was found and has a top-bar item');
 
     sensors.catalog.panel.sensors.length = 0;
-    let liveSensors = [['memory', 'usage'], ['storage', 'free'], ['system', 'uptime'], ['processor', 'usage'],
-        ['storage', 'read-rate'], ['storage', 'write-rate']].map(([categoryName, key]) => {
+    let liveSensors = [['memory', 'usage'], ['storage', '//free'], ['system', 'uptime'], ['processor', 'usage'],
+        ['storage', '//read-rate'], ['storage', '//write-rate']].map(([categoryName, key]) => {
         sensors.setPanelSensorVisible(categoryName, find(categoryName, key), true);
         return find(categoryName, key);
     });
@@ -398,7 +398,7 @@ export async function run() {
     equal(button._refreshTimeoutId, timer, 'opening preserves shared timer');
     // The reads are under way; no tick follows in this time.
     await Scripting.sleep(50);
-    equal(button._groups.temperature._statusLabel.text, '20°C', 'what came on screen does not wait for a tick');
+    equal(button._groups.temperature._statusLabel.text, '20 °C', 'what came on screen does not wait for a tick');
     let discoveriesBeforeRefresh = discoveries;
     await button._refresh();
     equal(discoveries, discoveriesBeforeRefresh + 1, 'Refresh rediscovers');
@@ -408,7 +408,7 @@ export async function run() {
     await button._querySensors();
     equal(temperature.shown, true, 'the header of an open menu is marked as shown');
     equal(first.shown, false, 'a row in a collapsed category is not');
-    equal(button._groups.temperature._statusLabel.text, '20°C', 'summary includes zero');
+    equal(button._groups.temperature._statusLabel.text, '20 °C', 'summary includes zero');
     button._groups.temperature.menu.open();
     await button._querySensors();
     equal(first.shown, true, 'a row in an open category is marked as shown');
@@ -421,23 +421,23 @@ export async function run() {
     b = 20;
     await button._querySensors();
     equal(button._rows.get(second).visible, true, 'nonzero row returns');
-    equal(button._rows.get(average).value, '30°C', 'average updated');
+    equal(button._rows.get(average).value, '30 °C', 'average updated');
     captures = reads;
     settings.set_int('unit', 1);
     equal(reads, captures, 'format change performs no reads');
-    equal(button._rows.get(first).value, '104°F', 'retained value reformatted');
+    equal(button._rows.get(first).value, '104 °F', 'retained value reformatted');
     settings.set_int('unit', 0);
-    equal(button._groups.temperature._statusLabel.text, '30°C', 'summary restored');
+    equal(button._groups.temperature._statusLabel.text, '30 °C', 'summary restored');
     a = NaN;
     await button._querySensors();
     equal(button._rows.get(first).visible, false, 'unavailable row hidden');
     equal(button._rows.get(average).visible, true, 'average uses available readings');
     equal(button._groups.temperature._statusLabel.visible, true, 'temperature group header remains visible');
-    equal(button._groups.temperature._statusLabel.text, '20°C', 'temperature group header uses available readings');
+    equal(button._groups.temperature._statusLabel.text, '20 °C', 'temperature group header uses available readings');
     b = 0;
     await button._querySensors();
     equal(button._groups.temperature._statusLabel.visible, true, 'zero group header remains visible');
-    equal(button._groups.temperature._statusLabel.text, '0°C', 'zero group header value');
+    equal(button._groups.temperature._statusLabel.text, '0 °C', 'zero group header value');
     equal(button._rows.get(second).visible, true, 'accepted zero row still visible');
     b = 20;
     a = 40;
@@ -870,9 +870,7 @@ export async function run() {
     let previousText = firstLabel.text;
     // Every text the label shows from here on.
     let textsShown = [];
-    // The value is a number and a unit; either can change.
-    for (let part of firstLabel.get_children())
-        part.connectObject('notify::text', () => textsShown.push(firstLabel.text), firstLabel);
+    firstLabel.clutter_text.connectObject('notify::text', () => textsShown.push(firstLabel.text), firstLabel);
     a = 50;
     await button._querySensors();
     equal(reads > captures, true, 'collection goes on during a drag');
@@ -884,10 +882,10 @@ export async function run() {
     await waitFor(() => !button._dragging, 'drag ended');
     equal(button._refreshTimeoutId, timer, 'drop preserves shared timer');
     equal(savedPanel(), 'temperature ' + second.key + ', temperature ' + first.key, 'drop changed saved order');
-    equal(firstLabel.text, '50°C', 'the drop shows the current reading at once, without waiting for a tick');
+    equal(firstLabel.text, '50 °C', 'the drop shows the current reading at once, without waiting for a tick');
     for (let part of firstLabel.get_children())
         part.disconnectObject(firstLabel);
-    equal(textsShown.at(-1), '50°C', 'the label ends with the current value');
+    equal(textsShown.at(-1), '50 °C', 'the label ends with the current value');
     equal(textsShown.includes('…'), false, 'the values never give way to "…"');
     pointer.run_dispose();
     print('PASS actual panel drag: display held still, readings current at the drop');
@@ -943,22 +941,18 @@ export async function run() {
     // The "emphasize values" option: lighter, smaller icons and units, or everything as strong as the numbers.
     let look = () => {
         let {item, value} = button._panelItems.get(panelLink(sensors, first));
-        let [number, unit] = value.get_children();
         return {
             iconOpacity: item.get_first_child().opacity, iconSize: item.get_first_child().get_theme_node().get_length('icon-size'),
-            unitOpacity: unit.opacity, unitSize: unit.get_theme_node().get_font().get_size(),
-            numberSize: number.get_theme_node().get_font().get_size(), text: value.text
+            unitMarked: /weight/.test(value.clutter_text.get_layout().get_attributes().to_string()), text: value.text
         };
     };
     await Scripting.sleep(100);
     let emphasized = look();
-    equal(emphasized.iconOpacity < 255 && emphasized.unitOpacity < 255, true, 'by default, icons and units are lighter');
-    equal(emphasized.unitSize < emphasized.numberSize, true, 'and the unit is smaller than the number');
+    equal(emphasized.iconOpacity < 255 && emphasized.unitMarked, true, 'by default, icons are lighter and the unit is set off inside the text');
     settings.set_boolean('emphasize-values', false);
     await Scripting.sleep(100);
     let plain = look();
-    equal(plain.iconOpacity == 255 && plain.unitOpacity == 255, true, 'with the option off, icons and units are full strength');
-    equal(plain.unitSize, plain.numberSize, 'the unit is as large as the number');
+    equal(plain.iconOpacity == 255 && !plain.unitMarked, true, 'with the option off, icons are full strength and the text is plain');
     equal(plain.iconSize > emphasized.iconSize, true, 'and the icon has the size of the Shell\'s status icons');
     equal(plain.text, emphasized.text, 'the text is the same either way');
     settings.reset('emphasize-values');

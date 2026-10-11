@@ -1,18 +1,15 @@
-.vitals-panel-item{spacing: 0;}
-.vitals-panel-menu{spacing: 0; padding: 3px; }
-/* The distances around a top-bar icon are set per icon in extension.js, from the empty room in its file. */
-.vitals-panel-icon { margin: 0; padding: 0; }
+/* A top-bar sensor is put together from GNOME Shell's own parts, and its distances are the Shell theme's: the row and
+   every sensor are a .panel-status-indicators-box, an icon is a .system-status-icon, and a sensor has the Shell's
+   class for a status icon with a number beside it, .power-status. That gives 4 pixels between an icon and its
+   value and 8 between two sensors. A user's own stylesheet can change them through .vitals-panel-item.
+   Without icons there is nothing between two values but the row's spacing, so this stands in front of each. */
+.vitals-panel-item-plain { margin-left: 8px; }
 .vitals-button-action { -st-icon-style: symbolic; border-radius: 32px; margin: 0px; min-height: 22px; min-width: 22px; padding: 10px; font-size: 100%; border: 1px solid transparent; }
 .vitals-button-action:hover, .vitals-button-action:focus { border-color: #777; }
 .vitals-button-action > StIcon { icon-size: 16px; }
 .vitals-button-box { padding: 0px; spacing: 22px; }
 /* The dropdown menu has one width. A label that does not fit next to its value is shortened with "…". */
 .vitals-menu { width: 22em; }
-/* Digits of one width, so a top-bar value does not change width when only its digits change. */
-.vitals-panel-label { font-feature-settings: "tnum"; }
-/* With the "emphasize values" option, a unit is smaller and thinner than its number. panelValue.js also draws it
-   lighter, and sets its distance from the number. */
-.vitals-panel-unit-light { font-size: 0.85em; font-weight: normal; }
 /* The panel with a sensor's actions is as wide as the rows it stands between, and its head and its actions are rows
    of the same height, so everything in it lines up with the list. It keeps a little room above and below. */
 .vitals-sensor-panel { border-radius: 12px; padding: 4px 0; margin: 2px 0 6px 0; border: none; }

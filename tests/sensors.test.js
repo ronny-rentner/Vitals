@@ -4,7 +4,7 @@ import {Sensors} from '../sensors.js';
 import {readCatalog, writeCatalog, writeCategoryEnabled, sensorPresent} from '../helpers/storedCatalog.js';
 import {test, equal, mean, settings, runTests} from './harness.js';
 import {Machine} from './machine.js';
-import {machine as machineFixture, filesystems, mappedRootMounts, usbDriveMounts} from './fixtures/machine.js';
+import {machine as machineFixture, filesystems, mappedRootMounts, usbDriveMounts, shareMounts} from './fixtures/machine.js';
 
 const CORETEMP = '/sys/class/hwmon/hwmon3/';
 const BATTERY = '/sys/class/hwmon/hwmon4/';
@@ -14,6 +14,9 @@ const USB_NAME = machineFixture[USB + 'name'].trim();
 const ZONES = '/sys/class/thermal/';
 const NETWORK = '/proc/net/dev';
 const DISKS = '/proc/diskstats';
+const MOUNTS = '/proc/self/mountinfo';
+const USB_DRIVE = '/media/USB drive';
+const SHARE = '/media/share';
 // The temperature files Vitals reports. Not among them: thermal_zone1 (the policy zone),
 // thermal_zone8 (the package temperature coretemp reports) and thermal_zone9 (published through hwmon7).
 const TEMPERATURES = [
@@ -24,11 +27,15 @@ const SECTOR_BYTES = 512;
 const YEAR_SECONDS = 365 * 86400;
 
 // Builds what one test works on: a machine, a Sensors instance that reads it, and the two clocks the test advances.
-// A test that starts from a saved catalog, or launches a second time, passes its own settings.
-function setup({files = machineFixture, configuration = settings()} = {}) {
+// A test that starts from a saved catalog, or launches a second time, passes its own settings. `locations` are the
+// storage locations the user added, when they are not the default.
+function setup({files = machineFixture, configuration = settings(), locations} = {}) {
     let machine = new Machine(files, filesystems);
     // Every file Sensors opens comes from this test's machine. This process only runs tests, so it is never restored.
     Gio.File.new_for_path = path => machine.file(path);
+    Gio.VolumeMonitor.get = () => machine.volumeMonitor();
+    if (locations)
+        configuration.set_strv('storage-locations', locations);
     let sensors = new Sensors(configuration, text => text);
     let time = 1;
     let date = Math.floor(GLib.get_real_time() / 1000000);
@@ -262,14 +269,14 @@ test('two devices with the same name each get a sensor with the same key, read f
 
 test('discovery uses settings changed while its reads are pending', async () => {
     let {sensors, configuration, machine, find} = setup({files: {...machineFixture, ...usbDriveMounts}});
-    let usbDevice = '8:1';
-    let mountsRead = machine.holdNextRead('/proc/self/mountinfo');
+    let mountsRead = machine.holdNextRead(MOUNTS);
     let firstDiscovery = sensors.discover();
-    configuration.set_string('storage-path', '/media/USB drive/data');
+    configuration.set_strv('storage-locations', [USB_DRIVE]);
     let secondDiscovery = sensors.discover();
     mountsRead.finish();
     await Promise.all([firstDiscovery, secondDiscovery]);
-    equal(find('storage', 'read-rate').device, usbDevice, 'the device of the storage path set last');
+    equal(find('storage', '//free'), undefined, 'the location that was removed meanwhile');
+    equal(find('storage', USB_DRIVE + '/free').status, 'pending', 'the one that was added');
     sensors.destroy();
 });
 
@@ -483,12 +490,12 @@ test('shown sensors select only the sources they need', async () => {
     sensors.destroy();
 });
 
-test('storage space rows report the filesystem that holds the storage path', async () => {
+test('a storage location has its space, and the header shows the free space of the first one', async () => {
     let {sensors, errors, find, show} = setup();
     let {'filesystem::size': size, 'filesystem::free': free, 'filesystem::used': used} = filesystems['/'];
-    let value = key => find('storage', key).value;
+    let value = field => find('storage', '//' + field).value;
     await sensors.discover();
-    show(...['total', 'used', 'free', 'reserved', 'used-percent', 'free-percent'].map(key => find('storage', key)), 'storage');
+    show(...['total', 'used', 'free', 'reserved', 'used-percent', 'free-percent'].map(field => find('storage', '//' + field)), 'storage');
     await sensors.poll();
     equal(errors.length, 0, 'collection errors');
     equal(value('total'), size, 'total');
@@ -497,7 +504,141 @@ test('storage space rows report the filesystem that holds the storage path', asy
     equal(value('reserved'), size - used - free, 'reserved is the unused space users may not write');
     equal(value('used-percent'), used / size, 'used share');
     equal(value('free-percent'), (size - used) / size, 'free share includes reserved space');
-    equal(sensors.catalog.storage.header, find('storage', 'free'), 'group header shows free space');
+    equal(sensors.catalog.storage.header, find('storage', '//free'), 'group header shows free space');
+    equal(find('storage', '//free').label, 'Free', 'with one location, a label does not name it');
+    sensors.destroy();
+});
+
+test('every storage location has its own values, in a section of its own', async () => {
+    let {sensors, machine, find, show} = setup({files: {...machineFixture, ...usbDriveMounts}, locations: [USB_DRIVE, '/']});
+    // The order of the locations does not follow the order of the table.
+    machine.write(MOUNTS, usbDriveMounts[MOUNTS].trim().split('\n').reverse().join('\n') + '\n');
+    await sensors.discover();
+    let rootFree = find('storage', '//free'), usbFree = find('storage', USB_DRIVE + '/free');
+    equal(rootFree.lowIsBad, true, 'free space is watched for low values');
+    equal(rootFree.label, 'Free (/)', 'with several locations, a label names its own');
+    equal(usbFree.label, 'Free (' + USB_DRIVE + ')');
+    equal(rootFree.section != usbFree.section, true, 'each location is a section');
+    equal(find('storage', USB_DRIVE + '/read-rate').section, usbFree.section, 'with all its values');
+    equal(sensors.catalog.storage.header, rootFree, 'the header shows the first location');
+    show(usbFree);
+    await sensors.poll();
+    equal(usbFree.value, filesystems[USB_DRIVE]['filesystem::free']);
+    equal(machine.asked.join(','), USB_DRIVE, 'only the location on screen is asked');
+    sensors.destroy();
+});
+
+test('a storage location is monitored when the user added it and something is mounted there', async () => {
+    let {sensors, configuration, find} = setup({files: {...machineFixture, ...shareMounts}});
+    let locations = () => [...new Set(sensors.catalog.storage.sensors.filter(sensor => sensorPresent(sensors.catalog.storage, sensor))
+        .map(sensor => sensor.location))].sort().join(',');
+    await sensors.discover();
+    equal(locations(), '/', 'at the start, the root alone');
+    configuration.set_strv('storage-locations', ['/', SHARE, '/media/idle', '/mnt/backup']);
+    await sensors.discover();
+    equal(locations(), '/,' + SHARE, 'not the automount that is not connected, nor a path where nothing is mounted');
+    equal(find('storage', SHARE + '/free').network, true, 'a share is a network storage location');
+    equal(find('storage', SHARE + '/read-rate'), undefined, 'which has no disk whose reads are counted');
+    equal(find('storage', '//free').network, false);
+    configuration.set_strv('storage-locations', [SHARE]);
+    await sensors.discover();
+    equal(sensors.catalog.storage.header, find('storage', SHARE + '/free'), 'the header shows the first monitored one');
+    equal(sensors.catalog.storage.header.label, 'Free');
+    configuration.set_strv('storage-locations', [SHARE, '/']);
+    await sensors.discover();
+    equal(sensors.catalog.storage.header, find('storage', '//free'), 'also when the first one was added later');
+    sensors.destroy();
+});
+
+test('what GNOME reports as mounted is monitored while the user wants that', async () => {
+    let {sensors, configuration, machine, find} = setup({files: {...machineFixture, ...usbDriveMounts}});
+    // A phone is a mount without a path.
+    machine.volumes = [USB_DRIVE, null];
+    await sensors.discover();
+    equal(find('storage', USB_DRIVE + '/free'), undefined, 'not from the start');
+    configuration.set_boolean('storage-monitor-volumes', true);
+    await sensors.discover();
+    equal(find('storage', USB_DRIVE + '/free').status, 'pending', 'the drive, which the user did not add');
+    equal(find('storage', '//free').label, 'Free (/)', 'beside the root');
+    machine.volumes = [];
+    await sensors.discover();
+    equal(find('storage', USB_DRIVE + '/free'), undefined, 'gone with its mount');
+    sensors.destroy();
+});
+
+test('a network storage location is asked once per interval, a disk at every tick', async () => {
+    let {sensors, configuration, machine, find, show, advance} = setup({files: {...machineFixture, ...shareMounts}, locations: ['/', SHARE]});
+    let minutes = 2;
+    configuration.set_int('storage-network-interval', minutes);
+    await sensors.discover();
+    let shareFree = find('storage', SHARE + '/free'), rootFree = find('storage', '//free');
+    show(shareFree, rootFree);
+    await sensors.poll();
+    equal(shareFree.value, filesystems[SHARE]['filesystem::free']);
+    let asked = location => machine.asked.filter(askedLocation => askedLocation == location).length;
+    let shareAsked = asked(SHARE), rootAsked = asked('/');
+    advance(minutes * 60 - 1);
+    await sensors.poll();
+    equal(asked(SHARE), shareAsked, 'the share is not asked inside its interval');
+    equal(asked('/'), rootAsked + 1, 'the disk is');
+    show(rootFree);
+    show(shareFree, rootFree);
+    await sensors.poll();
+    equal(asked(SHARE), shareAsked, 'nor when it comes on screen again inside it');
+    equal(shareFree.status, 'ready', 'it shows the answer it has');
+    await sensors.poll(true);
+    equal(asked(SHARE), shareAsked + 1, 'a forced reading asks it at once');
+    advance(minutes * 60);
+    await sensors.poll();
+    equal(asked(SHARE), shareAsked + 2, 'and so does a tick after the interval');
+    sensors.destroy();
+});
+
+test('a storage location where nothing is mounted any more is not asked', async () => {
+    let {sensors, machine, find, show, advance} = setup({files: {...machineFixture, ...shareMounts}, locations: ['/', SHARE]});
+    await sensors.discover();
+    let shareFree = find('storage', SHARE + '/free');
+    show(shareFree);
+    await sensors.poll();
+    let askedWhileConnected = machine.asked.length;
+    // The share disconnects: its automount stays in the table.
+    machine.write(MOUNTS, shareMounts[MOUNTS].split('\n').filter(line => !line.includes(' cifs ')).join('\n'));
+    await sensors.poll(true);
+    equal(machine.asked.length, askedWhileConnected, 'asking would connect it again');
+    equal(shareFree.status, 'unavailable');
+    machine.write(MOUNTS, shareMounts[MOUNTS]);
+    advance(1);
+    await sensors.poll();
+    equal(shareFree.status, 'ready', 'connected again, it is asked at the next tick and does not wait for its interval');
+    sensors.destroy();
+});
+
+test('a storage location that does not answer is not asked a second time', async () => {
+    let {sensors, machine, find, show, advance} = setup({files: {...machineFixture, ...shareMounts}, locations: ['/', SHARE]});
+    await sensors.discover();
+    let shareFree = find('storage', SHARE + '/free');
+    let question = machine.holdNextRead(SHARE);
+    let secondQuestion;
+    show(shareFree);
+    // Let the read get as far as the question it is held at.
+    await new Promise(resolve => setTimeout(resolve, 0));
+    equal(typeof question.finish, 'function', 'the question is out');
+    secondQuestion = machine.holdNextRead(SHARE);
+    // Each run cancels the read under way, and the reading that follows the run reads again.
+    await sensors.discover();
+    let reading = sensors.poll(true);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    equal(secondQuestion.finish, null, 'no second question while the first is out');
+    equal(machine.asked.filter(location => location == SHARE).length, 1, 'through the run and the readings after it');
+    question.finish();
+    await reading;
+    equal(shareFree.value, filesystems[SHARE]['filesystem::free'], 'the answer serves the reading that waited');
+    advance(1);
+    reading = sensors.poll(true);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    equal(typeof secondQuestion.finish, 'function', 'the location is asked again once it has answered');
+    secondQuestion.finish();
+    await reading;
     sensors.destroy();
 });
 
@@ -506,7 +647,7 @@ test('storage rates identify mapped devices and keep idle readings available', a
     let disk = {device: '254:1', name: 'dm-1', readSectors: 100, writtenSectors: 50};
     machine.write(DISKS, diskStatistics([disk]));
     await sensors.discover();
-    let readRate = find('storage', 'read-rate'), writeRate = find('storage', 'write-rate');
+    let readRate = find('storage', '//read-rate'), writeRate = find('storage', '//write-rate');
     show(readRate, writeRate);
     await sensors.poll();
     equal(readRate.status, 'pending', 'first reading establishes baseline');
@@ -538,22 +679,20 @@ test('storage rates identify mapped devices and keep idle readings available', a
     sensors.destroy();
 });
 
-test('storage rates select the containing mount with escaped spaces', async () => {
-    let configuration = settings();
-    configuration.set_string('storage-path', '/media/USB drive/data');
-    let {sensors, machine, find, show, advance} = setup({files: {...machineFixture, ...usbDriveMounts}, configuration});
+test('storage rates are those of the location\'s own disk, also at a path with an escaped space', async () => {
+    let {sensors, machine, find, show, advance} = setup({files: {...machineFixture, ...usbDriveMounts}, locations: ['/', USB_DRIVE]});
     let rootDisk = {device: '254:1', name: 'dm-1', readSectors: 100, writtenSectors: 50};
     let usbDisk = {device: '8:1', name: 'sda1', readSectors: 10, writtenSectors: 10};
     machine.write(DISKS, diskStatistics([rootDisk, usbDisk]));
     await sensors.discover();
-    let readRate = find('storage', 'read-rate');
+    let readRate = find('storage', USB_DRIVE + '/read-rate');
     show(readRate);
     await sensors.poll();
     let seconds = 1, readSectors = 2;
     advance(seconds);
     machine.write(DISKS, diskStatistics([rootDisk, {...usbDisk, readSectors: usbDisk.readSectors + readSectors}]));
     await sensors.poll();
-    equal(readRate.value, readSectors * SECTOR_BYTES / seconds, 'nested device selected');
+    equal(readRate.value, readSectors * SECTOR_BYTES / seconds, 'the USB drive, not the root disk');
     equal(readRate.format, 'storage-rate', 'rate format');
     sensors.destroy();
 });
@@ -999,6 +1138,41 @@ test('a tick starts the NVIDIA stream again when the update interval changed and
     equal(memoryUsed.status, 'ready');
     show();
     await nvidiaSmi.allStopped();
+    sensors.destroy();
+});
+
+test('an NVIDIA sensor that comes on screen next to a shown one of its card is read at once', async () => {
+    let {sensors, configuration, find, show} = setup();
+    let nvidiaSmi = installNvidiaSmi();
+    let card = {uuid: 'GPU-test', name: 'Test GPU', 'memory.used': 2048, 'memory.total': 8192, 'utilization.gpu': 30};
+    nvidiaSmi.setCards([card]);
+    writeCategoryEnabled(configuration, 'gpu', true);
+    sensors.reloadEnabled();
+    await sensors.discover();
+    let memoryUsed = find('gpu', 'Test GPU/memory.used');
+    let utilization = find('gpu', 'Test GPU/utilization.gpu');
+    show(memoryUsed);
+    await sensors.poll();
+    show(memoryUsed, utilization);
+    // No tick follows. The process that reports the utilization as well has to start and print its first line.
+    for (let waited = 0; utilization.status != 'ready' && waited < 3000; waited += 50)
+        await new Promise(resolve => setTimeout(resolve, 50));
+    equal(utilization.status, 'ready', 'without a tick');
+    equal(utilization.value, card['utilization.gpu'] / 100);
+    show();
+    await nvidiaSmi.allStopped();
+    sensors.destroy();
+});
+
+test('the refresh rate shows that its value is on its way until two frames were counted', async () => {
+    let {sensors, configuration, find, show} = setup();
+    writeCategoryEnabled(configuration, 'gpu', true);
+    sensors.reloadEnabled();
+    await sensors.discover();
+    let refreshRate = find('gpu', 'refresh-rate');
+    show(refreshRate);
+    await sensors.poll();
+    equal(refreshRate.status, 'pending', 'no frame is counted outside the Shell');
     sensors.destroy();
 });
 

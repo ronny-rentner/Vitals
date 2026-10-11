@@ -80,7 +80,9 @@ export const machine = deepFreeze({
 // The sizes in bytes that Gio reports for the filesystem mounted at each path. This is not a file in /sys or /proc:
 // Gio gets it from the statfs system call. `free` is what users may still write; unused space beyond it is reserved.
 export const filesystems = deepFreeze({
-    '/': {'filesystem::size': 1000000, 'filesystem::free': 300000, 'filesystem::used': 600000}
+    '/': {'filesystem::size': 1000000, 'filesystem::free': 300000, 'filesystem::used': 600000},
+    '/media/USB drive': {'filesystem::size': 64000, 'filesystem::free': 60000, 'filesystem::used': 4000},
+    '/media/share': {'filesystem::size': 8000000, 'filesystem::free': 5000000, 'filesystem::used': 3000000}
 });
 
 // The root filesystem on a device-mapper volume.
@@ -93,4 +95,16 @@ export const usbDriveMounts = deepFreeze({
     '/proc/self/mountinfo':
         '20 1 254:1 / / rw shared:1 - ext4 /dev/mapper/system-root rw\n' +
         '21 20 8:1 / /media/USB\\040drive rw shared:2 - ext4 /dev/sda1 rw\n'
+});
+
+// A root on a disk, a share that is connected under its automount, an automount that is not connected, and an
+// image file on a loop device.
+export const shareMounts = deepFreeze({
+    '/proc/self/mountinfo':
+        '20 1 8:1 / / rw shared:1 - ext4 /dev/sda1 rw\n' +
+        '27 20 0:26 / /proc rw shared:13 - proc proc rw\n' +
+        '55 20 0:45 / /media/share rw shared:113 - autofs systemd-1 rw,fd=82,timeout=600\n' +
+        '59 20 0:46 / /media/idle rw shared:117 - autofs systemd-1 rw,fd=84,timeout=600\n' +
+        '90 20 7:3 / /snap/core/1 ro shared:40 - squashfs /dev/loop3 ro\n' +
+        '431 55 0:104 / /media/share rw shared:631 - cifs //server/share rw,vers=3.1.1\n'
 });

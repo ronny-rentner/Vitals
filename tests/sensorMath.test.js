@@ -1,4 +1,4 @@
-import {PENDING, cpuUsage, parseCpuStat, parseNetwork, parseMemory, parseBattery, batteryTime} from '../helpers/sensorMath.js';
+import {PENDING, cpuUsage, parseCpuStat, parseNetwork, parseMountTable, isRemoteMount, parseTypesWithoutDevice, parseMemory, parseBattery, batteryTime} from '../helpers/sensorMath.js';
 import {test, equal, runTests} from './harness.js';
 
 test('network snapshot parses every interface and rejects incomplete rows', () => {
@@ -45,6 +45,30 @@ test('memory and battery inputs use canonical units', () => {
     equal(battery.power, -watts, 'discharging power is negative');
     equal(battery.now, wattHoursNow);
     equal(batteryTime(battery), wattHoursNow / watts * 3600);
+});
+
+test('the mount on top is what is mounted at a place', () => {
+    let disk = '30 20 8:17 / /mnt rw - ext4 /dev/sdb1 rw\n';
+    let memory = '31 30 0:50 / /mnt rw - tmpfs tmpfs rw\n';
+    let automount = '55 20 0:45 / /mnt rw - autofs systemd-1 rw\n';
+    equal(JSON.stringify(parseMountTable(disk).get('/mnt')), JSON.stringify({type: 'ext4', source: '/dev/sdb1', device: '8:17'}));
+    equal(parseMountTable(disk + memory).get('/mnt').type, 'tmpfs', 'a disk hidden under another mount');
+    equal(parseMountTable(memory + disk).get('/mnt').type, 'ext4', 'a disk mounted over another mount');
+    equal(parseMountTable(automount).has('/mnt'), false, 'an automount that waits is no mount');
+    equal(parseMountTable(disk + automount).has('/mnt'), false, 'nor is what it hides');
+    equal(parseMountTable(automount + disk).get('/mnt').type, 'ext4', 'what it connected is');
+});
+
+test('a mount is on another machine by df\'s rule', () => {
+    equal(isRemoteMount({type: 'cifs', source: '//server/share'}), true, 'by its type');
+    equal(isRemoteMount({type: 'fuse.sshfs', source: 'user@host:/data'}), true, 'by the colon in its source');
+    equal(isRemoteMount({type: 'ext4', source: '/dev/sdb1'}), false);
+    equal(isRemoteMount({type: 'zfs', source: 'tank'}), false);
+});
+
+test('the kernel marks the filesystem types that need no block device', () => {
+    let types = parseTypesWithoutDevice('nodev\tproc\n\text4\nnodev\tcifs\n');
+    equal([...types].join(','), 'proc,cifs');
 });
 
 await runTests();

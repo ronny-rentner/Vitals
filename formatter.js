@@ -74,11 +74,11 @@ export class Formatter {
         let unit = '';
         switch (format) {
             case 'percent':
-                unit = '%';
+                unit = ' %';
                 text = (precise ? numeric.toFixed(1) : String(Math.trunc(numeric))) + unit;
                 break;
             case 'temp':
-                unit = this._settings.get_int('unit') == 1 ? '°F' : '°C';
+                unit = this._settings.get_int('unit') == 1 ? ' °F' : ' °C';
                 text = (precise ? numeric.toFixed(1) : String(Math.trunc(numeric))) + unit;
                 break;
             case 'in':

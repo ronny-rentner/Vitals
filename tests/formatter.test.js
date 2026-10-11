@@ -10,10 +10,10 @@ test('formatting changes have no measurement state or I/O', () => {
         get_strv: () => []
     };
     let formatter = new Formatter(settings);
-    equal(formatter.format(45.1, 'temp', 'temperature', 't').text, '45°C');
-    equal(formatter.format(45.9, 'temp', 'temperature', 't').text, '45°C');
+    equal(formatter.format(45.1, 'temp', 'temperature', 't').text, '45 °C');
+    equal(formatter.format(45.9, 'temp', 'temperature', 't').text, '45 °C');
     options.unit = 1;
-    equal(formatter.format(45, 'temp', 'temperature', 't').text, '113°F');
+    equal(formatter.format(45, 'temp', 'temperature', 't').text, '113 °F');
     equal(formatter.format(1048576, 'memory', 'memory', 'm').text, '1.0 MiB');
     equal(formatter.format(45, 'watt-limit', 'processor', 'p').text, '45 W');
     equal(formatter.format(-1.2, 'in', 'voltage', 'v').text, '-1.2 V');

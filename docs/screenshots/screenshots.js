@@ -128,7 +128,7 @@ export async function run() {
     // The top bar: the sensors a new user has, which end with the download speed, and three more.
     await pin([['network', find('network', 'device-tx')], ['temperature', sensors.catalog.temperature.header],
         ['fan', sensors.catalog.fan.header]], true);
-    let more = [['processor', find('processor', 'usage')], ['storage', find('storage', 'free')],
+    let more = [['processor', find('processor', 'usage')], ['storage', find('storage', '//free')],
         ['voltage', sensors.catalog.voltage.header], ['system', find('system', 'uptime')]];
     // Every picture once in the Shell's dark style and once in its light style, whose pictures end in "-light".
     // The Shell is dark unless the desktop asks for light.

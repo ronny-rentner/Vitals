@@ -16,6 +16,10 @@ export class Machine {
         this._heldReads = new Map();
         // Every file read so far, in order.
         this.reads = [];
+        // Every path that was asked for the space of its filesystem so far, in order.
+        this.asked = [];
+        // The paths of the mounts that GNOME's volume monitor reports. A mount that has no path is null.
+        this.volumes = [];
     }
 
     content(path) {
@@ -38,8 +42,8 @@ export class Machine {
         this._listErrors.set(directoryPath, error);
     }
 
-    // Keeps the next read of the file open until the test calls `finish` on what this returns. `cancellable` is
-    // the one the reader passed, once the read has started.
+    // Keeps the next read of the file, or the next question for the space at the path, open until the test calls
+    // `finish` on what this returns. `cancellable` is the one the reader passed, once the read has started.
     holdNextRead(path) {
         let heldRead = {finish: null, cancellable: null};
         this._heldReads.set(path, heldRead);
@@ -69,19 +73,29 @@ export class Machine {
         return this._filesystems[mountPoint];
     }
 
+    // Answers at once, unless the test holds the next read of this path.
+    _answer(path, cancellable, answer) {
+        let heldRead = this._heldReads.get(path);
+        if (!heldRead) {
+            answer();
+            return;
+        }
+        this._heldReads.delete(path);
+        heldRead.cancellable = cancellable;
+        heldRead.finish = answer;
+    }
+
+    // Stands in for Gio.VolumeMonitor.get, with the one call that Sensors makes.
+    volumeMonitor() {
+        return {get_mounts: () => this.volumes.map(path => ({get_root: () => ({get_path: () => path})}))};
+    }
+
     // Only the Gio.File calls that Sensors makes. Callbacks run at once, except for a held read; the outcome is decided in *_finish.
     file(path) {
         let machine = this;
         return {
             load_contents_async(cancellable, callback) {
-                let heldRead = machine._heldReads.get(path);
-                if (!heldRead) {
-                    callback(this, null);
-                    return;
-                }
-                machine._heldReads.delete(path);
-                heldRead.cancellable = cancellable;
-                heldRead.finish = () => callback(this, null);
+                machine._answer(path, cancellable, () => callback(this, null));
             },
             load_contents_finish() {
                 machine.reads.push(path);
@@ -110,7 +124,8 @@ export class Machine {
                 };
             },
             query_filesystem_info_async(attributes, priority, cancellable, callback) {
-                callback(this, null);
+                machine.asked.push(path);
+                machine._answer(path, cancellable, () => callback(this, null));
             },
             query_filesystem_info_finish() {
                 let filesystem = machine._filesystemHolding(path);

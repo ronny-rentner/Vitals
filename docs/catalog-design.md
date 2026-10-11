@@ -63,7 +63,7 @@ catalog = {
 - `shown`: whether it is on screen right now. The renderer sets this; see "What is collected".
 - `value` and `updated`: its reading and when it was taken. A few readings are text, such as a battery's state.
 - `status`: `ready` when `value` is current, `pending` while there is none yet (shown as "…"), `unavailable` when it cannot be read (the row is hidden), and `saved` when `value` comes from an earlier session.
-- `file`: the file the sensor is read from. A temperature has a file of its own; the memory sensors all name `/proc/meminfo`. A few sensors are read from something that is not a file and have no `file`: a card read through `nvidia-smi` has `nvidia`, and the storage space, the public IP, the refresh rate and, on some machines, the CPU frequencies are known by their key. A sensor whose value discovery wrote, such as the kernel version, has none either, and neither has an average, minimum or maximum.
+- `file`: the file the sensor is read from. A temperature has a file of its own; the memory sensors all name `/proc/meminfo`. A few sensors are read from something that is not a file and have no `file`: a card read through `nvidia-smi` has `nvidia`, the space of a storage location has `location`, the place where it is mounted, and the public IP, the refresh rate and, on some machines, the CPU frequencies are known by their key. A sensor whose value discovery wrote, such as the kernel version, has none either, and neither has an average, minimum or maximum.
 - Fields that say which part of the file is the sensor's: the interface name for a network rate (with `hardware`, whether that interface is a hardware device), the core for a CPU core.
 
 - `lowIsBad`: set by discovery on a sensor whose low values are the ones to watch, such as free memory, a battery's charge or the WiFi link quality (`LOW_IS_BAD` in `sensors.js`). A colour scale on such a sensor colours downwards from its breakpoints; on every other sensor, upwards.
@@ -127,7 +127,7 @@ The readings are written when the extension stops, which is at logout and each t
 
 The setting holds the catalog as a structure, not as text. GNOME's settings format stores nested records and lists directly (type `a{sv}`). `helpers/storedCatalog.js` turns the catalog's plain data into that format; reading it back is built in.
 
-Other settings stay as they are: the display settings, and the options that belong to one category, such as hide-zeros, the storage path and the public-IP options.
+Other settings stay as they are: the display settings, and the options that belong to one category, such as hide-zeros, the storage locations and the public-IP options.
 
 ## The renderer
 
@@ -147,7 +147,9 @@ An average, minimum or maximum is not read from anything. When one of them is ma
 
 After it changed the marks, the renderer tells the collector so (`shownChanged`); see the last section. What came on screen is then read at once and does not wait for the next tick, which can be a minute away (`_readNewlyShown`, decided on 2026-10-10). Only that is read: a source that is on screen and has no reading. A source whose reading is current is not read again, and one that is still inside its own interval, such as the public IP, keeps the reading it has. The same happens when the catalog changed, for instance when another sensor became a category's header.
 
-A rate needs two readings, and all sensors of one file share them: with download speed in the top bar, `/proc/net/dev` always has two, and every network speed has its value the moment its row appears. A rate whose file was not on screen before starts from nothing, and it is not computed across the time its file was off screen. So a first reading that leaves a sensor without a value is followed by a second reading one second later (`SECOND_READING_SECONDS`), and the rate shows what happened in that second until the next tick. The second reading is called off when the source leaves the screen before it, and it is dropped when it falls into a discovery run; the rate then comes with the next tick.
+A rate needs two readings, and all sensors of one file share them: with download speed in the top bar, `/proc/net/dev` always has two, and every network speed has its value the moment its row appears. A rate whose file was not on screen before starts from nothing, and it is not computed across the time its file was off screen. So a first reading that leaves a sensor without a value is followed by a second reading one second later (`SECOND_READING_SECONDS`), and the rate shows what happened in that second until the next tick. The second reading is called off when the source leaves the screen before it or a tick was first to bring the value, and when it falls into a discovery run it waits for the end of that run.
+
+A reading from `nvidia-smi` holds only the fields that were asked for. When another sensor of a card comes on screen, the process is started again with more fields, and the reading it left counts as none, so the new sensor is read at once like any other.
 
 A tick can follow a first reading within a moment. A rate over less than half a second says nothing (processor usage over 4 ms reads 0), so a reading that arrives that soon after the last one is compared with the reading before the last one, or gives no rate when there is none (`SHORTEST_RATE_SECONDS`).
 

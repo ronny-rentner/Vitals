@@ -17,7 +17,6 @@ import {Extension, gettext as _} from 'resource:///org/gnome/shell/extensions/ex
 
 import * as Formatter from './formatter.js';
 import * as MenuItem from './menuItem.js';
-import * as PanelValue from './panelValue.js';
 import * as SensorCategories from './helpers/categories.js';
 import {sensorPresent} from './helpers/storedCatalog.js';
 
@@ -46,11 +45,6 @@ const LABEL_ORDER = new Intl.Collator(undefined, {numeric: true, sensitivity: 'b
 const PANEL_ICON_EM = {true: 1, false: 1.091};
 // How strongly a top-bar icon is drawn. 255 is fully opaque.
 const PANEL_ICON_OPACITY = {true: 165, false: 255};
-// The distances in the top bar, as shares of the icon size.
-// From the end of one top-bar item to the drawing of the next item's icon.
-const PANEL_ITEM_GAP = 0.75;
-// From the drawing of an icon to its value.
-const PANEL_ICON_TEXT_GAP = 0.35;
 
 var VitalsMenuButton = GObject.registerClass({
     GTypeName: 'VitalsMenuButton',
@@ -103,7 +97,7 @@ var VitalsMenuButton = GObject.registerClass({
             y_align: Clutter.ActorAlign.CENTER,
             reactive: true,
             x_expand: true,
-            style_class: 'vitals-panel-menu'
+            style_class: 'panel-status-indicators-box'
         });
         this._menuLayout._delegate = this;
 
@@ -152,7 +146,7 @@ var VitalsMenuButton = GObject.registerClass({
 
         for (let setting of [
             'include-public-ip', 'network-public-ip-provider', 'include-static-info', 'include-static-gpu-info',
-            'storage-path', 'hide-zeros'
+            'storage-locations', 'storage-monitor-volumes', 'hide-zeros'
         ])
             this._settings.connectObject('changed::' + setting, this._discoverSensors.bind(this), this);
 
@@ -440,12 +434,12 @@ var VitalsMenuButton = GObject.registerClass({
 
     _createDefaultItem() {
         this._defaultItem = new St.BoxLayout({
-            style_class: 'vitals-panel-item',
+            style_class: 'panel-status-indicators-box',
             reactive: true,
         });
         this._menuLayout.add_child(this._defaultItem);
         this._defaultItem.add_child(new St.Icon({
-            style_class: 'system-status-icon vitals-panel-icon-default',
+            style_class: 'system-status-icon',
             reactive: true,
             gicon: Gio.icon_new_for_string(this._sensorIconPath('system'))
         }));
@@ -461,29 +455,23 @@ var VitalsMenuButton = GObject.registerClass({
     _createPanelItem(link, gicon) {
         let sensor = link.sensor;
         let item = new St.BoxLayout({
-            style_class: 'vitals-panel-item',
+            // An icon with its value is put together as GNOME Shell does it for the battery and its percentage.
+            style_class: 'panel-status-indicators-box power-status vitals-panel-item' +
+                (this._settings.get_boolean('hide-icons') ? ' vitals-panel-item-plain' : ''),
             reactive: true,
         });
         this._menuLayout.add_child(item);
 
         let emphasizeValues = this._settings.get_boolean('emphasize-values');
-        let iconEm = PANEL_ICON_EM[emphasizeValues];
-        // The icon files have different amounts of empty room beside their drawings. The margins make up for
-        // it, so that every drawing is the same distance from the item before it and from its own value.
-        let [emptyLeft, emptyRight] = [0, 0];
         if (!this._settings.get_boolean('hide-icons')) {
-            let iconStyle = ['original', 'gnome'][this._settings.get_int('icon-style')];
-            [emptyLeft, emptyRight] = SensorCategories.iconInsets[iconStyle][this._sensorIcons[link.category][this._iconName(sensor)]];
             item.add_child(new St.Icon({
-                style_class: 'system-status-icon vitals-panel-icon',
-                style: 'icon-size: ' + iconEm + 'em; ' +
-                    'margin-right: ' + ((PANEL_ICON_TEXT_GAP - emptyRight) * iconEm).toFixed(3) + 'em;',
+                style_class: 'system-status-icon',
+                style: 'icon-size: ' + PANEL_ICON_EM[emphasizeValues] + 'em;',
                 opacity: PANEL_ICON_OPACITY[emphasizeValues],
                 reactive: true,
                 gicon: gicon || Gio.icon_new_for_string(this._sensorIconPath(link.category, this._iconName(sensor)))
             }));
         }
-        item.style = 'margin-left: ' + ((PANEL_ITEM_GAP - emptyLeft) * iconEm).toFixed(3) + 'em;';
 
         if (this._settings.get_boolean('allow-panel-dragging')) {
             item._delegate = {
@@ -511,14 +499,29 @@ var VitalsMenuButton = GObject.registerClass({
 
         // The item starts with the value its sensor has, so a pin does not flash "…" or uncoloured text.
         let formatted = this._formatted(link.category, sensor);
-        let value = new PanelValue.PanelValue(emphasizeValues);
+        let value = new St.Label({ y_expand: true, y_align: Clutter.ActorAlign.CENTER });
+        // A value is never shortened with "…" (0 is the text engine's "do not shorten"): it gets the width it needs.
+        value.clutter_text.ellipsize = 0;
         value.style = formatted.style || null;
-        value.setText(formatted.text, formatted.unit);
         this._panelItems.set(link, {item, value});
-        // prevent "called on the widget"  "which is not in the stage" errors by adding before width below
+        // The value is in the item before it gets its text: a text is measured in the font the item gives it.
         item.add_child(value);
+        this._setPanelText(value, formatted);
 
         this._reserveWidth(sensor, value);
+    }
+
+    // Writes a top-bar value. With the "emphasize values" option the unit is smaller, thinner and lighter than the
+    // number. It is marked inside the one text, so the text engine keeps both on one line of writing.
+    _setPanelText(value, {text, unit}) {
+        let escaped = part => GLib.markup_escape_text(part, -1);
+        let markup = unit && this._settings.get_boolean('emphasize-values')
+            ? escaped(text.slice(0, -unit.length)) + '<span size="85%" weight="normal" alpha="67%">' + escaped(unit) + '</span>'
+            : escaped(text);
+        // Set twice: after the first time, the Shell's text actor reports the width of the new text with the marks
+        // of the text before it, and keeps doing so until the text is set again (seen in GNOME Shell 50.5).
+        value.clutter_text.set_markup(markup);
+        value.clutter_text.set_markup(markup);
     }
 
     // support for fixed widths #55: gives a top-bar value the width kept free for it.
@@ -526,7 +529,9 @@ var VitalsMenuButton = GObject.registerClass({
         // A value has the font of the theme, and so its real width, only while it is on the stage. Items are
         // also built before the extension's button is in the top bar.
         if (!value.get_stage()) return;
-        let reservedWidth = this._reservedWidth(sensor, value.textWidth);
+        // The width the text needs, whatever width is set on the value. It has the theme's font once it is styled.
+        value.ensure_style();
+        let reservedWidth = this._reservedWidth(sensor, value.clutter_text.get_preferred_width(-1)[1]);
         if (this._settings.get_boolean('fixed-widths') && value.width != reservedWidth)
             value.set_width(reservedWidth);
     }
@@ -934,7 +939,7 @@ var VitalsMenuButton = GObject.registerClass({
             if (!changed(sensor)) continue;
             let formatted = this._formatted(link.category, sensor);
             item.visible = sensor.status != 'unavailable';
-            if (value.text != formatted.text) value.setText(formatted.text, formatted.unit);
+            if (value.text != formatted.text) this._setPanelText(value, formatted);
             if (value.style != formatted.style) value.style = formatted.style;
             this._reserveWidth(sensor, value);
             let icon = item.get_first_child();

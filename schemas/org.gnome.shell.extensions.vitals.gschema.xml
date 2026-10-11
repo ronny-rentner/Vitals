@@ -101,10 +101,21 @@
       <summary>Fixed network speed unit</summary>
       <description>Fix the network speed unit instead of auto-scaling. 0=Auto, 1=kbit/s or kB/s, 2=Mbit/s or MB/s</description>
     </key>
-    <key type="s" name="storage-path">
-      <default>"/"</default>
-      <summary>Storage path</summary>
-      <description>Storage path for monitoring</description>
+    <key type="as" name="storage-locations">
+      <default>['/']</default>
+      <summary>Monitored storage locations</summary>
+      <description>The mount points whose storage is monitored. A location has its values while something is mounted there.</description>
+    </key>
+    <key type="b" name="storage-monitor-volumes">
+      <default>false</default>
+      <summary>Monitor what is mounted in Files</summary>
+      <description>Also monitor the drives and shares that Files lists as mounted, for as long as they are mounted. A share that was opened inside Files is not among them.</description>
+    </key>
+    <key type="i" name="storage-network-interval">
+      <default>5</default>
+      <range min="1" max="1440"/>
+      <summary>Network storage location update interval in minutes</summary>
+      <description>How often a storage location on another machine is asked for its space. A location on a disk is asked at every update.</description>
     </key>
     <key type="i" name="memory-measurement">
       <default>1</default>

@@ -1,5 +1,6 @@
 import Adw from 'gi://Adw';
 import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import Gdk from 'gi://Gdk';
 import Gtk from 'gi://Gtk';
@@ -8,6 +9,7 @@ import {ExtensionPreferences, gettext as _} from 'resource:///org/gnome/Shell/Ex
 import {Formatter} from './formatter.js';
 import {sensorCategories, categoriesInOrder, MANUAL_CATEGORY_ORDER} from './helpers/categories.js';
 import {compareColorEntries, DEFAULT_THRESHOLD_RGBA, formatColorEntry, sanitizeAndSortColorEntries} from './helpers/colors.js';
+import {parseMountTable, parseTypesWithoutDevice, isRemoteMount} from './helpers/sensorMath.js';
 import {readCatalog, writeCategoryEnabled, sensorPresent} from './helpers/storedCatalog.js';
 
 // The preferences window, written in the order in which it shows its pages, groups and rows. A row is one call of
@@ -102,8 +104,10 @@ export default class VitalsPrefs extends ExtensionPreferences {
                     this._switchRow('network-public-ip-show-flag', _('Show country flag'), _('Not available with ipify.')))));
 
         this._categoryPage('storage', _('Monitor storage'), '', [
-            this._textRow('storage-path', _('Path'), _('The filesystem that holds this path is monitored.'), '/'),
-            this._toggleRow('storage-measurement', _('Units'), _('Binary is KiB, MiB, GiB. Decimal is kB, MB, GB.'), [_('Binary'), _('Decimal')])]);
+            this._toggleRow('storage-measurement', _('Units'), _('Binary is KiB, MiB, GiB. Decimal is kB, MB, GB.'), [_('Binary'), _('Decimal')])],
+            this._storageLocations(),
+            this._group(_('Network Storage Locations'),
+                this._numberRow('storage-network-interval', _('Minutes between updates'), 1, 1440)));
 
         this._categoryPage('battery', _('Monitor battery'));
 
@@ -276,6 +280,55 @@ export default class VitalsPrefs extends ExtensionPreferences {
             targets.set(`sensor:${name}/${sensor.key}`, { label: sensor.label, unit, decimals, lowIsBad: sensor.lowIsBad });
         }
         return targets;
+    }
+
+    // The storage locations the user added, each with a button that removes it, then the mount points that can be
+    // added, then the switch for what Files lists as mounted.
+    _storageLocations() {
+        let group = this._group(_('Storage Locations'));
+        let volumesSwitch = this._switchRow('storage-monitor-volumes', _('Monitor what is mounted in Files'),
+            _('Drives and shares that Files lists as mounted, for as long as they are mounted. A share that was opened inside Files is not among them.'));
+        let rows = [];
+        let textOf = path => new TextDecoder().decode(GLib.file_get_contents(path)[1]);
+        let draw = () => {
+            for (let row of rows)
+                group.remove(row);
+            let added = this._settings.get_strv('storage-locations');
+            let save = locations => this._settings.set_strv('storage-locations', locations);
+            let mounts = parseMountTable(textOf('/proc/self/mountinfo'));
+            // Which mount points are offered first is libgtop's rule for a disk and df's rule for a share, both as
+            // they are. Every other mount point can be added as well.
+            let typesWithoutDevice = parseTypesWithoutDevice(textOf('/proc/filesystems'));
+            // The file exists once something was mounted with an option that is not the kernel's.
+            let userOptions = GLib.file_test('/run/mount/utab', GLib.FileTest.EXISTS) ? textOf('/run/mount/utab') : '';
+            let hiddenMountPoints = userOptions.split('\n').filter(line => line.includes('x-gdu.hide'))
+                .map(line => line.split(' ').find(field => field.startsWith('TARGET=')).slice(7));
+            let offeredFirst = (location, mount) => isRemoteMount(mount) ||
+                (!typesWithoutDevice.has(mount.type) || mount.type == 'zfs') && !hiddenMountPoints.includes(location);
+            let offered = new Adw.ExpanderRow({ title: _('Add a storage location') });
+            let otherMountPoints = new Adw.ExpanderRow({ title: _('Other mount points') });
+            for (let location of [...mounts.keys()].filter(location => !added.includes(location)).sort()) {
+                let row = new Adw.ActionRow({ title: location, subtitle: mounts.get(location).source, use_markup: false });
+                row.add_suffix(this._iconButton('list-add-symbolic', _('Add storage location'), () => save([...added, location])));
+                (offeredFirst(location, mounts.get(location)) ? offered : otherMountPoints).add_row(row);
+            }
+            offered.add_row(otherMountPoints);
+            rows = [...added.map(location => {
+                let row = new Adw.ActionRow({ title: location, subtitle: mounts.get(location)?.source ?? _('Not mounted'), use_markup: false });
+                row.add_suffix(this._iconButton('edit-delete-symbolic', _('Remove storage location'),
+                    () => save(added.filter(other => other != location))));
+                return row;
+            }), offered, volumesSwitch];
+            for (let row of rows)
+                group.add(row);
+        };
+        // The list is made each time the page comes into view, since disks and shares come and go.
+        group.connect('map', draw);
+        this._settings.connect('changed::storage-locations', () => {
+            if (group.get_mapped())
+                draw();
+        });
+        return group;
     }
 
     _iconButton(iconName, tooltip, clicked) {

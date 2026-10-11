@@ -13,6 +13,39 @@ export function splitFields(text) {
     return fields;
 }
 
+// What is mounted where, from the kernel's mount table, the text of /proc/self/mountinfo: each mount point with the
+// source, the filesystem type and the device number of its mount. Of several mounts at one place the last one is on
+// top and hides the others. An automount that waits to be used (autofs) is no mount to ask: asking would connect it.
+export function parseMountTable(mountTable) {
+    let mounts = new Map();
+    for (let line of mountTable.trim().split('\n')) {
+        // A space in a path is written as \040.
+        let fields = line.split(' ').map(field => field.replace(/\\([0-7]{3})/g, (_, octal) =>
+            String.fromCharCode(Number.parseInt(octal, 8))));
+        let [type, source] = fields.slice(fields.indexOf('-') + 1);
+        if (type == 'autofs')
+            mounts.delete(fields[4]);
+        else
+            mounts.set(fields[4], {type, source, device: fields[2]});
+    }
+    return mounts;
+}
+
+// The filesystem types that df counts as being on another machine (is_remote_fs_type_name in gnulib).
+const REMOTE_TYPES = new Set(['acfs', 'afs', 'autofs', 'auristorfs', 'cachefs', 'ceph', 'cifs', 'coda', 'fhgfs', 'gfs',
+    'gfs2', 'gpfs', 'ibrix', 'lustre', 'ncpfs', 'netfs', 'nfs', 'nfs3', 'nfs4', 'ocfs2', 'panfs', 'smb', 'smb2', 'smb3',
+    'smbfs', 'snfs', 'stnfs', 'userlandfs', 'vxfs', 'websearchfs']);
+
+// Whether a mount is on another machine. The rule is df's (ME_REMOTE in gnulib), taken as it is.
+export function isRemoteMount({type, source}) {
+    return source.includes(':') || source == '-hosts' || REMOTE_TYPES.has(type);
+}
+
+// The filesystem types that need no block device, from the text of /proc/filesystems.
+export function parseTypesWithoutDevice(filesystems) {
+    return new Set(filesystems.trim().split('\n').filter(line => line.startsWith('nodev')).map(line => line.slice(5).trim()));
+}
+
 export function parseNetwork(contents) {
     let interfaces = new Map();
     for (let line of contents.trim().split('\n').slice(2)) {

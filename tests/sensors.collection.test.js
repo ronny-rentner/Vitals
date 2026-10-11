@@ -1,7 +1,7 @@
 // Tests of how Sensors collects: which sources it reads, when, and which sensors it writes.
 // They use made-up sources and sensors, so nothing here depends on a machine.
 import {Sensors} from '../sensors.js';
-import {counterRate} from '../helpers/sensorMath.js';
+import {counterRate, PENDING} from '../helpers/sensorMath.js';
 import {test, equal, mean, settings, runTests} from './harness.js';
 
 // Builds what one test works on: a Sensors instance with a clock the test advances
@@ -15,11 +15,15 @@ function setup() {
     // What the collector has scheduled for later. The test lets the time pass and runs it.
     let scheduled = [];
     sensors.schedule = (seconds, callback) => {
-        let entry = {seconds, callback};
+        let entry = {seconds, callback, due: time + seconds};
         scheduled.push(entry);
         return entry;
     };
-    sensors.unschedule = entry => scheduled.splice(scheduled.indexOf(entry), 1);
+    sensors.unschedule = entry => {
+        if (!scheduled.includes(entry))
+            throw new Error('Called off what is not scheduled');
+        scheduled.splice(scheduled.indexOf(entry), 1);
+    };
     sensors.onError = (id, error) => errors.push([id, error]);
     // The made-up sensors live in the fan category, which has an average over its sensors. How the value of each
     // follows from its source's reading is made up as well, so the real rules for that are replaced.
@@ -55,7 +59,7 @@ function setup() {
         // Lets the time pass and runs what was scheduled for a moment that has come.
         advance(seconds) {
             time += seconds;
-            for (let entry of scheduled.filter(candidate => (candidate.seconds -= seconds) <= 0)) {
+            for (let entry of scheduled.filter(candidate => candidate.due <= time)) {
                 scheduled.splice(scheduled.indexOf(entry), 1);
                 entry.callback();
             }
@@ -276,6 +280,99 @@ test('a rate that comes on screen has its value a second later, without a tick',
     show(plainValue);
     equal(scheduled.length, 0, 'a second reading is called off when its source leaves the screen');
     equal(counterReads, 3);
+});
+
+test('a tick that is first to give the rate calls the second reading off', async () => {
+    let {sensors, add, show, advance, scheduled} = setup();
+    let counter = 0, reads = 0;
+    let counted = 70, momentAfterShowing = 0.1, secondsToTick = 0.6;
+    sensors.addSource('counter', {read: async () => { reads++; return counter; }});
+    let rate = add('rate', 'counter', s => counterRate(s, value => value));
+    show(rate);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    advance(momentAfterShowing);
+    await sensors.poll();
+    equal(rate.status, 'pending');
+    equal(scheduled.length, 1, 'a tick that gives no rate yet schedules no further reading');
+    advance(secondsToTick);
+    counter += counted;
+    await sensors.poll();
+    equal(rate.status, 'ready', 'this tick gives the rate');
+    equal(scheduled.length, 0, 'so the second reading is called off');
+});
+
+test('a sensor that stays without a value gets one second reading, not one after the other', async () => {
+    let {sensors, add, show, advance, scheduled} = setup();
+    let reads = 0;
+    sensors.addSource('empty', {read: async () => ++reads});
+    let neverMeasured = add('never-measured', 'empty', () => PENDING);
+    let readsFinished = () => new Promise(resolve => setTimeout(resolve, 0));
+    show(neverMeasured);
+    await readsFinished();
+    let secondsUntilSecondReading = scheduled[0].seconds;
+    advance(secondsUntilSecondReading);
+    await readsFinished();
+    equal(reads, 2);
+    equal(scheduled.length, 0, 'the second reading schedules no third');
+});
+
+test('a rate that still shows a saved value gets its second reading too', async () => {
+    let {sensors, add, show, scheduled} = setup();
+    sensors.addSource('counter', {read: async () => 0});
+    let rate = add('rate', 'counter', s => counterRate(s, value => value));
+    rate.status = 'saved';
+    show(rate);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    equal(rate.status, 'saved', 'the saved value stays until there is a rate');
+    equal(scheduled.length, 1);
+});
+
+test('a reading that follows the last one within a moment gives the rate against the reading before it', async () => {
+    let {sensors, add, show, advance, scheduled} = setup();
+    let counter = 0;
+    let updateSeconds = 5, moment = 0.004, countedInInterval = 500, countedInMoment = 1;
+    sensors.addSource('counter', {read: async () => counter});
+    let rate = add('rate', 'counter', s => counterRate(s, value => value));
+    show(rate);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    advance(scheduled[0].seconds);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    advance(updateSeconds);
+    counter += countedInInterval;
+    await sensors.poll();
+    equal(rate.value, countedInInterval / updateSeconds);
+    advance(moment);
+    counter += countedInMoment;
+    await sensors.poll(true);
+    equal(rate.value, (countedInInterval + countedInMoment) / (updateSeconds + moment), 'not the rate over the moment');
+});
+
+test('what comes on screen during a discovery run is not read, and a second reading waits for the end of a run', async () => {
+    let {sensors, add, show, advance, scheduled} = setup();
+    let reads = 0;
+    sensors.addSource('counter', {read: async () => ++reads});
+    let rate = add('rate', 'counter', s => counterRate(s, value => value));
+    let readsFinished = () => new Promise(resolve => setTimeout(resolve, 0));
+    // A run in progress, and its end, as discover() sets and clears it.
+    let run = deferred();
+    sensors._discovery = run.promise;
+    show(rate);
+    await readsFinished();
+    equal(reads, 0, 'nothing is read during the run');
+    sensors._discovery = null;
+    sensors._readNewlyShown();
+    await readsFinished();
+    equal(reads, 1, 'it is read when the run has ended');
+
+    sensors._discovery = run.promise;
+    advance(scheduled[0].seconds);
+    await readsFinished();
+    equal(reads, 1, 'the second reading does not fall into a run');
+    sensors._discovery = null;
+    run.resolve();
+    await readsFinished();
+    equal(reads, 2, 'it follows when the run has ended');
+    equal(rate.status, 'ready');
 });
 
 test('a rate is not computed over the moment between coming on screen and the next tick', async () => {

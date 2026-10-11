@@ -27,6 +27,7 @@ Because a key is saved, it has to come out the same on every start and in every 
 | processor | usage of one core | `cpu8` | `/proc/stat`, the line for `cpu8` |
 | processor | usage | `usage` | `/proc/stat` |
 | memory | usage | `usage` | `/proc/meminfo` |
+| storage | a value of a storage location | `//free`, `/boot/free`, `/media/share/read-rate` | the location, or `/proc/diskstats` |
 | gpu | a value of an NVIDIA card | `<card name>/<nvidia-smi field>` | `nvidia-smi` |
 | gpu | a value of another card | `<vendor id>/<file name>` | `/sys/class/drm/card0/device/` |
 
@@ -36,6 +37,7 @@ Rules:
 - **No directory numbers.** The number in `hwmon5` or `thermal_zone2` is given by the kernel in the order it finds devices and can differ at the next boot.
 - **Input numbers stay.** `temp1`, `in0` and `fan1` are fixed by the driver, and they are the only thing that tells unlabelled inputs apart.
 - **The separator is `/`,** because it cannot occur in a device, zone or interface name. A sensor that is not part of a device has a key without one, so `average` can never be the key of a device's sensor.
+- **A storage location's sensor is `<mount point>/<field>`.** The mount point is a path, so the key of `/` starts with two slashes. The field names the value's entry in the `FIXED` table.
 - **A key is unique at most within its category.** `usage` is a sensor in `memory` and another one in `processor`.
 - **Case is kept.** `thermal/SEN1` and an interface called `WAN` keep their spelling.
 

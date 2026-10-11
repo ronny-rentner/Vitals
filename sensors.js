@@ -40,18 +40,18 @@ const DISKSTATS = '/proc/diskstats';
 const ARCSTATS = '/proc/spl/kstat/zfs/arcstats';
 const WIRELESS = '/proc/net/wireless';
 const NETWORK = '/proc/net/dev';
+const MOUNTS = '/proc/self/mountinfo';
 // The sources that are not one file whose content is read as it is.
 const CPU_FREQUENCIES = 'cpu-frequencies';
-const FILESYSTEM = 'filesystem';
 const PUBLIC_IP = 'public-ip';
 const FRAMES = 'frames';
+const NVIDIA = 'nvidia';
 // A reading taken when its sensor came on screen can be followed by a tick at once. A rate over less time than this
 // says nothing.
 const SHORTEST_RATE_SECONDS = 0.5;
 // A rate has no value after the first reading of its source. The second reading follows this much later and does
 // not wait for the next tick, which can be a minute away.
 const SECOND_READING_SECONDS = 1;
-const NVIDIA = 'nvidia';
 // How the content of a file is taken apart, for the files that hold more than one number.
 const PARSERS = {
     [MEMINFO]: SensorMath.parseMemory,
@@ -111,15 +111,15 @@ const NETWORK_SECTION = {machineSpeed: 1, hardwareInterfaces: 2, volume: 3, othe
 // What an interface that is hardware is called, by the DEVTYPE the kernel reports for it. A network card reports none.
 // "WiFi" is spelled as in the two WiFi labels below, which 22 translations are filed under.
 const HARDWARE_INTERFACE_KINDS = {wlan: 'WiFi', wwan: 'Mobile'};
-// The sensor whose value a category shows in its menu header. Temperature, voltage, fan, battery and gpu choose theirs in _chooseHeader.
+// The sensor whose value a category shows in its menu header. Temperature, voltage, fan, storage, battery and gpu choose theirs in _chooseHeader.
 const HEADER_KEYS = {
-    memory: 'usage', processor: 'usage', system: 'load-1m', storage: 'free', network: 'device-rx'
+    memory: 'usage', processor: 'usage', system: 'load-1m', network: 'device-rx'
 };
 
 // A sensor that is found by its key alone: what the catalog says about it, and how its value follows from the
 // reading of its source. `source` is the file the sensor is read from, which becomes its `file` field, or one of
-// the sources that are not a file. An entry without a source gets its file, or its value, from discovery. An entry
-// without `value` follows the rule for its fields (see Sensors._value).
+// the sources that are not a file. An entry without a source gets its file, its storage location or its value from
+// discovery. An entry without `value` follows the rule for its fields (see Sensors._value).
 function fixed(label, format, source, value, fields = {}) {
     let catalogFields = {label, format, ...fields};
     if (source?.startsWith('/'))
@@ -205,12 +205,12 @@ const FIXED = {
         }, {section: NETWORK_SECTION.other})
     },
     storage: {
-        'total': fixed('Total', 'storage', FILESYSTEM, s => s.value.total),
-        'used': fixed('Used', 'storage', FILESYSTEM, s => s.value.used),
-        'free': fixed('Free', 'storage', FILESYSTEM, s => s.value.free, LOW_IS_BAD),
-        'reserved': fixed('Reserved', 'storage', FILESYSTEM, s => s.value.total - s.value.used - s.value.free),
-        'used-percent': fixed('Used %', 'percent', FILESYSTEM, s => s.value.used / s.value.total),
-        'free-percent': fixed('Free %', 'percent', FILESYSTEM, s => (s.value.total - s.value.used) / s.value.total, LOW_IS_BAD),
+        'total': fixed('Total', 'storage', undefined, s => s.value.total),
+        'used': fixed('Used', 'storage', undefined, s => s.value.used),
+        'free': fixed('Free', 'storage', undefined, s => s.value.free, LOW_IS_BAD),
+        'reserved': fixed('Reserved', 'storage', undefined, s => s.value.total - s.value.used - s.value.free),
+        'used-percent': fixed('Used %', 'percent', undefined, s => s.value.used / s.value.total),
+        'free-percent': fixed('Free %', 'percent', undefined, s => (s.value.total - s.value.used) / s.value.total, LOW_IS_BAD),
         'read-total': fixed('Read total', 'storage', DISKSTATS, (s, sensor) => s.value.get(sensor.device)?.read),
         'read-rate': fixed('Read rate', 'storage-rate', DISKSTATS, (s, sensor) =>
             SensorMath.counterRate(s, disks => disks.get(sensor.device)?.read)),
@@ -273,7 +273,7 @@ export class Sensors {
         });
         this.unschedule = scheduled => GLib.Source.remove(scheduled);
         // Everything that is read, by its id: a file's path, or the name of a source that is not a file. Each holds
-        // how it is read, its last reading, and the read that is under way.
+        // how it is read, its last reading, the read that is under way, and a second reading that is scheduled.
         this.sources = new Map();
         // The sources that are read at the moment, each with the sensors that are written from its reading, as
         // pairs of category name and sensor.
@@ -294,6 +294,8 @@ export class Sensors {
         this._frameTimes = [];
         // For each battery file, the charging state it is in and its last readings of the time left in that state.
         this._batteryTimes = new Map();
+        // The read of the mount table that is under way, which every storage location of a tick waits for.
+        this._mountTableRead = null;
         this._registerSystemSources();
         this.catalog = this._load();
         // The timestamp of the latest discovery run. Every run gets a later one.
@@ -468,16 +470,18 @@ export class Sensors {
             .map(sensor => sensor.core);
     }
 
-    // The id of the source a sensor is read from: its file, or a source that is not a file. A sensor whose value
-    // discovery wrote, such as the kernel version, has none, and neither has an average, minimum or maximum.
+    // The id of the source a sensor is read from: its file, or a source that is not a file, which for the space of
+    // a storage location is the location. A sensor whose value discovery wrote, such as the kernel version, has
+    // none, and neither has an average, minimum or maximum.
     _sourceOf(categoryName, sensor) {
-        return sensor.file ?? (sensor.nvidia ? NVIDIA : this._fixed(categoryName, sensor)?.source);
+        return sensor.file ?? (sensor.nvidia ? NVIDIA : (sensor.location ?? this._fixed(categoryName, sensor)?.source));
     }
 
-    // The sensor's entry in the FIXED table, if it has one. A battery's sensors have the battery's name in their
-    // key, since a machine can have several batteries, and name their entry in `field`.
+    // The sensor's entry in the FIXED table, if it has one. A machine can have several batteries and several
+    // storage locations, so their sensors have the battery's name or the location in their key, and name their
+    // entry in `field`.
     _fixed(categoryName, sensor) {
-        return FIXED[categoryName]?.[categoryName == 'battery' ? sensor.field : sensor.key];
+        return FIXED[categoryName]?.[sensor.field ?? sensor.key];
     }
 
     // A sensor's value, from the reading of its source. The catalog holds no functions; which rule applies
@@ -521,7 +525,9 @@ export class Sensors {
                     if (!onScreen(sensor) && !summarisedSensor) continue;
                     let id = this._sourceOf(name, sensor);
                     if (id === undefined) continue;
-                    if (!this.sources.has(id)) {
+                    if (!this.sources.has(id) && id == sensor.location) {
+                        this.addSource(id, this._storageLocationSource(sensor));
+                    } else if (!this.sources.has(id)) {
                         // A battery's file is at another path on every machine, so it is known by its category.
                         let parse = PARSERS[id] ?? (name == 'battery' ? SensorMath.parseBattery : Number);
                         this.addSource(id, {read: async cancellation => parse(await this._read(id, cancellation))});
@@ -570,11 +576,15 @@ export class Sensors {
     _stopSource(id) {
         let source = this.sources.get(id);
         this._cancelRead(source);
+        this._callOffSecondReading(source);
+        if (source.stop) source.stop();
+    }
+
+    _callOffSecondReading(source) {
         if (source.secondReading) {
             this.unschedule(source.secondReading);
             source.secondReading = null;
         }
-        if (source.stop) source.stop();
     }
 
     // A tick: reads the sources of what is on screen whose reading is older than their interval. `force` reads
@@ -590,7 +600,7 @@ export class Sensors {
     // One that was read before has none when _select found its reading older than its interval.
     _readNewlyShown() {
         // Nothing is read during a discovery run. The run calls this when it ends.
-        if (this.destroyed || this._discovery) return;
+        if (this._discovery) return;
         this._readSources(id => {
             let reading = this.sources.get(id).reading;
             return !reading || reading.status == 'pending';
@@ -635,13 +645,16 @@ export class Sensors {
                 let written = this._write(id);
                 this.onValuesChanged(new Set(written));
                 // A first reading that leaves a sensor without a value, as it does a rate, is followed by a second.
+                // When a tick was first to bring the value, that second reading is called off.
                 let withoutValue = written.some(sensor => sensor.status == 'pending' || sensor.status == 'saved');
-                if (withoutValue && !source.reading.previous && !source.secondReading) {
+                if (!withoutValue) {
+                    this._callOffSecondReading(source);
+                } else if (!source.reading.previous && !source.secondReading) {
                     source.secondReading = this.schedule(SECOND_READING_SECONDS, () => {
                         source.secondReading = null;
-                        // No sensor is read during a discovery run. The rate then comes with the next tick.
-                        if (!this._discovery)
-                            this._readSources(candidate => candidate == id);
+                        // No sensor is read during a discovery run, so the reading waits for the end of one.
+                        let read = () => this._readSources(candidate => candidate == id);
+                        Promise.resolve(this._discovery).then(read, read);
                     });
                 }
                 // What a category shows over all its sensors is written once, when the last of their reads is in.
@@ -783,6 +796,51 @@ export class Sensors {
         return SensorMath.average(times);
     }
 
+    // What is mounted where, as it is now. One read of the mount table serves every location that is read in the
+    // same tick.
+    _mountTable() {
+        this._mountTableRead ??= this._read(MOUNTS, null).then(SensorMath.parseMountTable)
+            .finally(() => { this._mountTableRead = null; });
+        return this._mountTableRead;
+    }
+
+    // The space of one storage location. The kernel is asked once per location, so each is a source of its own.
+    _storageLocationSource(sensor) {
+        let location = sensor.location;
+        let question = null;
+        let mounted = true;
+        return {
+            // A network storage location is asked at the interval the user set, as the public IP is. One that
+            // was found not mounted is looked for at every tick: that costs no question, and it can be back any time.
+            interval: () => sensor.network && mounted ? this._settings.get_int('storage-network-interval') * 60 : 0,
+            read: async () => {
+                // Asking a path where nothing is mounted any more would connect an automounted share again, or
+                // give the space of the disk that holds the empty directory.
+                mounted = (await this._mountTable()).has(location);
+                if (!mounted)
+                    throw new Error('Nothing is mounted at ' + location);
+                // A share whose server is gone can take minutes to answer, and a question cannot be taken back
+                // from the kernel. So a location is not asked again while a question is out: its answer serves
+                // the read that follows.
+                question ??= new Promise((resolve, reject) => {
+                    Gio.File.new_for_path(location).query_filesystem_info_async(
+                        'filesystem::size,filesystem::free,filesystem::used', GLib.PRIORITY_DEFAULT, null,
+                        (file, result) => {
+                            try {
+                                let info = file.query_filesystem_info_finish(result);
+                                resolve({
+                                    total: info.get_attribute_uint64('filesystem::size'),
+                                    free: info.get_attribute_uint64('filesystem::free'),
+                                    used: info.get_attribute_uint64('filesystem::used')
+                                });
+                            } catch (error) { reject(error); }
+                        });
+                }).finally(() => { question = null; });
+                return question;
+            }
+        };
+    }
+
     // The sources that are not one file whose content is read as it is. A file gets its source when it is first read (see _select).
     _registerSystemSources() {
         this.addSource(NETWORK, {read: async cancellation => {
@@ -812,21 +870,6 @@ export class Sensors {
         // One file per core, for a machine whose /proc/cpuinfo does not list the frequencies.
         this.addSource(CPU_FREQUENCIES, {read: cancellation => Promise.all(this._cores().map(async core =>
             Number(await this._read('/sys/devices/system/cpu/' + core + '/cpufreq/scaling_cur_freq', cancellation)) * 1000))});
-        // The filesystem that holds the storage path the user set.
-        this.addSource(FILESYSTEM, {read: cancellation => new Promise((resolve, reject) => {
-            Gio.File.new_for_path(this._settings.get_string('storage-path')).query_filesystem_info_async(
-                'filesystem::size,filesystem::free,filesystem::used', GLib.PRIORITY_DEFAULT, cancellation,
-                (file, result) => {
-                    try {
-                        let info = file.query_filesystem_info_finish(result);
-                        resolve({
-                            total: info.get_attribute_uint64('filesystem::size'),
-                            free: info.get_attribute_uint64('filesystem::free'),
-                            used: info.get_attribute_uint64('filesystem::used')
-                        });
-                    } catch (error) { reject(error); }
-                });
-        })});
         // The public-IP service the user chose.
         this.addSource(PUBLIC_IP, {
             // An answer is kept for the interval the user set, unless it is from another service than the one chosen now.
@@ -902,7 +945,7 @@ export class Sensors {
             this._cancelRead(this.sources.get(id));
         let configuration = () => JSON.stringify([this.catalog.gpu.enabled, ...[
             'include-static-info', 'include-static-gpu-info', 'include-public-ip',
-            'network-public-ip-provider', 'storage-path', 'hide-zeros'
+            'network-public-ip-provider', 'storage-locations', 'storage-monitor-volumes', 'hide-zeros'
         ].map(key => this._settings.get_value(key).deep_unpack())]);
         // Each step with the categories it feeds. A category is complete when every step that feeds it succeeded.
         let steps = [
@@ -980,6 +1023,9 @@ export class Sensors {
             case 'battery':
                 // With one battery there is no total row; the header then shows that battery's power rate.
                 return withKey('total-power-rate') ?? present.find(sensor => sensor.field == 'power-rate');
+            case 'storage':
+                // The free space of the first location, which is "/" while that one is monitored.
+                return present.find(sensor => sensor.field == 'free' && sensor.section == 1);
             case 'gpu':
                 return present.find(sensor => sensor.field == 'utilization.gpu') ??
                     present.find(sensor => sensor.file?.endsWith('/gpu_busy_percent')) ?? withKey('refresh-rate');
@@ -1180,23 +1226,32 @@ export class Sensors {
         this.catalogChanged();
     }
 
+    // The storage locations that are monitored and mounted, each with its space and, unless it is on another
+    // machine, what was read and written. Monitored are the mount points the user added and, when the user wants
+    // them, the ones GNOME's volume monitor reports, which are those that Files lists as mounted.
     async _discoverStorage(run) {
-        for (let key of ['total', 'used', 'free', 'reserved', 'used-percent', 'free-percent'])
-            this._foundFixed(run, 'storage', key);
-
-        let storagePath = this._settings.get_string('storage-path');
-        let mounts = (await this._read('/proc/self/mountinfo', this._discoveryCancellation)).split('\n').map(line =>
-            line.split(' ').map(field => field.replace(/\\([0-7]{3})/g, (_, octal) =>
-                String.fromCharCode(Number.parseInt(octal, 8)))));
-        let mount = mounts.filter(fields => storagePath == fields[4] || storagePath.startsWith(fields[4].replace(/\/$/, '') + '/'))
-            .sort((a, b) => b[4].length - a[4].length)[0];
-        if (mount && mount[mount.indexOf('-') + 2].startsWith('/dev/')) {
-            for (let key of ['read-total', 'read-rate', 'write-total', 'write-rate'])
-                this._foundFixed(run, 'storage', key, {device: mount[2]});
+        let mounts = SensorMath.parseMountTable(await this._read(MOUNTS, this._discoveryCancellation));
+        let monitored = new Set(this._settings.get_strv('storage-locations'));
+        if (this._settings.get_boolean('storage-monitor-volumes')) {
+            // A mount without a path, such as a phone, is in no mount table.
+            for (let mount of Gio.VolumeMonitor.get().get_mounts())
+                monitored.add(mount.get_root().get_path());
+        }
+        let monitoredLocations = [...monitored].filter(location => mounts.has(location)).sort();
+        for (let [index, location] of monitoredLocations.entries()) {
+            let network = SensorMath.isRemoteMount(mounts.get(location));
+            for (let field of ['total', 'used', 'free', 'reserved', 'used-percent', 'free-percent',
+                ...(network ? [] : ['read-total', 'read-rate', 'write-total', 'write-rate'])]) {
+                let {label, ...fields} = FIXED.storage[field].fields;
+                // Each location is a section of the menu. With several, the labels say which one a value belongs to.
+                this._found(run, 'storage', {key: location + '/' + field, ...fields, field, location, network,
+                    device: mounts.get(location).device, section: index + 1,
+                    label: monitoredLocations.length > 1 ? this._gettext(label) + ' (' + location + ')' : label});
+            }
         }
         if (await this._optionalRead('/proc/spl/kstat/zfs/arcstats') !== null) {
             for (let key of ['arc-target', 'arc-maximum', 'arc-current'])
-                this._foundFixed(run, 'storage', key);
+                this._foundFixed(run, 'storage', key, {section: monitoredLocations.length + 1});
         }
     }
 
@@ -1383,6 +1438,10 @@ export class Sensors {
         let signature = [fields.join(','), uuids.join(','), interval].join(';');
         if (this._nvidia && this._nvidia.signature == signature && !this._nvidia.error) return;
         this._stopSource(NVIDIA);
+        // The reading of the process that ran so far lacks the fields that are asked for from now on.
+        let source = this.sources.get(NVIDIA);
+        if (source.reading)
+            source.reading = {...source.reading, status: 'pending'};
         let process;
         try {
             process = Gio.Subprocess.new([
