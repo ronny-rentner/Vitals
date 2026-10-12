@@ -280,6 +280,8 @@ export class Sensors {
         this.activeSources = new Map();
         // The names of the categories that show a value over all their sensors at the moment (see _select).
         this.summarised = new Set();
+        // The reads that each of those categories waits for before it writes that value (see _readSources).
+        this.summaryReads = new Map();
         this.destroyed = false;
         this.onCatalogChanged = () => {};
         this.onValuesChanged = () => {};
@@ -657,17 +659,24 @@ export class Sensors {
                         Promise.resolve(this._discovery).then(read, read);
                     });
                 }
-                // What a category shows over all its sensors is written once, when the last of their reads is in.
-                for (let name of this.summarised) {
-                    let inputs = this._measured(this.catalog[name])
-                        .map(sensor => this.sources.get(this._sourceOf(name, sensor)));
-                    if (inputs.includes(source) && !inputs.some(input => input.pending))
-                        this.onValuesChanged(new Set(this._summarise(name)));
-                }
             });
             reads.push(ticket.promise);
         }
-        await Promise.all(reads);
+        // What a category shows over all its sensors is written once, when the reads of its sensors are in.
+        let summaries = [];
+        for (let name of this.summarised) {
+            let categoryReads = [...this.activeSources].filter(([, written]) => written.some(([categoryName]) => categoryName == name))
+                .map(([id]) => this.sources.get(id).pending?.promise).filter(Boolean);
+            if (!categoryReads.length) continue;
+            this.summaryReads.set(name, categoryReads);
+            summaries.push(Promise.all(categoryReads).then(() => {
+                // Reads started since then have the category wait anew, so it is written once. A discovery run or
+                // another choice of what is shown has called these reads off.
+                if (this.summaryReads.get(name) != categoryReads || this.destroyed || this._discovery || !this.summarised.has(name)) return;
+                this.onValuesChanged(new Set(this._summarise(name)));
+            }));
+        }
+        await Promise.all([...reads, ...summaries]);
     }
 
     // Gives a sensor its new value. SensorMath.PENDING stands for none yet, such as a rate after its first counter

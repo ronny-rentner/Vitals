@@ -12,6 +12,13 @@ import {compareColorEntries, DEFAULT_THRESHOLD_RGBA, formatColorEntry, sanitizeA
 import {parseMountTable, parseTypesWithoutDevice, isRemoteMount} from './helpers/sensorMath.js';
 import {readCatalog, writeCategoryEnabled, sensorPresent} from './helpers/storedCatalog.js';
 
+function textOf(path) {
+    return new TextDecoder().decode(GLib.file_get_contents(path)[1]);
+}
+
+// The folders of the icon styles under icons/. The `icon-style` setting holds the position of the chosen one.
+const ICON_STYLE_DIRECTORIES = ['original', 'gnome'];
+
 // The preferences window, written in the order in which it shows its pages, groups and rows. A row is one call of
 // a helper below, which creates it and connects it to its setting.
 export default class VitalsPrefs extends ExtensionPreferences {
@@ -40,8 +47,8 @@ export default class VitalsPrefs extends ExtensionPreferences {
         this._page('general', _('General'), 'preferences-system-symbolic',
             this._group('',
                 this._updateRow(),
-                this._switchRow('use-higher-precision', _('Use higher precision'), _('One more decimal place, and seconds in uptimes.')),
-                this._toggleRow('icon-style', _('Icon style'), '', [_('Original'), _('GNOME')])),
+                this._switchRow('use-higher-precision', _('Use higher precision'), _('One more decimal place, and seconds in uptimes.'))),
+            this._group(_('Icon Style'), ...this._iconStyleRows()),
             new Adw.PreferencesGroup({
                 title: _('About'),
                 description: _('Feature requests or bugs? Please visit <a href="https://github.com/corecoding/Vitals/issues">GitHub</a>. No warranty, expressed or implied. <a href="https://corecoding.com/donate.php">Donate</a> if you found this useful.'),
@@ -82,8 +89,11 @@ export default class VitalsPrefs extends ExtensionPreferences {
 
         this._categoryPage('fan', _('Monitor fan'));
 
-        this._categoryPage('memory', _('Monitor memory'), '', [
-            this._toggleRow('memory-measurement', _('Units'), _('Binary is KiB, MiB, GiB. Decimal is kB, MB, GB.'), [_('Binary'), _('Decimal')])]);
+        this._categoryPage('memory', _('Monitor memory'), '', [],
+            this._group(_('Units'), ...this._radioRows('memory-measurement', [
+                // The previews show the same amount both ways.
+                [_('Binary'), _('KiB, MiB, GiB'), new Gtk.Label({ label: _('15.5 GiB') })],
+                [_('Decimal'), _('kB, MB, GB'), new Gtk.Label({ label: _('16.6 GB') })]])));
 
         this._categoryPage('processor', _('Monitor processor'), '', [
             this._switchRow('include-static-info', _('Include static information'), _('Values that never change, such as vendor and cache size.'))]);
@@ -94,7 +104,7 @@ export default class VitalsPrefs extends ExtensionPreferences {
             this._switchRow('network-hardware-only', _('Only show hardware interfaces'), _('Hide bridges, container, VPN and loopback interfaces.'))],
             this._group(_('Speeds'),
                 this._toggleRow('network-speed-format', _('Measure in'), '', [_('Bytes'), _('Bits')]),
-                this._comboRow('network-speed-unit', _('Unit'), '', [_('Automatic'), _('kB/s or kbit/s'), _('MB/s or Mbit/s')])),
+                this._speedUnitRow()),
             this._group(_('Public IP Address'),
                 this._switchRow('include-public-ip', _('Show public IP address'), _('Looked up over the internet from the provider below.')),
                 this._toggleRow('network-public-ip-provider', _('Provider'), '', [_('Core Coding'), _('MyIP.com'), _('ipify')]),
@@ -103,11 +113,15 @@ export default class VitalsPrefs extends ExtensionPreferences {
                 this._usableWhile('network-public-ip-provider', provider => provider != 2,
                     this._switchRow('network-public-ip-show-flag', _('Show country flag'), _('Not available with ipify.')))));
 
-        this._categoryPage('storage', _('Monitor storage'), '', [
-            this._toggleRow('storage-measurement', _('Units'), _('Binary is KiB, MiB, GiB. Decimal is kB, MB, GB.'), [_('Binary'), _('Decimal')])],
+        this._categoryPage('storage', _('Monitor storage'), '', [],
+            this._group(_('Units'), ...this._radioRows('storage-measurement', [
+                // The previews show the same amount both ways.
+                [_('Binary'), _('KiB, MiB, GiB'), new Gtk.Label({ label: _('100.5 GiB') })],
+                [_('Decimal'), _('kB, MB, GB'), new Gtk.Label({ label: _('107.9 GB') })]])),
             this._storageLocations(),
             this._group(_('Network Storage Locations'),
-                this._numberRow('storage-network-interval', _('Minutes between updates'), 1, 1440)));
+                this._numberRow('storage-network-interval', _('Minutes between updates'), 1, 1440,
+                    _('A share is asked over the network, so less often than a disk.'))));
 
         this._categoryPage('battery', _('Monitor battery'));
 
@@ -124,8 +138,40 @@ export default class VitalsPrefs extends ExtensionPreferences {
     _applyIconStyle() {
         let iconTheme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default());
         let ownIcons = `${this.path}/icons/`;
-        let style = ['original', 'gnome'][this._settings.get_int('icon-style')];
+        let style = ICON_STYLE_DIRECTORIES[this._settings.get_int('icon-style')];
         iconTheme.set_search_path([ownIcons + style, ...iconTheme.get_search_path().filter(directory => !directory.startsWith(ownIcons))]);
+    }
+
+    // The icon styles, each with its category icons as a preview.
+    _iconStyleRows() {
+        let previews = ICON_STYLE_DIRECTORIES.map(directory => {
+            let preview = new Gtk.Box({ spacing: 12 });
+            for (let category of Object.values(sensorCategories))
+                preview.append(new Gtk.Image({ pixel_size: 20, gicon: Gio.icon_new_for_string(`${this.path}/icons/${directory}/${category.icon}`) }));
+            return preview;
+        });
+        return this._radioRows('icon-style', [
+            [_('Classic'), _('Filled and detailed'), previews[0]],
+            [_('Adwaita'), _('Rounded outlines'), previews[1]]]);
+    }
+
+    // A choice as one row per entry: a radio button, the entry's title and subtitle, and a preview of what it
+    // stands for. The setting holds the position of the chosen entry.
+    _radioRows(key, entries) {
+        let radios = [];
+        return entries.map(([title, subtitle, preview], position) => {
+            // The first radio button has no group to join.
+            let radio = new Gtk.CheckButton({ valign: Gtk.Align.CENTER, group: radios[0] ?? null });
+            radios.push(radio);
+            let follow = () => radio.set_active(this._settings.get_int(key) == position);
+            follow();
+            this._settings.connect('changed::' + key, follow);
+            radio.connect('toggled', () => radio.active && this._settings.set_int(key, position));
+            let row = new Adw.ActionRow({ title, subtitle, activatable_widget: radio });
+            row.add_prefix(radio);
+            row.add_suffix(preview);
+            return row;
+        });
     }
 
     _underHeaderBar(content, headerBarProperties) {
@@ -282,43 +328,30 @@ export default class VitalsPrefs extends ExtensionPreferences {
         return targets;
     }
 
-    // The storage locations the user added, each with a button that removes it, then the mount points that can be
-    // added, then the switch for what Files lists as mounted.
+    // The storage locations the user added, each with a button that removes it, then the switch for what GNOME has
+    // mounted. The button in the group's head opens the dialog that adds one.
     _storageLocations() {
         let group = this._group(_('Storage Locations'));
-        let volumesSwitch = this._switchRow('storage-monitor-volumes', _('Monitor what is mounted in Files'),
-            _('Drives and shares that Files lists as mounted, for as long as they are mounted. A share that was opened inside Files is not among them.'));
+        group.set_header_suffix(this._iconButton('list-add-symbolic', _('Add storage location'), () => this._addStorageLocation(group)));
+        let volumesSwitch = this._switchRow('storage-monitor-volumes', _('Monitor drives mounted by GNOME'));
+        // A mount point is shown as it is, also with a "&" in it.
+        volumesSwitch.use_markup = false;
         let rows = [];
-        let textOf = path => new TextDecoder().decode(GLib.file_get_contents(path)[1]);
         let draw = () => {
             for (let row of rows)
                 group.remove(row);
             let added = this._settings.get_strv('storage-locations');
-            let save = locations => this._settings.set_strv('storage-locations', locations);
             let mounts = parseMountTable(textOf('/proc/self/mountinfo'));
-            // Which mount points are offered first is libgtop's rule for a disk and df's rule for a share, both as
-            // they are. Every other mount point can be added as well.
-            let typesWithoutDevice = parseTypesWithoutDevice(textOf('/proc/filesystems'));
-            // The file exists once something was mounted with an option that is not the kernel's.
-            let userOptions = GLib.file_test('/run/mount/utab', GLib.FileTest.EXISTS) ? textOf('/run/mount/utab') : '';
-            let hiddenMountPoints = userOptions.split('\n').filter(line => line.includes('x-gdu.hide'))
-                .map(line => line.split(' ').find(field => field.startsWith('TARGET=')).slice(7));
-            let offeredFirst = (location, mount) => isRemoteMount(mount) ||
-                (!typesWithoutDevice.has(mount.type) || mount.type == 'zfs') && !hiddenMountPoints.includes(location);
-            let offered = new Adw.ExpanderRow({ title: _('Add a storage location') });
-            let otherMountPoints = new Adw.ExpanderRow({ title: _('Other mount points') });
-            for (let location of [...mounts.keys()].filter(location => !added.includes(location)).sort()) {
-                let row = new Adw.ActionRow({ title: location, subtitle: mounts.get(location).source, use_markup: false });
-                row.add_suffix(this._iconButton('list-add-symbolic', _('Add storage location'), () => save([...added, location])));
-                (offeredFirst(location, mounts.get(location)) ? offered : otherMountPoints).add_row(row);
-            }
-            offered.add_row(otherMountPoints);
+            // What the switch monitors at this moment. A mount without a path, such as a phone, is in no mount table.
+            let mountedByGnome = Gio.VolumeMonitor.get().get_mounts().map(mount => mount.get_root().get_path())
+                .filter(location => mounts.has(location)).sort();
+            volumesSwitch.subtitle = mountedByGnome.length ? _('Now: %s').format(mountedByGnome.join(', ')) : _('None at the moment');
             rows = [...added.map(location => {
                 let row = new Adw.ActionRow({ title: location, subtitle: mounts.get(location)?.source ?? _('Not mounted'), use_markup: false });
                 row.add_suffix(this._iconButton('edit-delete-symbolic', _('Remove storage location'),
-                    () => save(added.filter(other => other != location))));
+                    () => this._settings.set_strv('storage-locations', added.filter(other => other != location))));
                 return row;
-            }), offered, volumesSwitch];
+            }), volumesSwitch];
             for (let row of rows)
                 group.add(row);
         };
@@ -329,6 +362,40 @@ export default class VitalsPrefs extends ExtensionPreferences {
                 draw();
         });
         return group;
+    }
+
+    // The dialog that adds a storage location: the mount points of this moment, and a click on one adds it.
+    _addStorageLocation(parent) {
+        let added = this._settings.get_strv('storage-locations');
+        let mounts = parseMountTable(textOf('/proc/self/mountinfo'));
+        // Which mount points are offered first is libgtop's rule for a disk and df's rule for a share, both as
+        // they are. Every other mount point can be added as well.
+        let typesWithoutDevice = parseTypesWithoutDevice(textOf('/proc/filesystems'));
+        // The file exists once something was mounted with an option that is not the kernel's.
+        let userOptions = GLib.file_test('/run/mount/utab', GLib.FileTest.EXISTS) ? textOf('/run/mount/utab') : '';
+        let hiddenMountPoints = userOptions.split('\n').filter(line => line.includes('x-gdu.hide'))
+            .map(line => line.split(' ').find(field => field.startsWith('TARGET=')).slice(7));
+        let offeredFirst = (location, mount) => isRemoteMount(mount) ||
+            (!typesWithoutDevice.has(mount.type) || mount.type == 'zfs') && !hiddenMountPoints.includes(location);
+        let dialog = new Adw.Dialog({ title: _('Add Storage Location'), content_width: 480, content_height: 480 });
+        let offered = new Adw.PreferencesGroup();
+        let otherMountPoints = new Adw.ExpanderRow({ title: _('Other mount points') });
+        for (let location of [...mounts.keys()].filter(location => !added.includes(location)).sort()) {
+            let row = new Adw.ActionRow({ title: location, subtitle: mounts.get(location).source, use_markup: false, activatable: true });
+            row.connect('activated', () => {
+                this._settings.set_strv('storage-locations', [...added, location]);
+                dialog.close();
+            });
+            if (offeredFirst(location, mounts.get(location)))
+                offered.add(row);
+            else
+                otherMountPoints.add_row(row);
+        }
+        offered.add(otherMountPoints);
+        let page = new Adw.PreferencesPage();
+        page.add(offered);
+        dialog.set_child(this._underHeaderBar(page, {}));
+        dialog.present(parent);
     }
 
     _iconButton(iconName, tooltip, clicked) {
@@ -379,20 +446,34 @@ export default class VitalsPrefs extends ExtensionPreferences {
         });
     }
 
-    _numberRow(key, title, lowest, highest) {
+    _numberRow(key, title, lowest, highest, subtitle = '') {
         let field = this._bound(key, this._numberField(lowest, highest, 0), 'value');
-        let row = new Adw.ActionRow({ title, activatable_widget: field });
+        let row = new Adw.ActionRow({ title, subtitle, activatable_widget: field });
         row.add_suffix(field);
         return row;
     }
 
     // A choice with all its entries in view. The setting holds the position of the chosen entry.
     _toggleRow(key, title, subtitle, entries) {
+        let row = new Adw.ActionRow({ title, subtitle });
+        row.add_suffix(this._toggles(key, entries));
+        return row;
+    }
+
+    _toggles(key, entries) {
         let toggles = new Adw.ToggleGroup({ valign: Gtk.Align.CENTER, homogeneous: true, can_shrink: false });
         for (let label of entries)
             toggles.add(new Adw.Toggle({ label }));
-        let row = new Adw.ActionRow({ title, subtitle });
-        row.add_suffix(this._bound(key, toggles, 'active'));
+        return this._bound(key, toggles, 'active');
+    }
+
+    // The unit of the network speeds, with the fixed units named as "Measure in" has them: in bytes or in bits.
+    _speedUnitRow() {
+        let units = () => [_('Automatic'), ...this._settings.get_int('network-speed-format') ? [_('kbit/s'), _('Mbit/s')] : [_('kB/s'), _('MB/s')]];
+        let toggles = this._toggles('network-speed-unit', units());
+        this._settings.connect('changed::network-speed-format', () => units().forEach((unit, position) => toggles.get_toggle(position).label = unit));
+        let row = new Adw.ActionRow({ title: _('Unit') });
+        row.add_suffix(toggles);
         return row;
     }
 

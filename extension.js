@@ -432,7 +432,7 @@ var VitalsMenuButton = GObject.registerClass({
 
     _createDefaultItem() {
         this._defaultItem = new St.BoxLayout({
-            style_class: 'panel-status-indicators-box',
+            style_class: 'vitals-panel-item',
             reactive: true,
         });
         this._menuLayout.add_child(this._defaultItem);

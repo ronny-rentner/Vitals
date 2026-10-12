@@ -4,8 +4,7 @@
 .vitals-panel-sensors { spacing: 10px; padding: 0 3px; }
 .vitals-panel-item { spacing: 4px; }
 #panel .panel-button .vitals-panel-item > .system-status-icon { margin: 0; padding: 0; }
-/* "Emphasize values": the icon at 80 % of the Shell's size (1.091em), and closer to its value. */
-.vitals-panel-item-emphasized { spacing: 3px; }
+/* "Emphasize values": the icon at 80 % of the Shell's size (1.091em). */
 #panel .panel-button .vitals-panel-item-emphasized > .system-status-icon { icon-size: 0.873em; }
 .vitals-button-action { -st-icon-style: symbolic; border-radius: 32px; margin: 0px; min-height: 22px; min-width: 22px; padding: 10px; font-size: 100%; border: 1px solid transparent; }
 .vitals-button-action:hover, .vitals-button-action:focus { border-color: #777; }
