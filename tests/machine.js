@@ -18,7 +18,7 @@ export class Machine {
         this.reads = [];
         // Every path that was asked for the space of its filesystem so far, in order.
         this.asked = [];
-        // The paths of the mounts that GNOME's volume monitor reports. A mount that has no path is null.
+        // The paths of the mounts that `Gio.VolumeMonitor` reports. A mount that has no path is null.
         this.volumes = [];
     }
 

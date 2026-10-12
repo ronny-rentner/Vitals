@@ -444,13 +444,15 @@ export async function run() {
     await button._querySensors();
     equal(button._rows.get(first).visible, true, 'available row returns');
     // Without the "animate categories" option, every category opens and closes at once, a short one and one that
-    // is long enough to need a scrollbar.
+    // is long enough to need a scrollbar. Whether one is needed depends on the height of the whole menu, so the
+    // short one has a single row, the smallest menu there is with a category open.
+    let shortRow = fixtures.add('voltage', {key: 'fixture/short', label: 'Fixture', format: 'string', value: 1, status: 'ready'});
     let systemGroup = button._groups.system;
     for (let index = 0; index < 60; index++)
         fixtures.add('system', {key: 'fixture/' + index, label: 'Fixture ' + index, format: 'string', value: index, status: 'ready'});
     sensors.catalogChanged();
     let click = group => group.activate(Clutter.get_current_event());
-    for (let [group, needsScrollbar] of [[button._groups.temperature, false], [systemGroup, true]]) {
+    for (let [group, needsScrollbar] of [[button._groups.voltage, false], [systemGroup, true]]) {
         let submenu = group.menu;
         if (submenu.isOpen)
             click(group);
@@ -463,6 +465,8 @@ export async function run() {
         equal(submenu.actor.get_transition('height'), null, 'closing is not animated, scrollbar=' + needsScrollbar);
         equal(submenu.actor.visible, false, 'and it is hidden at once');
     }
+    fixtures.retire(shortRow);
+    sensors.catalogChanged();
     // With the option, both kinds slide, and end at the height they have without it.
     let heightsWhile = async (submenu, act) => {
         let heights = [];

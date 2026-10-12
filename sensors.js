@@ -1237,7 +1237,8 @@ export class Sensors {
 
     // The storage locations that are monitored and mounted, each with its space and, unless it is on another
     // machine, what was read and written. Monitored are the mount points the user added and, when the user wants
-    // them, the ones GNOME's volume monitor reports, which are those that Files lists as mounted.
+    // them, the mounts of `Gio.VolumeMonitor`: GIO collects them from the volume monitor services of gvfs, of which
+    // `gvfs-udisks2-volume-monitor` reports the disks.
     async _discoverStorage(run) {
         let mounts = SensorMath.parseMountTable(await this._read(MOUNTS, this._discoveryCancellation));
         let monitored = new Set(this._settings.get_strv('storage-locations'));
