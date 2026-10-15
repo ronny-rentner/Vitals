@@ -968,8 +968,6 @@ export async function run() {
     await button._extensionObject.openPreferences();
     await waitFor(() => global.get_window_actors().some(actor =>
         actor.meta_window.get_title()?.includes('Vitals')), 'preferences window');
-    let preferences = global.get_window_actors().find(actor => actor.meta_window.get_title()?.includes('Vitals'));
-    preferences.meta_window.delete(global.get_current_time());
     print('PASS preferences opened in nested Shell');
 
     // Back to the real machine, with one sensor in the panel that has a reading.

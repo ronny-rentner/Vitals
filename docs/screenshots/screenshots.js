@@ -3,6 +3,7 @@
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Shell from 'gi://Shell';
+import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as Scripting from 'resource:///org/gnome/shell/ui/scripting.js';
 
@@ -15,6 +16,8 @@ const COLOR_RULES = {
     'memory-colors': ['0 ' + GREEN, '50 ' + YELLOW, '80 ' + RED].map(breakpoint => breakpoint + ' kind:percent'),
     'processor-colors': ['0 ' + GREEN, '25 ' + YELLOW, '75 ' + RED].map(breakpoint => breakpoint + ' kind:percent')
 };
+// How many pictures are saved so far, and their size together.
+let savedPictures = 0, savedBytes = 0;
 
 // Saves the part of the screen that holds the given actors, with some room around it.
 async function capture(name, ...actors) {
@@ -31,8 +34,8 @@ async function capture(name, ...actors) {
     top = Math.max(0, Math.floor(top) - MARGIN);
     right = Math.min(global.stage.width, Math.ceil(right) + MARGIN);
     bottom = Math.min(global.stage.height, Math.ceil(bottom) + MARGIN);
-    let stream = Gio.File.new_for_path(GLib.getenv('SCREENSHOT_DIR') + '/' + name + '.png')
-        .replace(null, false, Gio.FileCreateFlags.NONE, null);
+    let picture = Gio.File.new_for_path(GLib.getenv('SCREENSHOT_DIR') + '/' + name + '.png');
+    let stream = picture.replace(null, false, Gio.FileCreateFlags.NONE, null);
     await new Promise((resolve, reject) => {
         new Shell.Screenshot().screenshot_area(left, top, right - left, bottom - top, stream, (screenshot, result) => {
             try {
@@ -44,9 +47,14 @@ async function capture(name, ...actors) {
         });
     });
     stream.close(null);
+    let bytes = picture.query_info('standard::size', Gio.FileQueryInfoFlags.NONE, null).get_size();
+    savedPictures++;
+    savedBytes += bytes;
+    print(name + '.png (' + (right - left) + 'x' + (bottom - top) + ' px, ' + (bytes / 1000).toFixed(1) + ' kB)');
 }
 
 export async function run() {
+    let start = GLib.get_monotonic_time();
     // The Shell's helper process for automation scripts leaves by itself after half a minute, which is before this
     // script is done. Without this, the Shell tries to stop it at the end and ends with a failure.
     await Scripting.disableHelperAutoExit();
@@ -133,6 +141,9 @@ export async function run() {
     // Every picture once in the Shell's dark style and once in its light style, whose pictures end in "-light".
     // The Shell is dark unless the desktop asks for light.
     let desktop = new Gio.Settings({schema_id: 'org.gnome.desktop.interface'});
+    print('Taking the pictures in ' + GLib.getenv('SCREENSHOT_DIR'));
+    print('Screen ' + global.stage.width + 'x' + global.stage.height + ' px, scale ' + St.ThemeContext.get_for_stage(global.stage).scale_factor +
+        ', text scale ' + desktop.get_double('text-scaling-factor'));
     for (let style of ['', '-light']) {
         if (style)
             desktop.set_string('color-scheme', 'prefer-light');
@@ -161,5 +172,5 @@ export async function run() {
         await Scripting.sleep(50);
     await Scripting.sleep(1500);
     await capture('preferences', preferences());
-    preferences().meta_window.delete(global.get_current_time());
+    print(savedPictures + ' pictures saved (' + (savedBytes / 1000).toFixed(1) + ' kB, ' + Math.round((GLib.get_monotonic_time() - start) / 1000000) + ' s)');
 }
