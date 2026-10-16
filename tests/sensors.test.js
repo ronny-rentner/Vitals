@@ -276,6 +276,8 @@ test('a discovery step that fails is reported and leaves its categories as they 
     await sensors.discover();
     let discoveredBefore = sensors.catalog.temperature.discovered;
     machine.failLists('/sys/class/hwmon/', new Gio.IOErrorEnum({code: Gio.IOErrorEnum.FAILED, message: 'Input/output error'}));
+    // On the same stream as the error, so that it stands right before it.
+    printerr('WARNING: the next error, discover:hwmon, is caused on purpose by this test and is expected:');
     await sensors.discover();
     equal(takeFaults().length, 1, 'the failure is reported');
     equal(sensors.catalog.temperature.discovered, discoveredBefore, 'the category is not completed');
