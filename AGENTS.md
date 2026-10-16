@@ -148,7 +148,7 @@ A setting is on the page of what it changes: General, Top Bar, Menu, or a catego
 - What the user sets on a sensor is saved in the catalog, in fields that discovery leaves alone (`customLabel`, `hidden`, `categoryDefault`). A hidden sensor does not count in its category's average, minimum and maximum, and keeps its top-bar item when pinned.
 - A header's sensor is chosen when the hardware is looked for and when the user pins one, never between.
 - A panel link whose device is not there keeps its place and has no top-bar item until the device is found.
-- What comes on screen is read at once, not at the next tick (decided on 2026-10-10). A rate gets its second reading a second later.
+- What comes on screen is read at once, not at the next tick (decided on 2026-10-10), unless it was read during the last update interval. A rate gets its second reading a second later.
 - At start the collector reads as soon as discovery ends. Until then a saved reading is shown if it is at most a minute old, otherwise "…".
 - The catalog is written when a sensor is added or forgotten and when the user changes the panel; the readings when the extension stops, not on every tick.
 - A sensor read that fails is an expected state, not an error: the sensor becomes `unavailable`, its row is hidden, and it is logged with `console.debug`. `console.error` is for faults.

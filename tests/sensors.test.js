@@ -452,8 +452,8 @@ test('a read that fails keeps the last value, which is unavailable until a read 
     sensors.destroy();
 });
 
-test('a rate that comes on screen has its value a second later, without a tick, and starts over when it comes back', async () => {
-    let {sensors, reads, find, show} = setup();
+test('a rate that comes on screen has its value a second later, without a tick, and back on screen keeps a fresh reading', async () => {
+    let {sensors, machine, configuration, reads, find, show} = setup();
     await sensors.discover();
     let download = find('network', 'eth0/rx'), uptime = find('system', 'uptime');
     show(download, uptime);
@@ -470,10 +470,18 @@ test('a rate that comes on screen has its value a second later, without a tick, 
     show(uptime);
     show(download, uptime);
     await settle();
-    equal(download.status, 'pending', 'back on screen, the rate starts over');
+    equal(download.status + ' ' + reads(NETWORK), 'ready 3', 'back within the update interval, the rate keeps its value until the next tick');
+    show(uptime);
+    machine.skip(configuration.get_int('update-time'));
+    show(download, uptime);
+    await settle();
+    equal(download.status + ' ' + reads(NETWORK), 'pending 4', 'back later, the file is read and the rate starts over');
     show(uptime);
     await secondReading();
     equal(reads(NETWORK), 4, 'a second reading is called off when its file leaves the screen');
+    show(download, uptime);
+    await settle();
+    equal(download.status + ' ' + reads(NETWORK), 'pending 5', 'a first reading alone is not kept, since its second reading was called off');
     sensors.destroy();
 });
 

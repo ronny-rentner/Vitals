@@ -32,8 +32,11 @@ const WIDTH_MEMORY_SECONDS = 60;
 const SENSOR_PANEL_MILLISECONDS = 150;
 const SENSOR_PANEL_DIMMED_OPACITY = 90;
 
-// How long a category takes to slide open or shut, as a submenu of GNOME Shell does.
-const CATEGORY_SLIDE_MILLISECONDS = 250;
+// How long a category takes to slide open, as a submenu of GNOME Shell does.
+const CATEGORY_OPEN_MILLISECONDS = 250;
+// How long a category takes to slide shut. Shorter than opening, so that a category below the one that opens has
+// stopped first and the eye ends on the one that opened.
+const CATEGORY_CLOSE_MILLISECONDS = 200;
 
 // The order of labels in the menu: natural order for numbers, so that "Core 2" comes before "Core 10".
 // One collator for all comparisons; String.localeCompare with options builds a new one on every call.
@@ -273,7 +276,6 @@ var VitalsMenuButton = GObject.registerClass({
         let submenu = this._groups[groupName].menu;
         let openSubmenu = submenu.open.bind(submenu);
         let closeSubmenu = submenu.close.bind(submenu);
-        let slide = {duration: CATEGORY_SLIDE_MILLISECONDS, mode: Clutter.AnimationMode.EASE_OUT_EXPO};
         submenu.open = () => {
             // What the menu needs around its rows. It is measured while the menu is below its height limit, where
             // the menu asks for all it needs; at the limit it asks for less, so the largest value seen is kept.
@@ -298,12 +300,12 @@ var VitalsMenuButton = GObject.registerClass({
             let overflow = this.menu.box.get_preferred_height(-1)[1] + this._menuFrame - this.menu.actor.get_preferred_height(-1)[1];
             // The category that was open until now slides shut at the same time, as in a menu of GNOME Shell. It
             // starts only here, after the measuring above, which is of the menu without it.
-            this._slideShutOnOpen?.();
+            this._slideShutOnOpen?.(this._groups[groupName].actor);
             this._slideShutOnOpen = null;
             // A long category has its scrollbar from the start of the slide: the rows are narrower next to it, and
             // would jump sideways if it came at the end.
             submenu.actor.height = 0;
-            submenu.actor.ease({height: heightOfAllRows - margins - overflow, ...slide,
+            submenu.actor.ease({height: heightOfAllRows - margins - overflow, duration: CATEGORY_OPEN_MILLISECONDS, mode: Clutter.AnimationMode.EASE_OUT_EXPO,
                 onStopped: () => submenu.actor.set_height(-1)});
         };
         submenu.close = animation => {
@@ -314,11 +316,16 @@ var VitalsMenuButton = GObject.registerClass({
             // Closing without the Shell's slide hides the submenu at once.
             closeSubmenu(false);
             if (!this._settings.get_boolean('animate-categories')) return;
-            let slideShut = () => {
+            // `openingHeader` is the header of the category that opens while this one shuts, if one does.
+            let slideShut = openingHeader => {
                 submenu.actor.show();
                 // As above: the height an actor reports includes its margins, and the height that is set on it does not.
                 submenu.actor.height = openHeight - submenu.actor.margin_top - submenu.actor.margin_bottom;
-                submenu.actor.ease({height: 0, ...slide, onStopped: () => {
+                // A category above the one that opens pulls that one up as it shuts. At the opening speed, the top and
+                // the bottom of the opening category move in step.
+                let above = openingHeader && this._groups[groupName].actor.get_transformed_position()[1] < openingHeader.get_transformed_position()[1];
+                let duration = above ? CATEGORY_OPEN_MILLISECONDS : CATEGORY_CLOSE_MILLISECONDS;
+                submenu.actor.ease({height: 0, duration, mode: Clutter.AnimationMode.EASE_OUT_EXPO, onStopped: () => {
                     submenu.actor.hide();
                     submenu.actor.set_height(-1);
                 }});

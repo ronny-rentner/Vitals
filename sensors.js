@@ -549,9 +549,13 @@ export class Sensors {
         for (let [id, written] of activeSources) {
             let source = this.sources.get(id);
             if (!this.activeSources.has(id)) {
-                // A reading still inside its interval stays as it is; reading the source again is not due yet.
-                if (source.reading && !this._withinInterval(id))
-                    source.reading = {...source.reading, status: 'pending'};
+                // A reading still inside its interval stays as it is; reading the source again is not due yet. So does
+                // one younger than the update interval, which the next tick replaces. A first reading alone is not
+                // kept: the second reading that its rates wait for was called off when the source left the screen.
+                let reading = source.reading;
+                let fresh = reading?.status == 'ready' && reading.previous && clock() - reading.time < this._settings.get_int('update-time');
+                if (reading && !fresh && !this._withinInterval(id))
+                    source.reading = {...reading, status: 'pending'};
                 if (source.start) source.start();
             }
             if (source.configure)
