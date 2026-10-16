@@ -6,13 +6,19 @@ export const sensorCategories = {
         'voltage' : { 'name': 'Voltage', 'icon': 'voltage-symbolic.svg' },
             'fan' : { 'name': 'Fan', 'icon': 'fan-symbolic.svg' },
          'memory' : { 'name': 'Memory', 'icon': 'memory-symbolic.svg' },
-      'processor' : { 'name': 'Processor', 'icon': 'cpu-symbolic.svg' },
+      'processor' : { 'name': 'Processor', 'icon': 'cpu-symbolic.svg',
+                   'icon-frequency': 'cpu-frequency-symbolic.svg',
+                   'icon-power': 'cpu-power-symbolic.svg'
+        },
          'system' : { 'name': 'System', 'icon': 'system-symbolic.svg' },
         'network' : { 'name': 'Network', 'icon': 'network-symbolic.svg',
                    'icon-rx': 'network-download-symbolic.svg',
                    'icon-tx': 'network-upload-symbolic.svg'
         },
-        'storage' : { 'name': 'Storage', 'icon': 'storage-symbolic.svg' },
+        'storage' : { 'name': 'Storage', 'icon': 'storage-symbolic.svg',
+                   'icon-read': 'storage-read-symbolic.svg',
+                   'icon-write': 'storage-write-symbolic.svg'
+        },
         'battery' : { 'name': 'Battery', 'icon': 'battery-symbolic.svg' },
             'gpu' : { 'name': 'GPU', 'icon': 'gpu-symbolic.svg' }
         };

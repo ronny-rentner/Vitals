@@ -167,12 +167,12 @@ const FIXED = {
         'frequency': fixed('Frequency', 'hertz', CPU_FREQUENCIES, s => {
             let frequencies = cpuFrequencies(s);
             return frequencies.reduce((sum, frequency) => sum + frequency, 0) / frequencies.length;
-        }),
-        'min-frequency': fixed('Min frequency', 'hertz', CPU_FREQUENCIES, s => Math.min(...cpuFrequencies(s))),
-        'max-frequency': fixed('Max frequency', 'hertz', CPU_FREQUENCIES, s => Math.max(...cpuFrequencies(s))),
+        }, {icon: 'frequency'}),
+        'min-frequency': fixed('Min frequency', 'hertz', CPU_FREQUENCIES, s => Math.min(...cpuFrequencies(s)), {icon: 'frequency'}),
+        'max-frequency': fixed('Max frequency', 'hertz', CPU_FREQUENCIES, s => Math.max(...cpuFrequencies(s)), {icon: 'frequency'}),
         'process-time': fixed('Process Time', 'uptime', UPTIME, (s, sensor, sensors) =>
             s.value[0] - s.value[1] / sensors._cores().length),
-        'powercap': fixed('Powercap', 'watt-limit'),
+        'powercap': fixed('Powercap', 'watt-limit', undefined, undefined, {icon: 'power'}),
         'vendor': fixed('Vendor', 'string'),
         'bogomips': fixed('Bogomips', 'string'),
         'sockets': fixed('Sockets', 'string'),
@@ -211,12 +211,14 @@ const FIXED = {
         'reserved': fixed('Reserved', 'storage', undefined, s => s.value.total - s.value.used - s.value.free),
         'used-percent': fixed('Used %', 'percent', undefined, s => s.value.used / s.value.total),
         'free-percent': fixed('Free %', 'percent', undefined, s => (s.value.total - s.value.used) / s.value.total, LOW_IS_BAD),
-        'read-total': fixed('Read total', 'storage', DISKSTATS, (s, sensor) => s.value.get(sensor.device)?.read),
+        'read-total': fixed('Read total', 'storage', DISKSTATS, (s, sensor) => s.value.get(sensor.device)?.read,
+            {icon: 'read'}),
         'read-rate': fixed('Read rate', 'storage-rate', DISKSTATS, (s, sensor) =>
-            SensorMath.counterRate(s, disks => disks.get(sensor.device)?.read)),
-        'write-total': fixed('Write total', 'storage', DISKSTATS, (s, sensor) => s.value.get(sensor.device)?.write),
+            SensorMath.counterRate(s, disks => disks.get(sensor.device)?.read), {icon: 'read'}),
+        'write-total': fixed('Write total', 'storage', DISKSTATS, (s, sensor) => s.value.get(sensor.device)?.write,
+            {icon: 'write'}),
         'write-rate': fixed('Write rate', 'storage-rate', DISKSTATS, (s, sensor) =>
-            SensorMath.counterRate(s, disks => disks.get(sensor.device)?.write)),
+            SensorMath.counterRate(s, disks => disks.get(sensor.device)?.write), {icon: 'write'}),
         'arc-target': fixed('ARC Target', 'storage', ARCSTATS, s => s.value.c),
         'arc-maximum': fixed('ARC Maximum', 'storage', ARCSTATS, s => s.value.c_max),
         'arc-current': fixed('ARC Current', 'storage', ARCSTATS, s => s.value.size)

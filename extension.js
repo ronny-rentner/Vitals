@@ -657,8 +657,8 @@ var VitalsMenuButton = GObject.registerClass({
     }
 
     // Brings the menu in line with the catalog: a sensor that is on the machine and has no row gets one, a row
-    // whose sensor is gone is removed, and a row whose sensor got another label or place is relabelled or moved.
-    // Every other row stays as it is.
+    // whose sensor is gone is removed, and a row whose sensor got another label, icon or place is relabelled, gets the
+    // icon or is moved. Every other row stays as it is.
     _syncCatalog() {
         if (this._dragging || this._sensors.destroyed) return;
         // Rows are placed by counting them, and the panel with a sensor's actions is not a row. So it is taken out
@@ -689,12 +689,16 @@ var VitalsMenuButton = GObject.registerClass({
                     this._addRow(name, category, sensor);
                 }
             }
-            // A sensor that has a row can get another label or section: the user renames it, or discovery does,
+            // A sensor that has a row can get another label, icon or section: the user renames it, or discovery does,
             // for example when a saved catalog from an earlier version is shown first.
             let rowsInOrder = this._sensorsInRowOrder(category).map(sensor => {
                 let row = this._rows.get(sensor);
                 if (row.label != this._label(sensor))
                     row.label = this._label(sensor);
+                // Once a reading gives the public IP a country, its row's icon follows that reading, not the catalog.
+                let gicon = Gio.icon_new_for_string(this._sensorIconPath(name, this._iconName(sensor)));
+                if (sensor.country === undefined && !row.gicon.equal(gicon))
+                    row.gicon = gicon;
                 row.pinned = pinnedSensors.has(sensor);
                 // The star marks the sensor whose value the category's header shows, whoever chose it.
                 row.categoryDefault = sensor == category.header;
@@ -892,9 +896,11 @@ var VitalsMenuButton = GObject.registerClass({
             : {text: '…', style: ''};
     }
 
-    // The icon of the sensor's category, or the arrow for a download or upload value.
+    // The icon of the sensor's category, or the one of its kind of value: the arrow for a download or upload value, or
+    // the one the sensor names in `icon`.
     _iconName(sensor) {
-        return sensor.direction ? 'icon-' + sensor.direction : 'icon';
+        let kind = sensor.icon ?? sensor.direction;
+        return kind ? 'icon-' + kind : 'icon';
     }
 
     // Writes the readings of the given sensors to what shows them, or of every sensor on screen when called without any.

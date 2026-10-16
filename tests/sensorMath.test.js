@@ -47,6 +47,19 @@ test('memory and battery inputs use canonical units', () => {
     equal(batteryTime(battery), wattHoursNow / watts * 3600);
 });
 
+test('a battery\'s power rate takes its sign from the status, whatever sign the driver gives', () => {
+    let micro = 1000000;
+    let watts = 5, volts = 12, amperes = 0.5;
+    let power = (status, field, value) => parseBattery('POWER_SUPPLY_STATUS=' + status + '\nPOWER_SUPPLY_VOLTAGE_NOW=' +
+        volts * micro + '\nPOWER_SUPPLY_' + field + '=' + value * micro + '\n').power;
+    // The battery driver of Apple's machines (macsmc-battery) gives a negative number while discharging.
+    equal(power('Discharging', 'POWER_NOW', -watts), -watts, 'negative power from the driver');
+    equal(power('Discharging', 'CURRENT_NOW', -amperes), -volts * amperes, 'negative current from the driver');
+    equal(power('Discharging', 'POWER_NOW', watts), -watts, 'positive power from the driver');
+    equal(power('Charging', 'POWER_NOW', watts), watts);
+    equal(power('Charging', 'POWER_NOW', -watts), watts);
+});
+
 test('the mount on top is what is mounted at a place', () => {
     let disk = '30 20 8:17 / /mnt rw - ext4 /dev/sdb1 rw\n';
     let memory = '31 30 0:50 / /mnt rw - tmpfs tmpfs rw\n';

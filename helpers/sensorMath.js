@@ -107,9 +107,11 @@ export function parseBattery(contents) {
     }));
     let voltage = Number(fields.VOLTAGE_NOW) / 1000000;
     let designVoltage = Number(fields.VOLTAGE_MIN_DESIGN) / 1000000;
-    let power = fields.POWER_NOW === undefined
+    // Some drivers give a discharging battery's power or current as a negative number, others as a positive one. As
+    // UPower does, only the size is taken from them, and the sign comes from the status.
+    let power = Math.abs(fields.POWER_NOW === undefined
         ? voltage * Number(fields.CURRENT_NOW) / 1000000
-        : Number(fields.POWER_NOW) / 1000000;
+        : Number(fields.POWER_NOW) / 1000000);
     let energy = (energyKey, chargeKey) => fields[energyKey] === undefined
         ? Number(fields[chargeKey]) * designVoltage / 1000000
         : Number(fields[energyKey]) / 1000000;

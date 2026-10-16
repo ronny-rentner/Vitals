@@ -5,7 +5,7 @@ ZIP := vitals.zip
 # The scale of the screen, a whole number, and of the text: `make test-shell SCALE=2 TEXT_SCALE=1.25`.
 # The screen grows with its scale, so that it shows as much.
 SCALE ?= 1
-TEXT_SCALE ?= 1
+TEXT_SCALE ?= 1.25
 
 # A target that runs a Shell keeps its settings and its copy of the extension under build/<target>, away from the
 # desktop's own.
