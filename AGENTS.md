@@ -62,12 +62,15 @@ Local clone: compile schemas after schema edits (`glib-compile-schemas --strict 
 
 `make test` runs the unit tests in GJS; `make test-shell` runs `tests/shell.test.js` inside a headless gnome-shell. `make test-shell` resets the extension's settings under `build/test-shell` first, so it starts from the schema defaults.
 
-- One `tests/<module>.test.js` per module, all run in GJS. `sensors.js` has two: `sensors.test.js` for what it reads from a machine, and `sensors.collection.test.js` for how it collects.
-- Fixtures are frozen constants in `tests/fixtures/`; `machine.js` is the `/sys` and `/proc` of a ThinkPad, each file's content exactly as the kernel presents it. No test changes a fixture.
+- One `tests/<module>.test.js` per module, all run in GJS, each in an interpreter of its own.
+- Nothing in Vitals is replaced, made up or read from a private member. A test uses `Sensors` as the extension does, the callbacks the extension sets included, and changes only the machine and the settings.
+- A test of `Sensors` drives it through a `Machine` (`tests/machine.js`), the test double for the system that `Sensors` monitors. It stands in for the files under `/sys` and `/proc`, the space of the mounted filesystems, the mounts of `Gio.VolumeMonitor`, the public IP services and the monotonic clock. The test sets and removes files, plugs device groups in and out, fails and holds reads, and skips time instead of waiting out an interval.
+- Fixtures are frozen constants in `tests/fixtures/`; `machine.js` is a ThinkPad in device groups, each file's content exactly as the kernel presents it. No test changes a fixture.
 - Everything mutable is created inside the test and ends with it. A `setup()` helper may build it; it holds no data.
-- A test drives `Sensors` through a `Machine` (`tests/machine.js`) that stands behind `Gio.File.new_for_path`: it writes and removes files and uses `failReads`, `failLists` and `holdNextRead`. `Sensors` runs unmodified, with one exception: for made-up sensors, the collection tests and `tests/shell.test.js` replace `Sensors._value`.
+- In the GJS tests, a `console.error` or `console.warn` fails the test, unless the test expects it and takes it with `takeFaults`.
 - `nvidia-smi` is a real program in the tests, a stand-in that the test puts first in `PATH`.
 - Compute every expected value from the machine's current contents or from named inputs in the same test. Formatted strings in `tests/formatter.test.js` are the specification and stay literal.
+- `tests/shell.test.js` runs in the Shell's own interpreter, so whatever it replaced, it would replace for the Shell too: it replaces nothing, and Vitals reads the machine the test runs on. It acts as a user does, through a virtual pointer and keyboard and the settings, and checks only what is on screen. Each step puts back the settings and the arrangement it changed. It needs a machine with two temperatures or more, and English as the language.
 
 ### Screenshots
 
@@ -137,15 +140,15 @@ A setting is on the page of what it changes: General, Top Bar, Menu, or a catego
 - With the "fixed widths" option, a top-bar value keeps the room of its widest text of the last minute. While the option is off, no width is remembered.
 - The dropdown menu has a fixed width; in a row that is too narrow the label is shortened, never the value.
 - A category slides with a slide of our own, never GNOME Shell's: the Shell only slides a submenu that needs no scrollbar, so long and short categories would behave differently. One category is open at a time, and it stays open while the menu is closed.
-- Every battery that powers the machine is found by itself (`type` is `Battery`, `scope` is not `Device`); there is no setting for which battery to show and no list of battery names. With several batteries there is one more sensor, the total power rate, which the header shows.
+- Every battery is found by itself (`type` is `Battery`), also that of a mouse or a keyboard; there is no setting for which battery to show and no list of battery names. With several batteries a label names its battery, a device's battery (`scope` is `Device`) by the device's model. With several batteries that power the machine there is one more sensor, the total power rate, which the header shows; otherwise the header shows the power rate of the one battery, or the percentage of a device's battery, which has no power rate.
 - A click on a row opens a panel with that sensor's actions under the row and does nothing else: Pin to top bar, Pin to category, Rename, Hide. A row's marks only show the state.
 - The panel follows the second-level menus of GNOME Shell's quick settings (`QuickToggleMenu`), decided on 2026-10-09 after a design of our own was not recognisable as belonging to its row.
-- A click anywhere else and Escape close the panel and do nothing else.
+- A click anywhere else closes the panel and does nothing else. Escape closes the whole menu, as in every menu of the Shell.
 - Each level of the menu starts under the name of the level above it.
 - What the user sets on a sensor is saved in the catalog, in fields that discovery leaves alone (`customLabel`, `hidden`, `categoryDefault`). A hidden sensor does not count in its category's average, minimum and maximum, and keeps its top-bar item when pinned.
 - A header's sensor is chosen when the hardware is looked for and when the user pins one, never between.
 - A panel link whose device is not there keeps its place and has no top-bar item until the device is found.
-- What comes on screen is read at once, not at the next tick (decided on 2026-10-10). A rate gets its second reading a second later and is never computed over less than half a second.
+- What comes on screen is read at once, not at the next tick (decided on 2026-10-10). A rate gets its second reading a second later.
 - At start the collector reads as soon as discovery ends. Until then a saved reading is shown if it is at most a minute old, otherwise "…".
 - The catalog is written when a sensor is added or forgotten and when the user changes the panel; the readings when the extension stops, not on every tick.
 - A sensor read that fails is an expected state, not an error: the sensor becomes `unavailable`, its row is hidden, and it is logged with `console.debug`. `console.error` is for faults.

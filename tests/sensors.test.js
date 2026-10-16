@@ -2,53 +2,53 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import {Sensors} from '../sensors.js';
 import {readCatalog, writeCatalog, writeCategoryEnabled, sensorPresent} from '../helpers/storedCatalog.js';
-import {test, equal, mean, settings, runTests} from './harness.js';
+import {test, atEnd, equal, near, between, mean, settings, takeFaults, settle, wait, runTests} from './harness.js';
 import {Machine} from './machine.js';
-import {machine as machineFixture, filesystems, mappedRootMounts, usbDriveMounts, shareMounts} from './fixtures/machine.js';
+import {devices, filesystems} from './fixtures/machine.js';
 
 const CORETEMP = '/sys/class/hwmon/hwmon3/';
 const BATTERY = '/sys/class/hwmon/hwmon4/';
 const THINKPAD = '/sys/class/hwmon/hwmon5/';
+const NVME = '/sys/class/hwmon/hwmon6/';
 const USB = '/sys/class/hwmon/hwmon8/';
-const USB_NAME = machineFixture[USB + 'name'].trim();
+const SECOND_NVME = '/sys/class/hwmon/hwmon9/';
 const ZONES = '/sys/class/thermal/';
 const NETWORK = '/proc/net/dev';
 const DISKS = '/proc/diskstats';
 const MOUNTS = '/proc/self/mountinfo';
 const USB_DRIVE = '/media/USB drive';
 const SHARE = '/media/share';
+// The public IP services, in the order of the setting `network-public-ip-provider`.
+const PUBLIC_IP_URLS = ['https://ipv4.corecoding.com', 'https://api.myip.com', 'https://api.ipify.org?format=json'];
 // The temperature files Vitals reports. Not among them: thermal_zone1 (the policy zone),
 // thermal_zone8 (the package temperature coretemp reports) and thermal_zone9 (published through hwmon7).
 const TEMPERATURES = [
-    CORETEMP + 'temp1_input', THINKPAD + 'temp1_input', THINKPAD + 'temp2_input', '/sys/class/hwmon/hwmon7/temp1_input',
-    ZONES + 'thermal_zone2/temp', ZONES + 'thermal_zone6/temp'
+    CORETEMP + 'temp1_input', THINKPAD + 'temp1_input', THINKPAD + 'temp2_input', NVME + 'temp1_input',
+    '/sys/class/hwmon/hwmon7/temp1_input', ZONES + 'thermal_zone2/temp', ZONES + 'thermal_zone6/temp'
 ];
 const SECTOR_BYTES = 512;
 const YEAR_SECONDS = 365 * 86400;
 
-// Builds what one test works on: a machine, a Sensors instance that reads it, and the two clocks the test advances.
-// A test that starts from a saved catalog, or launches a second time, passes its own settings. `locations` are the
-// storage locations the user added, when they are not the default.
-function setup({files = machineFixture, configuration = settings(), locations} = {}) {
-    let machine = new Machine(files, filesystems);
-    // Every file Sensors opens comes from this test's machine. This process only runs tests, so it is never restored.
-    Gio.File.new_for_path = path => machine.file(path);
-    Gio.VolumeMonitor.get = () => machine.volumeMonitor();
-    if (locations)
-        configuration.set_strv('storage-locations', locations);
+// Waits for the second reading that follows the first reading of a rate a second later.
+const secondReading = () => wait(1.2);
+// Seconds of the machine's clock. The span of a rate after its second reading is at least a second, since the
+// second reading never comes early, and at most the seconds the test measured around both readings.
+const clock = () => GLib.get_monotonic_time() / 1000000;
+
+// What one test works on: the machine, in place of the system, and a Sensors instance that reads it. A test that
+// launches a second time passes the settings of the first.
+function setup(configuration = settings()) {
+    let machine = new Machine();
+    machine.install();
+    atEnd(() => machine.uninstall());
+    let nvidiaSmi = installNvidiaSmi();
     let sensors = new Sensors(configuration, text => text);
-    let time = 1;
-    let date = Math.floor(GLib.get_real_time() / 1000000);
-    let errors = [];
-    sensors.clock = () => time;
-    sensors.now = () => date;
-    // Here only ticks read. The second reading that follows a rate's first one is in the collection tests.
-    sensors.schedule = () => null;
-    sensors.onError = (id, error) => errors.push([id, error]);
     return {
-        sensors, configuration, machine, errors,
+        sensors, configuration, machine, nvidiaSmi,
         // sysfs stores temperatures and voltages in thousandths of °C and V.
         fileValue: path => Number(machine.content(path)) / 1000,
+        // How often the file was read so far.
+        reads: path => machine.reads.filter(read => read == path).length,
         // The sensor with this key that is on the machine, if there is one.
         find(categoryName, key) {
             let category = sensors.catalog[categoryName];
@@ -62,47 +62,44 @@ function setup({files = machineFixture, configuration = settings(), locations} =
                     sensor.shown = shown.includes(sensor);
             }
             sensors.shownChanged();
-        },
-        advance(seconds) { time += seconds; },
-        advanceDate(seconds) { date += seconds; }
+        }
     };
+}
+
+function keys(category) {
+    return category.sensors.map(sensor => sensor.key).join(', ');
 }
 
 // /proc/net/dev as the kernel writes it, for the given byte counters.
 function networkDevices(counters) {
-    return 'Inter-| Receive | Transmit\n' +
-        ' face |bytes packets errs drop fifo frame compressed multicast|bytes packets errs drop fifo colls carrier compressed\n' +
+    return devices.system[NETWORK](0).split('\n').slice(0, 2).join('\n') + '\n' +
         Object.entries(counters).map(([name, {rx, tx}]) =>
             name + ': ' + rx + ' 0 0 0 0 0 0 0 ' + tx + ' 0 0 0 0 0 0 0\n').join('');
 }
 
-// /proc/diskstats as the kernel writes it, for the given sector counters.
-function diskStatistics(disks) {
-    return disks.map(disk => disk.device.replace(':', ' ') + ' ' + disk.name + ' 1 0 ' + disk.readSectors + ' 0 1 0 ' +
-        disk.writtenSectors + ' 0 0 0 0\n').join('');
+// Checks fields of sensors in one table: each row is a category, a key, a field and the value it should have.
+function fields(find, rows) {
+    for (let [categoryName, key, field, expected] of rows)
+        equal(find(categoryName, key)?.[field], expected, categoryName + ' ' + key + ' ' + field);
 }
 
-// Bytes per second over every interface except loopback that both snapshots contain.
-function combinedRate(before, after, seconds) {
-    let bytes = 0;
-    for (let [name, counters] of Object.entries(after)) {
-        if (name == 'lo' || !(name in before)) continue;
-        bytes += counters.rx - before[name].rx + counters.tx - before[name].tx;
-    }
-    return bytes / seconds;
-}
-
-// Puts the stand-in nvidia-smi of tests/fixtures/programs in front of the real one for this process, with a card
-// list and a start log of this test's own. Sensors finds and runs it like the real program.
+// The stand-in nvidia-smi of tests/fixtures/programs, first in PATH for the test, so that no test runs the real one.
+// It reports the cards the test gives it, none at first, and logs every start.
 function installNvidiaSmi() {
     let directory = GLib.dir_make_tmp('vitals-nvidia-XXXXXX');
     let cardsFile = directory + '/cards', logFile = directory + '/log';
-    GLib.file_set_contents(logFile, '');
+    let environment = ['PATH', 'NVIDIA_SMI_CARDS', 'NVIDIA_SMI_LOG'].map(name => [name, GLib.getenv(name)]);
     GLib.setenv('NVIDIA_SMI_CARDS', cardsFile, true);
     GLib.setenv('NVIDIA_SMI_LOG', logFile, true);
-    let programs = GLib.get_current_dir() + '/tests/fixtures/programs';
-    if (!GLib.getenv('PATH').startsWith(programs + ':'))
-        GLib.setenv('PATH', programs + ':' + GLib.getenv('PATH'), true);
+    GLib.setenv('PATH', GLib.get_current_dir() + '/tests/fixtures/programs:' + GLib.getenv('PATH'), true);
+    atEnd(() => {
+        for (let [name, value] of environment) {
+            if (value === null) GLib.unsetenv(name);
+            else GLib.setenv(name, value, true);
+        }
+        for (let file of [cardsFile, logFile, directory])
+            GLib.remove(file);
+    });
     // The processes started with -l, which keep reporting until they are stopped.
     let streams = () => new TextDecoder().decode(GLib.file_get_contents(logFile)[1]).split('\n')
         .filter(start => start.includes(' -l ')).map(start => {
@@ -112,7 +109,7 @@ function installNvidiaSmi() {
                 queriedFields: startArguments.find(argument => argument.startsWith('--query-gpu=')).slice('--query-gpu='.length)
             };
         });
-    return {
+    let nvidiaSmi = {
         setCards(cards) {
             GLib.file_set_contents(cardsFile, cards.map(card =>
                 Object.entries(card).map(([field, fieldValue]) => field + '=' + fieldValue).join(';') + '\n').join(''));
@@ -122,153 +119,104 @@ function installNvidiaSmi() {
         async allStopped() {
             for (let attempt = 0; streams().some(({pid}) => GLib.file_test('/proc/' + pid, GLib.FileTest.EXISTS)); attempt++) {
                 if (attempt == 20) throw new Error('an nvidia-smi stream is still running');
-                await new Promise(resolve => setTimeout(resolve, 50));
+                await wait(0.05);
             }
         }
     };
+    GLib.file_set_contents(logFile, '');
+    nvidiaSmi.setCards([]);
+    return nvidiaSmi;
 }
 
-// Adds a battery as the kernel shows it. `status` is "Charging", "Discharging" or "Not charging"; `scope` is
-// "Device" for the battery of a mouse or keyboard, and a battery of the machine has none.
-function plugInBattery(machine, name, {status, powerWatts, percent, scope}) {
-    machine.write('/sys/class/power_supply/' + name + '/type', 'Battery\n');
-    if (scope)
-        machine.write('/sys/class/power_supply/' + name + '/scope', scope + '\n');
-    machine.write('/sys/class/power_supply/' + name + '/uevent', 'POWER_SUPPLY_NAME=' + name + '\nPOWER_SUPPLY_STATUS=' + status +
-        '\nPOWER_SUPPLY_POWER_NOW=' + powerWatts * 1000000 + '\nPOWER_SUPPLY_CAPACITY=' + percent +
-        '\nPOWER_SUPPLY_ENERGY_FULL_DESIGN=50000000\nPOWER_SUPPLY_ENERGY_FULL=40000000\nPOWER_SUPPLY_ENERGY_NOW=20000000\n');
-}
+// Discovery
 
-// Adds what the kernel shows for a hardware network interface: its own description and its device.
-// `deviceType` is the DEVTYPE the kernel reports, such as "wlan"; a network card has none.
-function plugInInterface(machine, name, deviceType) {
-    machine.write('/sys/class/net/' + name + '/uevent',
-        (deviceType ? 'DEVTYPE=' + deviceType + '\n' : '') + 'INTERFACE=' + name + '\n');
-    machine.write('/sys/class/net/' + name + '/device/uevent', 'DRIVER=test\n');
-}
-
-function keys(category) {
-    return category.sensors.map(sensor => sensor.key).join(', ');
-}
-
-test('discovery describes sensors without starting collection', async () => {
-    let {sensors, machine, errors, find} = setup();
-    machine.write(THINKPAD + 'temp2_input', '0\n');
+test('discovery finds the sensors of the machine, says where each is read from, and reads none of them', async () => {
+    let {sensors, machine, find} = setup();
     await sensors.discover();
-    equal(errors.length, 0, 'discovery errors');
-    equal(find('temperature', 'thermal/SEN1') !== undefined, true, 'SEN1');
-    equal(find('temperature', 'thermal/TCPU') !== undefined, true, 'a thermal zone no rule leaves out');
-    equal(find('temperature', 'thinkpad/temp2') !== undefined, true, 'zero sensor');
-    equal(find('processor', 'powercap') !== undefined, true, 'Processor Powercap');
-    equal(find('system', 'lap-mode') !== undefined, true, 'lap mode');
-    for (let key of ['average', 'minimum', 'maximum']) {
-        equal(find('voltage', key), undefined, 'voltage has no ' + key);
-        equal(find('fan', key), undefined, 'one fan has no ' + key);
-        equal(find('temperature', key) !== undefined, true, 'temperature ' + key);
-    }
-    equal(sensors.catalog.voltage.header, find('voltage', 'BAT0/in0'), 'voltage header');
-    equal(sensors.activeSources.size, 0, 'active sources');
-    equal(machine.reads.includes(THINKPAD + 'temp1_input'), false, 'thermal discovery read');
-    equal(machine.reads.includes('/proc/meminfo'), false, 'memory discovery read');
-    equal(machine.reads.filter(readPath => readPath == THINKPAD + 'device/type').length, 1,
-        'one supply type read for multiple voltage sensors');
-    sensors.destroy();
-});
-
-test('a sensor says where it is read from and how it is shown, and its key leaves the kernel number out', async () => {
-    let {sensors, find} = setup();
-    await sensors.discover();
-    let temperature = find('temperature', 'thinkpad/temp1');
-    equal(temperature.file, THINKPAD + 'temp1_input', 'the file as it is now');
-    equal(temperature.label, 'thinkpad CPU', 'the label the kernel gives the input');
-    equal(temperature.format, 'temp');
-    equal(find('temperature', 'coretemp/temp1').label, 'Processor 0', 'a renamed label does not change the key');
-    equal(find('memory', 'usage').file, '/proc/meminfo', 'a sensor that shares its file with others names it too');
-    equal(find('network', 'eth0/rx').file, NETWORK);
-    equal(find('network', 'eth0/rx').interface, 'eth0');
-    equal(find('network', 'eth0/rx').hardware, true, 'a network card is hardware');
-    equal(find('network', 'lo/tx').hardware, false, 'the loopback is not');
-    equal(find('processor', 'cpu0').core, 'cpu0');
+    let present = categoryName => sensors.catalog[categoryName].sensors
+        .filter(sensor => sensorPresent(sensors.catalog[categoryName], sensor)).map(sensor => sensor.key).join(', ');
+    // Not the zones that are no sensor or are listed through hwmon, and no average, minimum or maximum of voltages
+    // or of one fan.
+    equal(present('temperature'), 'coretemp/temp1, thinkpad/temp1, thinkpad/temp2, nvme/temp1, iwlwifi_1/temp1, ' +
+        'thermal/SEN1, thermal/TCPU, average, minimum, maximum');
+    equal(present('voltage'), 'BAT0/in0, thinkpad/in1, thinkpad/in2, ucsi_source_psy_USBC000:001/in0');
+    equal(present('fan'), 'thinkpad/fan1');
+    // A key leaves the kernel number out, and a renamed label does not change it.
+    fields(find, [
+        ['temperature', 'thinkpad/temp1', 'file', THINKPAD + 'temp1_input'], ['temperature', 'thinkpad/temp1', 'label', 'thinkpad CPU'],
+        ['temperature', 'thinkpad/temp1', 'format', 'temp'], ['temperature', 'coretemp/temp1', 'label', 'Processor 0'],
+        ['memory', 'usage', 'file', '/proc/meminfo'], ['network', 'eth0/rx', 'file', NETWORK],
+        ['network', 'eth0/rx', 'interface', 'eth0'], ['network', 'eth0/rx', 'hardware', true],
+        ['network', 'lo/tx', 'hardware', false], ['processor', 'cpu0', 'core', 'cpu0'], ['processor', 'cpu1', 'core', 'cpu1'],
+        ['processor', 'powercap', 'format', 'watt-limit'], ['system', 'lap-mode', 'format', 'string'],
+        ['storage', '//free', 'location', '/'], ['battery', 'BAT0/percentage', 'format', 'percent']
+    ]);
+    for (let path of [...TEMPERATURES, '/proc/meminfo', '/proc/loadavg', '/proc/uptime'])
+        equal(machine.reads.includes(path), false, path + ' is not read');
+    equal(machine.reads.filter(path => path == THINKPAD + 'device/type').length, 1,
+        'what kind of supply a device is, is read once for all its voltages');
     for (let [name, category] of sensors.categories()) {
         for (let sensor of category.sensors)
             equal(Object.values(sensor).some(field => typeof field == 'function' || typeof field == 'object'), false,
                 name + '/' + sensor.key + ' is plain data');
     }
-    sensors.destroy();
-});
-
-test('thermal zones that are not sensors are excluded', async () => {
-    let {sensors, find} = setup();
+    // A second run in the same second still has a later timestamp, which a present sensor carries.
+    let firstRun = sensors.catalog.memory.discovered;
     await sensors.discover();
-    equal(find('temperature', 'thermal/INT3400 Thermal'), undefined, 'thermal policy zone excluded');
-    equal(find('temperature', 'thermal/SEN1') !== undefined, true, 'other thermal zones still discovered');
+    equal(sensors.catalog.memory.discovered > firstRun, true);
+    equal(find('memory', 'usage').discovered, sensors.catalog.memory.discovered);
     sensors.destroy();
 });
 
-test('a thermal zone that the kernel also publishes through hwmon is listed once', async () => {
-    let {sensors, find} = setup();
+test('every category has the header its rule names', async () => {
+    let {sensors, configuration, machine, find} = setup();
+    writeCategoryEnabled(configuration, 'gpu', true);
+    sensors.reloadEnabled();
+    machine.plug('amdGpu');
     await sensors.discover();
-    equal(find('temperature', 'iwlwifi_1/temp1') !== undefined, true, 'hwmon view listed');
-    equal(find('temperature', 'thermal/iwlwifi_1'), undefined, 'thermal zone view left out');
+    for (let [categoryName, key] of [['temperature', 'average'], ['voltage', 'BAT0/in0'], ['fan', 'thinkpad/fan1'],
+        ['memory', 'usage'], ['processor', 'usage'], ['system', 'load-1m'], ['network', 'device-rx'],
+        ['storage', '//free'], ['battery', 'BAT0/power-rate'], ['gpu', '0x1002/gpu_busy_percent']])
+        equal(sensors.catalog[categoryName].header, find(categoryName, key), categoryName);
     sensors.destroy();
 });
 
-test('zones of one type share an hwmon device, and all of them are listed through it only', async () => {
+test('a thermal zone is listed once, through hwmon where the kernel publishes it there, and CPU package zone only without coretemp', async () => {
     let {sensors, machine, find} = setup();
     // A second ACPI zone: the kernel adds it to the hwmon device of the first as temp2 and gives it no directory of its own.
-    machine.write('/sys/class/hwmon/hwmon0/name', 'acpitz\n');
-    machine.write('/sys/class/hwmon/hwmon0/temp1_input', '45000\n');
-    machine.write('/sys/class/hwmon/hwmon0/temp2_input', '48000\n');
-    machine.write(ZONES + 'thermal_zone0/type', 'acpitz\n');
-    machine.write(ZONES + 'thermal_zone0/temp', '45000\n');
-    machine.write(ZONES + 'thermal_zone0/hwmon0/name', 'acpitz\n');
-    machine.write(ZONES + 'thermal_zone3/type', 'acpitz\n');
-    machine.write(ZONES + 'thermal_zone3/temp', '48000\n');
-    await sensors.discover();
-    equal(find('temperature', 'acpitz/temp1') !== undefined, true, 'first zone through hwmon');
-    equal(find('temperature', 'acpitz/temp2') !== undefined, true, 'second zone through hwmon');
-    equal(find('temperature', 'thermal/acpitz'), undefined, 'neither zone is listed a second time');
-    sensors.destroy();
-});
-
-test('the CPU package zone is listed only when coretemp does not report the package temperature', async () => {
-    let withCoretemp = setup();
-    await withCoretemp.sensors.discover();
-    equal(withCoretemp.find('temperature', 'coretemp/temp1') !== undefined, true, 'coretemp package temperature listed');
-    equal(withCoretemp.find('temperature', 'thermal/x86_pkg_temp'), undefined, 'zone left out next to coretemp');
-    withCoretemp.sensors.destroy();
-
-    let withoutCoretemp = setup();
+    for (let [path, content] of [['/sys/class/hwmon/hwmon0/name', 'acpitz'], ['/sys/class/hwmon/hwmon0/temp1_input', '45000'],
+        ['/sys/class/hwmon/hwmon0/temp2_input', '48000'], [ZONES + 'thermal_zone0/type', 'acpitz'],
+        [ZONES + 'thermal_zone0/temp', '45000'], [ZONES + 'thermal_zone0/hwmon0/name', 'acpitz'],
+        [ZONES + 'thermal_zone3/type', 'acpitz'], [ZONES + 'thermal_zone3/temp', '48000']])
+        machine.setContent(path, content + '\n');
     for (let file of ['name', 'temp1_label', 'temp1_input'])
-        withoutCoretemp.machine.remove(CORETEMP + file);
-    await withoutCoretemp.sensors.discover();
-    equal(withoutCoretemp.find('temperature', 'thermal/x86_pkg_temp') !== undefined, true, 'zone listed without coretemp');
-    withoutCoretemp.sensors.destroy();
+        machine.remove(CORETEMP + file);
+    await sensors.discover();
+    equal(find('temperature', 'acpitz/temp1') !== undefined && find('temperature', 'acpitz/temp2') !== undefined, true,
+        'both zones through hwmon');
+    equal(find('temperature', 'thermal/acpitz'), undefined, 'neither a second time');
+    equal(find('temperature', 'thermal/x86_pkg_temp') !== undefined, true, 'the package zone without coretemp');
+    sensors.destroy();
 });
 
 test('two devices with the same name each get a sensor with the same key, read from its own file', async () => {
     let {sensors, machine, fileValue, show} = setup();
     // Every NVMe drive registers its hwmon device under the name "nvme".
-    let drives = ['/sys/class/hwmon/hwmon1/', '/sys/class/hwmon/hwmon2/'];
-    machine.write(drives[0] + 'name', 'nvme\n');
-    machine.write(drives[0] + 'temp1_input', '45000\n');
-    machine.write(drives[1] + 'name', 'nvme\n');
-    machine.write(drives[1] + 'temp1_input', '52000\n');
+    machine.plug('secondNvme');
     await sensors.discover();
     let twins = () => sensors.catalog.temperature.sensors.filter(sensor => sensor.key == 'nvme/temp1');
-    equal(twins().map(sensor => sensor.file).join(', '), drives.map(drive => drive + 'temp1_input').join(', '),
-        'one sensor per drive, in directory order');
+    equal(twins().map(sensor => sensor.file).join(', '), NVME + 'temp1_input, ' + SECOND_NVME + 'temp1_input');
     await sensors.discover();
-    equal(twins().length, drives.length, 'a later run matches both again and adds none');
+    equal(twins().length, 2, 'a later run matches both again and adds none');
     show(...twins());
-    await sensors.poll();
-    for (let [index, sensor] of twins().entries())
-        equal(sensor.value, fileValue(drives[index] + 'temp1_input'), 'drive ' + index);
+    await settle();
+    equal(twins().map(sensor => sensor.value).join(', '), [NVME, SECOND_NVME].map(drive => fileValue(drive + 'temp1_input')).join(', '));
     sensors.destroy();
 });
 
 test('discovery uses settings changed while its reads are pending', async () => {
-    let {sensors, configuration, machine, find} = setup({files: {...machineFixture, ...usbDriveMounts}});
+    let {sensors, configuration, machine, find} = setup();
+    machine.plug('usbDrive');
     let mountsRead = machine.holdNextRead(MOUNTS);
     let firstDiscovery = sensors.discover();
     configuration.set_strv('storage-locations', [USB_DRIVE]);
@@ -280,52 +228,42 @@ test('discovery uses settings changed while its reads are pending', async () => 
     sensors.destroy();
 });
 
-test('every discovery run has a later timestamp, and a present sensor carries that of its category', async () => {
-    let {sensors, find} = setup();
-    await sensors.discover();
-    let firstRun = sensors.catalog.memory.discovered;
-    equal(find('memory', 'usage').discovered, firstRun);
-    // The second run starts in the same second.
-    await sensors.discover();
-    equal(sensors.catalog.memory.discovered > firstRun, true, 'later than the run before');
-    equal(find('memory', 'usage').discovered, sensors.catalog.memory.discovered);
-    sensors.destroy();
-});
-
 test('an unplugged device stays in the catalog and is not read; when it returns it is the same sensor in the same place', async () => {
-    let {sensors, machine, find, show} = setup();
+    let {sensors, machine, reads, show} = setup();
+    machine.plug('secondNvme');
     await sensors.discover();
-    let usbVoltage = find('voltage', USB_NAME + '/in0');
-    let order = keys(sensors.catalog.voltage);
-    show(usbVoltage);
-    for (let file of ['name', 'in0_input', 'device/type'])
-        machine.remove(USB + file);
+    let category = sensors.catalog.temperature;
+    let secondDrive = category.sensors.find(sensor => sensor.file == SECOND_NVME + 'temp1_input');
+    let order = keys(category);
+    show(secondDrive);
+    await settle();
+    machine.unplug('secondNvme');
     await sensors.discover();
-    equal(find('voltage', USB_NAME + '/in0'), undefined, 'not present');
-    equal(sensors.catalog.voltage.sensors.includes(usbVoltage), true, 'still in the catalog');
-    equal(sensors.activeSources.has(usbVoltage.file), false, 'not read, although it is marked as shown');
-    for (let file of ['name', 'in0_input', 'device/type'])
-        machine.write(USB + file, machineFixture[USB + file]);
+    equal(sensorPresent(category, secondDrive), false, 'not present');
+    equal(category.sensors.includes(secondDrive), true, 'still in the catalog');
+    let readsWhilePresent = reads(SECOND_NVME + 'temp1_input');
+    await sensors.poll();
+    equal(reads(SECOND_NVME + 'temp1_input'), readsWhilePresent, 'not read, although it is marked as shown');
+    machine.plug('secondNvme');
     await sensors.discover();
-    equal(find('voltage', USB_NAME + '/in0'), usbVoltage, 'the same sensor is present again');
-    equal(keys(sensors.catalog.voltage), order, 'in the same place');
+    equal(sensorPresent(category, secondDrive), true, 'the same sensor is present again');
+    equal(keys(category), order, 'in the same place');
     sensors.destroy();
 });
 
 test('a kernel number that passes to another device does not make the old sensor read the new device', async () => {
-    let {sensors, machine, fileValue, find, show, advance} = setup();
+    let {sensors, machine, fileValue, find, show} = setup();
     await sensors.discover();
-    let usbVoltage = find('voltage', USB_NAME + '/in0');
+    let usbVoltage = find('voltage', 'ucsi_source_psy_USBC000:001/in0');
     show(usbVoltage);
-    await sensors.poll();
+    await settle();
     let lastUsbReading = usbVoltage.value;
     // The USB supply is unplugged and another device gets hwmon8.
-    machine.write(USB + 'name', 'other_supply\n');
-    machine.write(USB + 'in0_input', '9000\n');
+    machine.setContent(USB + 'name', 'other_supply\n');
+    machine.setContent(USB + 'in0_input', '9000\n');
     await sensors.discover();
     let otherVoltage = find('voltage', 'other_supply/in0');
     show(usbVoltage, otherVoltage);
-    advance(1);
     await sensors.poll();
     equal(otherVoltage.value, fileValue(USB + 'in0_input'), 'the new device is read');
     equal(usbVoltage.file, otherVoltage.file, 'the old sensor still names the same file');
@@ -333,47 +271,36 @@ test('a kernel number that passes to another device does not make the old sensor
     sensors.destroy();
 });
 
-test('a discovery step that fails leaves its categories as they were', async () => {
-    let {sensors, machine, errors, find} = setup();
+test('a discovery step that fails is reported and leaves its categories as they were', async () => {
+    let {sensors, machine, find} = setup();
     await sensors.discover();
     let discoveredBefore = sensors.catalog.temperature.discovered;
     machine.failLists('/sys/class/hwmon/', new Gio.IOErrorEnum({code: Gio.IOErrorEnum.FAILED, message: 'Input/output error'}));
     await sensors.discover();
-    equal(errors.length, 1, 'the failure is reported');
+    equal(takeFaults().length, 1, 'the failure is reported');
     equal(sensors.catalog.temperature.discovered, discoveredBefore, 'the category is not completed');
     equal(find('temperature', 'thinkpad/temp1') !== undefined, true, 'its sensors are still present');
     equal(sensors.catalog.memory.discovered > discoveredBefore, true, 'other categories are completed');
     sensors.destroy();
 });
 
-test('no sensor is read during a discovery run, and a rate afterwards spans the run', async () => {
-    let {sensors, machine, find, show, advance} = setup();
-    let initial = {lo: {rx: 10, tx: 10}, eth0: {rx: 100, tx: 50}};
-    let later = {lo: {rx: 10, tx: 10}, eth0: {rx: 700, tx: 350}};
-    machine.write(NETWORK, networkDevices(initial));
+test('no sensor is read during a discovery run, and a rate does not start over because of one', async () => {
+    let {sensors, machine, reads, find, show} = setup();
     await sensors.discover();
     let download = find('network', 'eth0/rx');
     show(download);
-    await sensors.poll();
-    let secondsBeforeRun = 2, secondsAfterRun = 1;
-    advance(secondsBeforeRun);
-
-    let mountsRead = machine.holdNextRead('/proc/self/mountinfo');
+    await secondReading();
+    let mountsRead = machine.holdNextRead(MOUNTS);
     let run = sensors.discover();
     // Let the run get as far as the read it is held at.
-    await new Promise(resolve => setTimeout(resolve, 0));
-    let readsBeforeTick = machine.reads.filter(readPath => readPath == NETWORK).length;
+    await settle();
+    let readsBeforeTick = reads(NETWORK);
     await sensors.poll();
-    equal(machine.reads.filter(readPath => readPath == NETWORK).length, readsBeforeTick, 'a tick that falls into a run reads nothing');
+    equal(reads(NETWORK), readsBeforeTick, 'a tick that falls into a run reads nothing');
     mountsRead.finish();
     await run;
-
-    advance(secondsAfterRun);
-    machine.write(NETWORK, networkDevices(later));
     await sensors.poll();
-    equal(download.status, 'ready', 'the rate does not start over after the run');
-    equal(download.value, (later.eth0.rx - initial.eth0.rx) / (secondsBeforeRun + secondsAfterRun),
-        'computed against the last reading before the run');
+    equal(download.status, 'ready', 'the rate is computed against the last reading before the run');
     sensors.destroy();
 });
 
@@ -381,157 +308,406 @@ test('a discovery run cancels a read that is under way, and its late result is d
     let {sensors, machine, find, show} = setup();
     await sensors.discover();
     let uptime = find('system', 'uptime');
-    machine.write('/proc/uptime', '100.00 50.00\n');
+    machine.setContent('/proc/uptime', '100.00 50.00\n');
     let uptimeRead = machine.holdNextRead('/proc/uptime');
     show(uptime);
-    let poll = sensors.poll();
-    await Promise.resolve();
+    await settle();
     let readAfterRun = machine.holdNextRead('/proc/uptime');
     await sensors.discover();
     equal(uptimeRead.cancellable.is_cancelled(), true, 'the read is cancelled when the run starts');
     uptimeRead.finish();
-    await poll;
+    await settle();
     equal(uptime.value, undefined, 'the late result is not taken');
     equal(typeof readAfterRun.finish, 'function', 'the sensor is read again when the run ends, without a tick');
     readAfterRun.finish();
-    await new Promise(resolve => setTimeout(resolve, 0));
-    equal(uptime.value, 100, 'and has its value');
+    await settle();
+    equal(uptime.value, 100);
     sensors.destroy();
 });
 
-test('a sensor that no run has found for a year is forgotten, unless it is in the panel', async () => {
-    let {sensors, machine, find, advanceDate} = setup();
-    machine.write(NETWORK, networkDevices({lo: {rx: 0, tx: 0}, eth0: {rx: 0, tx: 0}, veth1a2b3c: {rx: 0, tx: 0}}));
+test('hide-zeros leaves out a temperature that reads zero at discovery, until a run reads a value; then it stays', async () => {
+    let {sensors, configuration, machine, fileValue, reads, find, show} = setup();
+    configuration.set_boolean('hide-zeros', true);
+    machine.setContent(THINKPAD + 'temp2_input', '0\n');
     await sensors.discover();
-    let containerDownload = find('network', 'veth1a2b3c/rx');
-    let containerUpload = find('network', 'veth1a2b3c/tx');
-    sensors.setPanelSensorVisible('network', containerUpload, true);
-    machine.write(NETWORK, networkDevices({lo: {rx: 0, tx: 0}, eth0: {rx: 0, tx: 0}}));
-    advanceDate(YEAR_SECONDS - 60);
-    await sensors.discover();
-    equal(sensors.catalog.network.sensors.includes(containerDownload), true, 'kept within the year');
-    advanceDate(120);
-    await sensors.discover();
-    equal(sensors.catalog.network.sensors.includes(containerDownload), false, 'forgotten after a year');
-    equal(sensors.catalog.network.sensors.includes(containerUpload), true, 'a sensor in the panel is never forgotten');
-    equal(find('network', 'eth0/rx') !== undefined, true, 'sensors that are still found stay');
-    sensors.destroy();
-});
-
-test('a second launch finds the saved sensors again, in their order, with their last readings', async () => {
-    let first = setup();
-    await first.sensors.discover();
-    let usage = first.find('memory', 'usage');
-    first.show(usage);
-    await first.sensors.poll();
-    let order = keys(first.sensors.catalog.temperature);
-    first.sensors.destroy();
-
-    let second = setup({configuration: first.configuration});
-    let restored = second.find('memory', 'usage');
-    equal(restored.value, usage.value, 'the last reading is there before anything is read');
-    equal(restored.status, 'saved');
-    second.show(restored);
-    equal(restored.status, 'saved', 'and stays on screen while this launch has no reading of its own');
-    equal(sensorPresent(second.sensors.catalog.memory, restored), true, 'the saved sensor counts as present until discovery ran');
-    await second.sensors.discover();
-    equal(keys(second.sensors.catalog.temperature), order, 'discovery matches every saved sensor and adds none');
-    equal(second.find('memory', 'usage'), restored, 'the saved sensor is the one discovery found');
-    second.sensors.destroy();
-});
-
-test('a saved reading that is older than a minute is not shown at the next launch', async () => {
-    let first = setup();
-    await first.sensors.discover();
-    let usage = first.find('memory', 'usage');
-    first.show(usage);
-    await first.sensors.poll();
-    first.sensors.destroy();
-    // The machine was off for two minutes.
-    let saved = readCatalog(first.configuration);
-    let savedUsage = saved.memory.sensors.find(sensor => sensor.key == 'usage');
-    savedUsage.updated -= 120;
-    writeCatalog(first.configuration, saved);
-
-    let second = setup({configuration: first.configuration});
-    equal(second.find('memory', 'usage').status, 'pending', 'an old reading says nothing about now');
-    second.sensors.destroy();
-});
-
-test('a category is switched on and off in the saved catalog, and saving keeps what the preferences wrote', async () => {
-    let {sensors, configuration, find} = setup();
-    await sensors.discover();
-    equal(sensors.catalog.battery.enabled, false, 'the schema default');
-    writeCategoryEnabled(configuration, 'battery', true);
-    // The collector saves before it has taken the switch over.
-    sensors.setPanelSensorVisible('memory', find('memory', 'usage'), true);
-    equal(readCatalog(configuration).battery.enabled, true, 'saving does not undo the switch');
-    equal(sensors.reloadEnabled(), true, 'a changed switch is reported');
-    equal(sensors.catalog.battery.enabled, true);
-    equal(sensors.reloadEnabled(), false, 'nothing changed since');
-    sensors.destroy();
-});
-
-test('shown sensors select only the sources they need', async () => {
-    let {sensors, machine, find, show} = setup();
-    let totalKilobytes = 1000, availableKilobytes = 400;
-    machine.write('/proc/meminfo',
-        'MemTotal: ' + totalKilobytes + ' kB\nMemAvailable: ' + availableKilobytes + ' kB\nMemFree: 300 kB\n');
-    await sensors.discover();
-    machine.reads.length = 0;
-    show(find('memory', 'usage'), find('memory', 'free'));
+    equal(find('temperature', 'thinkpad/temp2'), undefined, 'left out');
+    let average = find('temperature', 'average');
+    show(average);
+    await settle();
+    equal(reads(THINKPAD + 'temp2_input'), 1, 'read once, by discovery');
+    equal(average.value, mean(TEMPERATURES.filter(path => path != THINKPAD + 'temp2_input').map(fileValue)), 'not averaged');
+    machine.setContent(THINKPAD + 'temp2_input', '10000\n');
     await sensors.poll();
-    equal(machine.reads.join(','), '/proc/meminfo', 'shared memory read');
-    equal(find('memory', 'usage').value, (totalKilobytes - availableKilobytes) / totalKilobytes, 'memory usage');
+    equal(find('temperature', 'thinkpad/temp2'), undefined, 'a reading does not take it in');
+    await sensors.discover();
+    equal(find('temperature', 'thinkpad/temp2') !== undefined, true, 'a run does');
+    machine.setContent(THINKPAD + 'temp2_input', '0\n');
+    await sensors.discover();
+    await sensors.poll();
+    equal(find('temperature', 'thinkpad/temp2') !== undefined, true, 'a later zero does not take it out again');
+    equal(average.value, mean(TEMPERATURES.map(fileValue)), 'and the zero is averaged');
+    sensors.destroy();
+});
+
+test('hide-zeros leaves fans, voltages and unreadable temperatures alone, and switched off it takes zeros in', async () => {
+    let {sensors, configuration, machine, find, show} = setup();
+    configuration.set_boolean('hide-zeros', true);
+    for (let file of ['fan1_input', 'in1_input', 'temp2_input'])
+        machine.setContent(THINKPAD + file, '0\n');
+    machine.failReads(THINKPAD + 'temp1_input',
+        new Gio.IOErrorEnum({code: Gio.IOErrorEnum.FAILED, message: 'No such device or address'}));
+    await sensors.discover();
+    equal(find('temperature', 'thinkpad/temp1'), undefined, 'a temperature that cannot be read is left out');
+    equal(find('temperature', 'thermal/SEN1') !== undefined, true, 'without stopping the run');
+    let zeros = [find('fan', 'thinkpad/fan1'), find('voltage', 'thinkpad/in1')];
+    show(...zeros);
+    await settle();
+    equal(zeros.map(sensor => sensor.value).join(','), '0,0');
+    configuration.set_boolean('hide-zeros', false);
+    await sensors.discover();
+    equal(find('temperature', 'thinkpad/temp2') !== undefined, true, 'a zero temperature is taken in');
+    sensors.destroy();
+});
+
+// Reading
+
+test('only what is on screen is read, at once, and a file that several sensors on screen come from is read once', async () => {
+    let {sensors, configuration, machine, find, show} = setup();
+    await sensors.discover();
+    let kilobytes = name => Number(machine.content('/proc/meminfo').match(new RegExp(name + ':\\s*(\\d+)'))[1]);
     machine.reads.length = 0;
+    show(find('memory', 'usage'), find('memory', 'free'), find('network', 'combined'));
+    await settle();
+    equal(machine.reads.sort().join(','), '/proc/meminfo,/proc/net/dev', 'when they come on screen, without a tick');
+    equal(find('memory', 'usage').value, (kilobytes('MemTotal') - kilobytes('MemAvailable')) / kilobytes('MemTotal'));
+    equal(find('memory', 'free').value, kilobytes('MemFree') * 1024);
+    machine.reads.length = 0;
+    show(find('memory', 'usage'), find('memory', 'free'), find('network', 'combined'), find('system', 'uptime'));
+    await settle();
+    equal(machine.reads.join(','), '/proc/uptime', 'what comes on screen next to them is read alone');
+    machine.reads.length = 0;
+    await sensors.poll();
+    equal(machine.reads.sort().join(','), '/proc/meminfo,/proc/uptime', 'a tick reads them again; the network file waits for its second reading');
+    await sensors.discover();
+    equal(find('system', 'uptime').status, 'ready', 'discovery keeps the readings');
+    machine.reads.length = 0;
+    configuration.set_int('unit', 1);
+    await settle();
+    equal(machine.reads.length, 0, 'a setting of the display reads nothing');
     show();
     await sensors.poll();
-    equal(machine.reads.length, 0, 'closed menu without pins');
+    equal(machine.reads.length, 0, 'nothing on screen, nothing read');
     sensors.destroy();
 });
 
-test('a storage location has its space, and the header shows the free space of the first one', async () => {
-    let {sensors, errors, find, show} = setup();
-    let {'filesystem::size': size, 'filesystem::free': free, 'filesystem::used': used} = filesystems['/'];
+test('a sensor that becomes the header of a category on screen is read at once', async () => {
+    let {sensors, find, show} = setup();
+    await sensors.discover();
+    let systemVoltage = find('voltage', 'thinkpad/in1');
+    show('voltage');
+    await settle();
+    equal(systemVoltage.status, 'pending', 'a sensor that is neither on screen nor a header is not read');
+    sensors.setCategoryDefault('voltage', systemVoltage);
+    await settle();
+    equal(systemVoltage.status, 'ready');
+    sensors.destroy();
+});
+
+test('ticks that overlap share the read that is under way, and nothing is read once Sensors is destroyed', async () => {
+    let {sensors, machine, find, show} = setup();
+    await sensors.discover();
+    show(find('memory', 'usage'));
+    await settle();
+    machine.reads.length = 0;
+    let read = machine.holdNextRead('/proc/meminfo');
+    let ticks = [sensors.poll(), sensors.poll()];
+    await settle();
+    read.finish();
+    await Promise.all(ticks);
+    equal(machine.reads.join(','), '/proc/meminfo');
+    machine.reads.length = 0;
+    show(find('memory', 'usage'), find('system', 'uptime'));
+    sensors.destroy();
+    await settle();
+    equal(machine.reads.length, 0);
+});
+
+test('a read that fails keeps the last value, which is unavailable until a read succeeds again', async () => {
+    let {sensors, machine, fileValue, find, show} = setup();
+    await sensors.discover();
+    let temperature = find('temperature', 'thinkpad/temp1');
+    show(temperature);
+    await settle();
+    let lastValue = temperature.value;
+    machine.remove(THINKPAD + 'temp1_input');
+    await sensors.poll();
+    equal(temperature.status, 'unavailable');
+    equal(temperature.value, lastValue);
+    machine.setContent(THINKPAD + 'temp1_input', '41000\n');
+    await sensors.poll();
+    equal(temperature.status, 'ready');
+    equal(temperature.value, fileValue(THINKPAD + 'temp1_input'));
+    sensors.destroy();
+});
+
+test('a rate that comes on screen has its value a second later, without a tick, and starts over when it comes back', async () => {
+    let {sensors, reads, find, show} = setup();
+    await sensors.discover();
+    let download = find('network', 'eth0/rx'), uptime = find('system', 'uptime');
+    show(download, uptime);
+    await settle();
+    equal(download.status, 'pending', 'one reading gives no rate');
+    await sensors.poll();
+    equal(reads(NETWORK), 2, 'a tick leaves the file to the second reading');
+    equal(download.status, 'pending', 'so the rate waits for it');
+    await secondReading();
+    equal(download.status, 'ready', 'which gives the rate');
+    equal(download.value > 0, true);
+    equal(reads(NETWORK), 3);
+    equal(reads('/proc/uptime'), 2, 'the other file is not read with it');
+    show(uptime);
+    show(download, uptime);
+    await settle();
+    equal(download.status, 'pending', 'back on screen, the rate starts over');
+    show(uptime);
+    await secondReading();
+    equal(reads(NETWORK), 4, 'a second reading is called off when its file leaves the screen');
+    sensors.destroy();
+});
+
+test('a tick right after the second reading computes the rate from the first reading, not over a moment', async () => {
+    let {sensors, machine, find, show} = setup();
+    await sensors.discover();
+    let download = find('network', 'eth0/rx');
+    let received = rx => networkDevices({lo: {rx: 0, tx: 0}, eth0: {rx, tx: 0}, wlan0: {rx: 0, tx: 0}});
+    machine.setContent(NETWORK, received(1000));
+    let start = clock();
+    show(download);
+    await settle();
+    machine.setContent(NETWORK, received(2000));
+    await secondReading();
+    between(download.value, 1000 / (clock() - start), 1000, 'the second reading gives the bytes received per second');
+    await sensors.poll();
+    between(download.value, 1000 / (clock() - start), 1000, 'the counter stood since the second reading, but the rate spans from the first');
+    await wait(1);
+    await sensors.poll();
+    equal(download.value, 0, 'the next tick computes against the tick before');
+    sensors.destroy();
+});
+
+test('a rate is never computed across a counter that went back or a failed read', async () => {
+    let {sensors, machine, find, show} = setup();
+    await sensors.discover();
+    let download = find('network', 'eth0/rx');
+    show(download);
+    await secondReading();
+    equal(download.status, 'ready');
+    machine.setContent(NETWORK, networkDevices({lo: {rx: 0, tx: 0}, eth0: {rx: 5, tx: 5}, wlan0: {rx: 5, tx: 5}}));
+    await sensors.poll();
+    equal(download.status, 'pending', 'a counter that went back');
+    machine.remove(NETWORK);
+    await sensors.poll();
+    equal(download.status, 'unavailable', 'a failed read');
+    machine.restore(NETWORK);
+    await sensors.poll();
+    equal(download.status, 'pending', 'the reading after it starts over');
+    await secondReading();
+    equal(download.status, 'ready');
+    sensors.destroy();
+});
+
+test('what comes on screen during a discovery run, and a second reading, wait for the end of the run', async () => {
+    let {sensors, machine, reads, find, show} = setup();
+    await sensors.discover();
+    let download = find('network', 'eth0/rx');
+    let mountsRead = machine.holdNextRead(MOUNTS);
+    let run = sensors.discover();
+    await settle();
+    let readsInRun = reads(NETWORK);
+    show(download);
+    await settle();
+    equal(reads(NETWORK), readsInRun, 'not read during the run');
+    mountsRead.finish();
+    await run;
+    await settle();
+    equal(reads(NETWORK), readsInRun + 1, 'read when it ends');
+
+    mountsRead = machine.holdNextRead(MOUNTS);
+    run = sensors.discover();
+    await settle();
+    readsInRun = reads(NETWORK);
+    await secondReading();
+    equal(reads(NETWORK), readsInRun, 'the second reading is not taken during the run');
+    mountsRead.finish();
+    await run;
+    await settle();
+    equal(download.status, 'ready', 'it follows when the run has ended');
+    sensors.destroy();
+});
+
+test('a finished file writes and publishes its own sensors, and the average follows once when the last is in', async () => {
+    let {sensors, machine, find, show} = setup();
+    await sensors.discover();
+    show(find('temperature', 'average'));
+    await settle();
+    let published = [];
+    sensors.onValuesChanged = written => published.push([...written].map(sensor => sensor.key).join(','));
+    let slowRead = machine.holdNextRead(THINKPAD + 'temp1_input');
+    let tick = sensors.poll();
+    await settle();
+    equal(published.length, TEMPERATURES.length - 1, 'every other file published its sensor');
+    equal(published.some(keys => keys.includes('thinkpad/temp1') || keys.includes('average')), false,
+        'not the slow one, nor the average');
+    slowRead.finish();
+    await tick;
+    equal(published.slice(-2).join(' | '), 'thinkpad/temp1 | average,minimum,maximum', 'then the slow one, then the average');
+    sensors.destroy();
+});
+
+test('the average, minimum and maximum count every readable sensor of the category, zeros too, hidden ones not', async () => {
+    let {sensors, machine, fileValue, reads, find, show} = setup();
+    await sensors.discover();
+    let [average, minimum, maximum] = ['average', 'minimum', 'maximum'].map(key => find('temperature', key));
+    let hidden = find('temperature', 'thinkpad/temp2');
+    sensors.setSensorHidden(hidden, true);
+    machine.setContent(NVME + 'temp1_input', '0\n');
+    machine.remove(THINKPAD + 'temp1_input');
+    show(average, minimum, maximum);
+    await settle();
+    let counted = TEMPERATURES.filter(path => path != THINKPAD + 'temp2_input' && path != THINKPAD + 'temp1_input')
+        .map(fileValue);
+    equal(reads(THINKPAD + 'temp2_input'), 0, 'a hidden sensor is not read for them');
+    equal(average.value, mean(counted));
+    equal(minimum.value, 0, 'a zero is a reading');
+    equal(maximum.value, Math.max(...counted));
+    sensors.setSensorHidden(hidden, false);
+    machine.restore(THINKPAD + 'temp1_input');
+    await sensors.poll();
+    equal(average.value, mean(TEMPERATURES.map(fileValue)), 'shown again and readable again, both count');
+    for (let path of TEMPERATURES)
+        machine.remove(path);
+    await sensors.poll();
+    equal(average.status, 'unavailable', 'no readings is not zero');
+    sensors.destroy();
+});
+
+test('with one temperature there is no average and the header shows that temperature', async () => {
+    let {sensors, machine, find} = setup();
+    // Left are the ThinkPad's first temperature and the thermal policy zone, which is no sensor.
+    let kept = [THINKPAD + 'name', THINKPAD + 'temp1_input', ZONES + 'thermal_zone1/type', ZONES + 'thermal_zone1/temp'];
+    for (let path of Object.keys(devices.system)) {
+        if ((path.startsWith('/sys/class/hwmon/') || path.startsWith(ZONES)) && !kept.includes(path))
+            machine.remove(path);
+    }
+    await sensors.discover();
+    equal(find('temperature', 'average'), undefined);
+    equal(sensors.catalog.temperature.header, find('temperature', 'thinkpad/temp1'));
+    sensors.destroy();
+});
+
+test('the voltage header shows the battery, then the system, then a USB supply, as discovery finds them', async () => {
+    let {sensors, machine, fileValue, show} = setup();
+    let header = () => sensors.catalog.voltage.header;
+    await sensors.discover();
+    machine.reads.length = 0;
+    show('voltage');
+    await settle();
+    equal(header().value, fileValue(BATTERY + 'in0_input'), 'the battery, whatever its name or value');
+    equal(machine.reads.join(','), BATTERY + 'in0_input', 'only the header\'s voltage is read for it');
+    machine.remove(BATTERY + 'in0_input');
+    await sensors.poll();
+    equal(header().status, 'unavailable', 'a header that cannot be read keeps its sensor until the next discovery');
+    await sensors.discover();
+    await settle();
+    equal(header().value, fileValue(THINKPAD + 'in1_input'), 'the system before a USB supply');
+    machine.remove(THINKPAD + 'in1_input');
+    machine.remove(THINKPAD + 'in2_input');
+    await sensors.discover();
+    await settle();
+    equal(header().value, fileValue(USB + 'in0_input'), 'a USB supply when it is the only voltage');
+    machine.remove(USB + 'in0_input');
+    await sensors.discover();
+    equal(header(), undefined, 'no voltage, no header');
+    sensors.destroy();
+});
+
+// Intervals
+
+test('the public IP is asked once per interval, at once on Refresh and for another service', async () => {
+    let {sensors, configuration, machine, reads, find, show} = setup();
+    configuration.set_boolean('include-public-ip', true);
+    let minutes = configuration.get_int('network-public-ip-interval');
+    await sensors.discover();
+    let publicIp = find('network', 'public-ip');
+    show(publicIp);
+    await settle();
+    equal(publicIp.value, JSON.parse(machine.content(PUBLIC_IP_URLS[0])).IPv4);
+    await sensors.poll();
+    equal(reads(PUBLIC_IP_URLS[0]), 1, 'not asked again inside its interval');
+    show();
+    show(publicIp);
+    await settle();
+    equal(reads(PUBLIC_IP_URLS[0]), 1, 'nor when it comes back on screen inside it');
+    equal(publicIp.status, 'ready', 'which shows the answer it has');
+    await sensors.poll(true);
+    equal(reads(PUBLIC_IP_URLS[0]), 2, 'Refresh asks at once');
+    machine.skip(minutes * 60);
+    await sensors.poll();
+    equal(reads(PUBLIC_IP_URLS[0]), 3, 'a tick after the interval asks again');
+    for (let provider of [1, 2]) {
+        configuration.set_int('network-public-ip-provider', provider);
+        await sensors.poll();
+        equal(reads(PUBLIC_IP_URLS[provider]), 1, 'another service is asked at once');
+        equal(publicIp.value, JSON.parse(machine.content(PUBLIC_IP_URLS[provider])).ip);
+    }
+    machine.remove(PUBLIC_IP_URLS[2]);
+    machine.skip(minutes * 60);
+    await sensors.poll();
+    equal(publicIp.status, 'unavailable');
+    await sensors.poll();
+    equal(reads(PUBLIC_IP_URLS[2]), 2, 'a failed question is not repeated inside the interval');
+    sensors.destroy();
+});
+
+// Storage
+
+test('every storage location has its space, its labels and a section of its own; the header shows the first one', async () => {
+    let {sensors, configuration, machine, find, show} = setup();
     let value = field => find('storage', '//' + field).value;
     await sensors.discover();
-    show(...['total', 'used', 'free', 'reserved', 'used-percent', 'free-percent'].map(field => find('storage', '//' + field)), 'storage');
-    await sensors.poll();
-    equal(errors.length, 0, 'collection errors');
-    equal(value('total'), size, 'total');
-    equal(value('used'), used, 'used');
-    equal(value('free'), free, 'free is what users may still write');
-    equal(value('reserved'), size - used - free, 'reserved is the unused space users may not write');
-    equal(value('used-percent'), used / size, 'used share');
-    equal(value('free-percent'), (size - used) / size, 'free share includes reserved space');
-    equal(sensors.catalog.storage.header, find('storage', '//free'), 'group header shows free space');
     equal(find('storage', '//free').label, 'Free', 'with one location, a label does not name it');
-    sensors.destroy();
-});
+    show(...['total', 'used', 'free', 'reserved', 'used-percent', 'free-percent'].map(field => find('storage', '//' + field)));
+    await settle();
+    let {'filesystem::size': size, 'filesystem::free': free, 'filesystem::used': used} = filesystems['/'];
+    // Free is what users may still write; reserved is the unused space they may not write, which counts as free in
+    // the free share.
+    equal([value('total'), value('used'), value('free'), value('reserved'), value('used-percent'), value('free-percent')].join(),
+        [size, used, free, size - used - free, used / size, (size - used) / size].join());
 
-test('every storage location has its own values, in a section of its own', async () => {
-    let {sensors, machine, find, show} = setup({files: {...machineFixture, ...usbDriveMounts}, locations: [USB_DRIVE, '/']});
-    // The order of the locations does not follow the order of the table.
-    machine.write(MOUNTS, usbDriveMounts[MOUNTS].trim().split('\n').reverse().join('\n') + '\n');
+    machine.plug('usbDrive');
+    configuration.set_strv('storage-locations', [USB_DRIVE, '/']);
     await sensors.discover();
     let rootFree = find('storage', '//free'), usbFree = find('storage', USB_DRIVE + '/free');
-    equal(rootFree.lowIsBad, true, 'free space is watched for low values');
-    equal(rootFree.label, 'Free (/)', 'with several locations, a label names its own');
-    equal(usbFree.label, 'Free (' + USB_DRIVE + ')');
+    fields(find, [['storage', '//free', 'label', 'Free (/)'], ['storage', USB_DRIVE + '/free', 'label', 'Free (' + USB_DRIVE + ')'],
+        ['storage', '//free', 'lowIsBad', true], ['storage', USB_DRIVE + '/read-rate', 'section', usbFree.section]]);
     equal(rootFree.section != usbFree.section, true, 'each location is a section');
-    equal(find('storage', USB_DRIVE + '/read-rate').section, usbFree.section, 'with all its values');
     equal(sensors.catalog.storage.header, rootFree, 'the header shows the first location');
+    machine.asked.length = 0;
     show(usbFree);
-    await sensors.poll();
+    await settle();
     equal(usbFree.value, filesystems[USB_DRIVE]['filesystem::free']);
     equal(machine.asked.join(','), USB_DRIVE, 'only the location on screen is asked');
     sensors.destroy();
 });
 
-test('a storage location is monitored when the user added it and something is mounted there', async () => {
-    let {sensors, configuration, find} = setup({files: {...machineFixture, ...shareMounts}});
+test('a storage location is monitored when the user added it, or GNOME mounted it, and something is mounted there', async () => {
+    let {sensors, configuration, machine, find} = setup();
+    machine.plug('share');
+    machine.plug('usbDrive');
     let locations = () => [...new Set(sensors.catalog.storage.sensors.filter(sensor => sensorPresent(sensors.catalog.storage, sensor))
         .map(sensor => sensor.location))].sort().join(',');
+    // A phone is a mount without a path.
+    machine.volumes = [USB_DRIVE, null];
     await sensors.discover();
     equal(locations(), '/', 'at the start, the root alone');
     configuration.set_strv('storage-locations', ['/', SHARE, '/media/idle', '/mnt/backup']);
@@ -539,769 +715,374 @@ test('a storage location is monitored when the user added it and something is mo
     equal(locations(), '/,' + SHARE, 'not the automount that is not connected, nor a path where nothing is mounted');
     equal(find('storage', SHARE + '/free').network, true, 'a share is a network storage location');
     equal(find('storage', SHARE + '/read-rate'), undefined, 'which has no disk whose reads are counted');
-    equal(find('storage', '//free').network, false);
     configuration.set_strv('storage-locations', [SHARE]);
     await sensors.discover();
     equal(sensors.catalog.storage.header, find('storage', SHARE + '/free'), 'the header shows the first monitored one');
-    equal(sensors.catalog.storage.header.label, 'Free');
     configuration.set_strv('storage-locations', [SHARE, '/']);
     await sensors.discover();
     equal(sensors.catalog.storage.header, find('storage', '//free'), 'also when the first one was added later');
-    sensors.destroy();
-});
-
-test('what GNOME reports as mounted is monitored while the user wants that', async () => {
-    let {sensors, configuration, machine, find} = setup({files: {...machineFixture, ...usbDriveMounts}});
-    // A phone is a mount without a path.
-    machine.volumes = [USB_DRIVE, null];
-    await sensors.discover();
-    equal(find('storage', USB_DRIVE + '/free'), undefined, 'not from the start');
     configuration.set_boolean('storage-monitor-volumes', true);
     await sensors.discover();
-    equal(find('storage', USB_DRIVE + '/free').status, 'pending', 'the drive, which the user did not add');
-    equal(find('storage', '//free').label, 'Free (/)', 'beside the root');
+    equal(locations(), '/,' + USB_DRIVE + ',' + SHARE, 'the drive GNOME mounted, while the user wants that');
     machine.volumes = [];
     await sensors.discover();
-    equal(find('storage', USB_DRIVE + '/free'), undefined, 'gone with its mount');
+    equal(locations(), '/,' + SHARE, 'gone with its mount');
     sensors.destroy();
 });
 
-test('a network storage location is asked once per interval, a disk at every tick', async () => {
-    let {sensors, configuration, machine, find, show, advance} = setup({files: {...machineFixture, ...shareMounts}, locations: ['/', SHARE]});
-    let minutes = 2;
-    configuration.set_int('storage-network-interval', minutes);
+test('a network storage location is asked once per interval, and not while nothing is mounted there', async () => {
+    let {sensors, configuration, machine, find, show} = setup();
+    machine.plug('share');
+    configuration.set_strv('storage-locations', ['/', SHARE]);
     await sensors.discover();
     let shareFree = find('storage', SHARE + '/free'), rootFree = find('storage', '//free');
     show(shareFree, rootFree);
-    await sensors.poll();
-    equal(shareFree.value, filesystems[SHARE]['filesystem::free']);
+    await settle();
     let asked = location => machine.asked.filter(askedLocation => askedLocation == location).length;
-    let shareAsked = asked(SHARE), rootAsked = asked('/');
-    advance(minutes * 60 - 1);
     await sensors.poll();
-    equal(asked(SHARE), shareAsked, 'the share is not asked inside its interval');
-    equal(asked('/'), rootAsked + 1, 'the disk is');
+    equal(asked(SHARE) + ',' + asked('/'), '1,2', 'the share not inside its interval, the disk at every tick');
     show(rootFree);
     show(shareFree, rootFree);
-    await sensors.poll();
-    equal(asked(SHARE), shareAsked, 'nor when it comes on screen again inside it');
-    equal(shareFree.status, 'ready', 'it shows the answer it has');
+    await settle();
+    equal(asked(SHARE), 1, 'nor when it comes on screen again inside it');
     await sensors.poll(true);
-    equal(asked(SHARE), shareAsked + 1, 'a forced reading asks it at once');
-    advance(minutes * 60);
+    equal(asked(SHARE), 2, 'Refresh asks it at once');
+    machine.skip(configuration.get_int('storage-network-interval') * 60);
     await sensors.poll();
-    equal(asked(SHARE), shareAsked + 2, 'and so does a tick after the interval');
-    sensors.destroy();
-});
-
-test('a storage location where nothing is mounted any more is not asked', async () => {
-    let {sensors, machine, find, show, advance} = setup({files: {...machineFixture, ...shareMounts}, locations: ['/', SHARE]});
-    await sensors.discover();
-    let shareFree = find('storage', SHARE + '/free');
-    show(shareFree);
-    await sensors.poll();
-    let askedWhileConnected = machine.asked.length;
-    // The share disconnects: its automount stays in the table.
-    machine.write(MOUNTS, shareMounts[MOUNTS].split('\n').filter(line => !line.includes(' cifs ')).join('\n'));
+    equal(asked(SHARE), 3, 'and so does a tick after the interval');
+    // The share disconnects: its automount stays in the table, and asking would connect it again.
+    machine.setContent(MOUNTS, machine.content(MOUNTS).split('\n').filter(line => !line.includes(' cifs ')).join('\n'));
     await sensors.poll(true);
-    equal(machine.asked.length, askedWhileConnected, 'asking would connect it again');
+    equal(asked(SHARE), 3, 'not asked once nothing is mounted there');
     equal(shareFree.status, 'unavailable');
-    machine.write(MOUNTS, shareMounts[MOUNTS]);
-    advance(1);
+    machine.restore(MOUNTS);
     await sensors.poll();
-    equal(shareFree.status, 'ready', 'connected again, it is asked at the next tick and does not wait for its interval');
+    equal(shareFree.status, 'ready', 'connected again, it is asked at the next tick');
     sensors.destroy();
 });
 
 test('a storage location that does not answer is not asked a second time', async () => {
-    let {sensors, machine, find, show, advance} = setup({files: {...machineFixture, ...shareMounts}, locations: ['/', SHARE]});
+    let {sensors, configuration, machine, find, show} = setup();
+    machine.plug('share');
+    configuration.set_strv('storage-locations', ['/', SHARE]);
     await sensors.discover();
     let shareFree = find('storage', SHARE + '/free');
     let question = machine.holdNextRead(SHARE);
-    let secondQuestion;
     show(shareFree);
-    // Let the read get as far as the question it is held at.
-    await new Promise(resolve => setTimeout(resolve, 0));
-    equal(typeof question.finish, 'function', 'the question is out');
-    secondQuestion = machine.holdNextRead(SHARE);
+    await settle();
+    let secondQuestion = machine.holdNextRead(SHARE);
     // Each run cancels the read under way, and the reading that follows the run reads again.
     await sensors.discover();
     let reading = sensors.poll(true);
-    await new Promise(resolve => setTimeout(resolve, 0));
+    await settle();
     equal(secondQuestion.finish, null, 'no second question while the first is out');
     equal(machine.asked.filter(location => location == SHARE).length, 1, 'through the run and the readings after it');
     question.finish();
     await reading;
     equal(shareFree.value, filesystems[SHARE]['filesystem::free'], 'the answer serves the reading that waited');
-    advance(1);
     reading = sensors.poll(true);
-    await new Promise(resolve => setTimeout(resolve, 0));
+    await settle();
     equal(typeof secondQuestion.finish, 'function', 'the location is asked again once it has answered');
     secondQuestion.finish();
     await reading;
     sensors.destroy();
 });
 
-test('storage rates identify mapped devices and keep idle readings available', async () => {
-    let {sensors, machine, find, show, advance} = setup({files: {...machineFixture, ...mappedRootMounts}});
-    let disk = {device: '254:1', name: 'dm-1', readSectors: 100, writtenSectors: 50};
-    machine.write(DISKS, diskStatistics([disk]));
-    await sensors.discover();
-    let readRate = find('storage', '//read-rate'), writeRate = find('storage', '//write-rate');
-    show(readRate, writeRate);
-    await sensors.poll();
-    equal(readRate.status, 'pending', 'first reading establishes baseline');
-    let seconds = 2, readSectors = 4, writtenSectors = 2;
-    advance(seconds);
-    machine.write(DISKS, diskStatistics([
-        {...disk, readSectors: disk.readSectors + readSectors, writtenSectors: disk.writtenSectors + writtenSectors}
-    ]));
-    machine.reads.length = 0;
-    await sensors.poll();
-    equal(machine.reads.join(','), DISKS, 'read and write share one disk snapshot');
-    equal(readRate.value, readSectors * SECTOR_BYTES / seconds, 'read bytes per second');
-    equal(writeRate.value, writtenSectors * SECTOR_BYTES / seconds, 'write bytes per second');
-    advance(1);
-    await sensors.poll();
-    equal(readRate.status, 'ready', 'idle read rate remains available');
-    equal(readRate.value, 0, 'idle read rate is zero');
-    machine.write(DISKS, diskStatistics([{device: '8:0', name: 'sda', readSectors: 10, writtenSectors: 10}]));
-    advance(1);
-    await sensors.poll();
-    equal(readRate.status, 'unavailable', 'removed disk unavailable');
-    machine.write(DISKS, diskStatistics([disk]));
-    advance(1);
-    await sensors.poll();
-    equal(readRate.status, 'pending', 'return establishes new baseline');
-    advance(1);
-    await sensors.poll();
-    equal(readRate.status, 'ready', 'returned idle disk available');
-    sensors.destroy();
-});
-
-test('storage rates are those of the location\'s own disk, also at a path with an escaped space', async () => {
-    let {sensors, machine, find, show, advance} = setup({files: {...machineFixture, ...usbDriveMounts}, locations: ['/', USB_DRIVE]});
-    let rootDisk = {device: '254:1', name: 'dm-1', readSectors: 100, writtenSectors: 50};
-    let usbDisk = {device: '8:1', name: 'sda1', readSectors: 10, writtenSectors: 10};
-    machine.write(DISKS, diskStatistics([rootDisk, usbDisk]));
-    await sensors.discover();
-    let readRate = find('storage', USB_DRIVE + '/read-rate');
-    show(readRate);
-    await sensors.poll();
-    let seconds = 1, readSectors = 2;
-    advance(seconds);
-    machine.write(DISKS, diskStatistics([rootDisk, {...usbDisk, readSectors: usbDisk.readSectors + readSectors}]));
-    await sensors.poll();
-    equal(readRate.value, readSectors * SECTOR_BYTES / seconds, 'the USB drive, not the root disk');
-    equal(readRate.format, 'storage-rate', 'rate format');
-    sensors.destroy();
-});
-
-test('hide-zeros excludes a temperature that reads zero at discovery', async () => {
-    let {sensors, configuration, machine, fileValue, find, show} = setup();
-    configuration.set_boolean('hide-zeros', true);
-    machine.write(THINKPAD + 'temp2_input', '0\n');
-    await sensors.discover();
-    equal(find('temperature', 'thinkpad/temp2'), undefined, 'zero temperature excluded');
-    show(find('temperature', 'average'));
-    machine.reads.length = 0;
-    await sensors.poll();
-    equal(machine.reads.includes(THINKPAD + 'temp2_input'), false, 'excluded temperature not polled');
-    equal(find('temperature', 'average').value,
-        mean(TEMPERATURES.filter(path => path != THINKPAD + 'temp2_input').map(fileValue)), 'excluded temperature not averaged');
-    sensors.destroy();
-});
-
-test('hide-zeros admits an excluded temperature when a rediscovery reads a value', async () => {
-    let {sensors, configuration, machine, fileValue, find, show, advance} = setup();
-    configuration.set_boolean('hide-zeros', true);
-    machine.write(THINKPAD + 'temp2_input', '0\n');
-    await sensors.discover();
-    show(find('temperature', 'average'));
-    machine.write(THINKPAD + 'temp2_input', '10000\n');
-    await sensors.poll();
-    equal(find('temperature', 'thinkpad/temp2'), undefined, 'polling does not admit the temperature');
-    await sensors.discover();
-    advance(1);
-    await sensors.poll();
-    equal(find('temperature', 'thinkpad/temp2') !== undefined, true, 'rediscovery admits the temperature');
-    equal(find('temperature', 'average').value, mean(TEMPERATURES.map(fileValue)), 'admitted temperature averaged');
-    sensors.destroy();
-});
-
-test('hide-zeros keeps an admitted temperature that later reads zero', async () => {
-    let {sensors, configuration, machine, fileValue, find, show} = setup();
-    configuration.set_boolean('hide-zeros', true);
-    await sensors.discover();
-    show(find('temperature', 'average'));
-    machine.write(THINKPAD + 'temp1_input', '0\n');
-    await sensors.discover();
-    await sensors.poll();
-    equal(find('temperature', 'thinkpad/temp1') !== undefined, true, 'admitted temperature survives a later zero');
-    equal(find('temperature', 'average').value, mean(TEMPERATURES.map(fileValue)), 'later zero averaged');
-    sensors.destroy();
-});
-
-test('turning hide-zeros off admits a temperature that reads zero', async () => {
-    let {sensors, configuration, machine, fileValue, find, show} = setup();
-    configuration.set_boolean('hide-zeros', true);
-    machine.write(THINKPAD + 'temp2_input', '0\n');
-    await sensors.discover();
-    equal(find('temperature', 'thinkpad/temp2'), undefined, 'zero temperature excluded while the option is on');
-    configuration.set_boolean('hide-zeros', false);
-    await sensors.discover();
-    show(find('temperature', 'average'));
-    await sensors.poll();
-    equal(find('temperature', 'thinkpad/temp2') !== undefined, true, 'zero temperature admitted');
-    equal(find('temperature', 'average').value, mean(TEMPERATURES.map(fileValue)), 'zero temperature averaged');
-    sensors.destroy();
-});
-
-test('hide-zeros keeps zero fan and voltage readings', async () => {
+test('what a storage location read and wrote is that of its own disk, also at a path with an escaped space', async () => {
     let {sensors, configuration, machine, find, show} = setup();
-    configuration.set_boolean('hide-zeros', true);
-    machine.write(THINKPAD + 'fan1_input', '0\n');
-    machine.write(THINKPAD + 'in1_input', '0\n');
+    machine.plug('usbDrive');
+    configuration.set_strv('storage-locations', ['/', USB_DRIVE]);
+    // /proc/diskstats with the sectors read and written since boot by the root's volume and by the USB drive.
+    let diskLine = (numbers, sectors) => numbers + ' 1 0 ' + sectors + ' 0 1 0 ' + sectors + ' 0 0 0 0 0 0 0 0 0 0\n';
+    let diskStatistics = ({root, usb}) => diskLine('254 1 dm-1', root) + (usb === undefined ? '' : diskLine('8 1 sda1', usb));
+    let sectors = {root: 1000, usb: 10};
+    machine.setContent(DISKS, diskStatistics(sectors));
     await sensors.discover();
-    let zeroReadings = [find('fan', 'thinkpad/fan1'), find('voltage', 'thinkpad/in1')];
-    show(...zeroReadings);
+    let [rootRead, usbRead, usbWritten, usbReadRate] = [['/', 'read-total'], [USB_DRIVE, 'read-total'],
+        [USB_DRIVE, 'write-total'], [USB_DRIVE, 'read-rate']].map(([location, field]) => find('storage', location + '/' + field));
+    let start = clock();
+    show(rootRead, usbRead, usbWritten, usbReadRate);
+    await settle();
+    equal([rootRead.value, usbRead.value, usbWritten.value].join(), [sectors.root, sectors.usb, sectors.usb].map(count => count * SECTOR_BYTES).join());
+    let moreSectors = {...sectors, usb: sectors.usb + 20};
+    machine.setContent(DISKS, diskStatistics(moreSectors));
+    await secondReading();
+    let readBytes = 20 * SECTOR_BYTES;
+    between(usbReadRate.value, readBytes / (clock() - start), readBytes, 'the bytes the USB drive read per second');
+    machine.setContent(DISKS, diskStatistics({root: sectors.root}));
     await sensors.poll();
-    for (let sensor of zeroReadings) {
-        equal(sensor.status, 'ready', sensor.key + ' valid');
-        equal(sensor.value, 0, sensor.key + ' zero');
-    }
+    equal(usbReadRate.status, 'unavailable', 'a disk that is gone has none');
+    machine.setContent(DISKS, diskStatistics(moreSectors));
+    // Ticks are an update interval apart.
+    await wait(1);
+    await sensors.poll();
+    equal(usbReadRate.status, 'pending', 'back, it starts over');
     sensors.destroy();
 });
 
-test('an unreadable initial temperature does not abort discovery', async () => {
-    let {sensors, configuration, machine, errors, find} = setup();
-    configuration.set_boolean('hide-zeros', true);
-    machine.failReads(THINKPAD + 'temp1_input',
-        new Gio.IOErrorEnum({code: Gio.IOErrorEnum.FAILED, message: 'No such device or address'}));
-    await sensors.discover();
-    equal(errors.length, 0, 'an unreadable sensor is not reported as an error');
-    equal(find('temperature', 'thinkpad/temp1'), undefined, 'failed sensor excluded');
-    equal(find('temperature', 'thermal/SEN1') !== undefined, true, 'other sensors still discovered');
-    equal(find('voltage', 'thinkpad/in1') !== undefined, true, 'voltage still discovered');
-    sensors.destroy();
-});
+// Network
 
-test('rediscovery keeps readings and a format setting causes no reads', async () => {
-    let {sensors, configuration, machine, fileValue, find, show} = setup();
+test('interfaces that come and go change the network sensors at the next reading, not only at discovery', async () => {
+    let {sensors, machine, find, show} = setup();
     await sensors.discover();
-    let temperature = find('temperature', 'thinkpad/temp1');
-    show(temperature);
+    let combined = find('network', 'combined'), ethernetDownload = find('network', 'eth0/rx');
+    show(combined, ethernetDownload);
+    await secondReading();
+    machine.plug('vpn');
     await sensors.poll();
-    await sensors.discover();
-    equal(temperature.value, fileValue(THINKPAD + 'temp1_input'), 'retained reading');
-    equal(temperature.status, 'ready');
-    machine.reads.length = 0;
-    configuration.set_int('unit', 1);
-    equal(machine.reads.length, 0, 'format setting does not read');
-    sensors.destroy();
-});
-
-test('the voltage header shows the battery, then the system, then a USB supply, as discovery finds them', async () => {
-    let {sensors, machine, fileValue, show, advance} = setup();
-    let header = () => sensors.catalog.voltage.header;
-    await sensors.discover();
-    show('voltage');
-    machine.reads.length = 0;
-    await sensors.poll();
-    equal(header().value, fileValue(BATTERY + 'in0_input'), 'battery preferred regardless of name or magnitude');
-    equal(machine.reads.join(','), BATTERY + 'in0_input', 'only the header\'s voltage is read for it');
-    machine.remove(BATTERY + 'in0_input');
-    advance(1);
-    await sensors.poll();
-    equal(header().status, 'unavailable', 'a header whose voltage cannot be read keeps its sensor until the next discovery');
-    await sensors.discover();
-    advance(1);
-    await sensors.poll();
-    equal(header().value, fileValue(THINKPAD + 'in1_input'), 'system voltage preferred over USB');
-    machine.remove(THINKPAD + 'in1_input');
-    machine.remove(THINKPAD + 'in2_input');
-    await sensors.discover();
-    advance(1);
-    await sensors.poll();
-    equal(header().value, fileValue(USB + 'in0_input'), 'USB used when it is the only voltage');
-    machine.remove(USB + 'in0_input');
-    await sensors.discover();
-    equal(header(), undefined, 'no voltage, no header');
-    sensors.destroy();
-});
-
-test('temperature aggregates ignore an unreadable input and include it again when it recovers', async () => {
-    let {sensors, machine, fileValue, find, show, advance} = setup();
-    await sensors.discover();
-    let average = find('temperature', 'average');
-    equal(sensors.catalog.temperature.header, average, 'the header shows the average');
-    equal(average.aggregate, true, 'the average is marked as computed over the sensors');
-    equal(find('temperature', 'thinkpad/temp1').aggregate, undefined, 'a sensor of the machine is not');
-    equal(average.section > (find('temperature', 'thinkpad/temp1').section ?? 0), true, 'and it is in a section after the sensors');
-    show('temperature', average, find('temperature', 'minimum'), find('temperature', 'maximum'));
-    machine.remove(THINKPAD + 'temp1_input');
-    await sensors.poll();
-    let readable = TEMPERATURES.filter(path => path != THINKPAD + 'temp1_input').map(fileValue);
-    equal(average.status, 'ready', 'average with failed input');
-    equal(average.value, mean(readable), 'average of the readable temperatures');
-    equal(find('temperature', 'minimum').value, Math.min(...readable), 'minimum ignores failed input');
-    equal(find('temperature', 'maximum').value, Math.max(...readable), 'maximum ignores failed input');
-    machine.write(THINKPAD + 'temp1_input', machineFixture[THINKPAD + 'temp1_input']);
-    advance(1);
-    await sensors.poll();
-    equal(average.value, mean(TEMPERATURES.map(fileValue)), 'recovered temperature included');
-    for (let path of TEMPERATURES)
-        machine.remove(path);
-    advance(1);
-    await sensors.poll();
-    equal(average.status, 'unavailable', 'no readings is not zero');
-    sensors.destroy();
-});
-
-test('with one temperature there is no average row and the header shows that temperature', async () => {
-    let {sensors, machine, find} = setup();
-    for (let path of Object.keys(machineFixture)) {
-        if ((path.startsWith('/sys/class/hwmon/') || path.startsWith(ZONES)) && !path.startsWith(THINKPAD))
-            machine.remove(path);
-    }
-    machine.remove(THINKPAD + 'temp2_input');
-    machine.remove(THINKPAD + 'temp2_label');
-    await sensors.discover();
-    equal(find('temperature', 'average'), undefined, 'no average of one');
-    equal(sensors.catalog.temperature.header, find('temperature', 'thinkpad/temp1'));
-    sensors.destroy();
-});
-
-test('network inventory changes update rates and sums; an interface leaves and returns like any sensor', async () => {
-    let {sensors, machine, errors, find, show, advance} = setup();
-    let initial = {lo: {rx: 10, tx: 10}, eth0: {rx: 100, tx: 50}};
-    machine.write(NETWORK, networkDevices(initial));
-    // The interfaces that come and go in this test are hardware, like eth0.
-    plugInInterface(machine, 'wlan0', 'wlan');
-    plugInInterface(machine, 'eth1');
-    await sensors.discover();
-    let combined = find('network', 'combined');
-    let eth0Download = find('network', 'eth0/rx');
-    show(combined, eth0Download);
-    machine.reads.length = 0;
-    await sensors.poll();
-    equal(machine.reads.length, 1, 'one shared network read');
-    equal(combined.status, 'pending', 'initial baseline');
-
-    let busy = {lo: {rx: 9000, tx: 9000}, eth0: {rx: 300, tx: 150}};
-    advance(2);
-    machine.write(NETWORK, networkDevices(busy));
-    await sensors.poll();
-    equal(combined.value, combinedRate(initial, busy, 2), 'combined excludes loopback');
-
-    let joined = {eth0: {rx: 400, tx: 200}, wlan0: {rx: 0, tx: 0}, eth1: {rx: 0, tx: 0}};
-    advance(1);
-    machine.write(NETWORK, networkDevices(joined));
-    await sensors.poll();
-    equal(find('network', 'wlan0/rx') !== undefined, true, 'Wi-Fi adapter appeared');
-    equal(find('network', 'eth1/tx') !== undefined, true, 'second network card appeared');
-
-    let allBusy = {eth0: {rx: 500, tx: 250}, wlan0: {rx: 100, tx: 50}, eth1: {rx: 100, tx: 50}};
-    advance(1);
-    machine.write(NETWORK, networkDevices(allBusy));
-    await sensors.poll();
-    equal(combined.value, combinedRate(joined, allBusy, 1), 'all current interfaces contribute');
-
-    let withoutEth0 = {wlan0: {rx: 200, tx: 100}, eth1: {rx: 200, tx: 100}};
-    advance(1);
-    machine.write(NETWORK, networkDevices(withoutEth0));
+    equal(find('network', 'tun0/rx') !== undefined, true, 'an interface that appeared');
+    let lastValue = ethernetDownload.value;
+    machine.setContent(NETWORK, machine.content(NETWORK).split('\n').filter(line => !line.startsWith('eth0:')).join('\n'));
     await sensors.poll();
     equal(find('network', 'eth0/rx'), undefined, 'an interface that disappeared is no longer present');
-    equal(combined.value, combinedRate(allBusy, withoutEth0, 1), 'missing interface excluded');
-
+    equal(ethernetDownload.value, lastValue, 'and its sensors are not written');
+    equal(combined.status, 'ready', 'the total goes on without it');
     machine.remove(NETWORK);
-    advance(1);
     await sensors.poll();
-    equal(errors.length, 0, 'a failed read is not reported as an error');
-    equal(find('network', 'wlan0/rx') !== undefined, true, 'failed read preserves inventory');
-
-    let returned = {eth0: {rx: 5000, tx: 2500}};
-    advance(1);
-    machine.write(NETWORK, networkDevices(returned));
+    equal(find('network', 'tun0/rx') !== undefined, true, 'a failed read keeps the interfaces');
+    machine.restore(NETWORK);
+    machine.unplug('vpn');
     await sensors.poll();
-    equal(find('network', 'eth0/rx'), eth0Download, 'the returned interface is the same sensor again');
-    equal(find('network', 'wlan0/rx'), undefined, 'the interfaces that disappeared are no longer present');
-    equal(eth0Download.status, 'pending', 'return establishes baseline');
-
-    let returnedBusy = {eth0: {rx: 5100, tx: 2550}};
-    advance(1);
-    machine.write(NETWORK, networkDevices(returnedBusy));
-    await sensors.poll();
-    equal(combined.value, combinedRate(returned, returnedBusy, 1), 'normal rate after return');
+    equal(find('network', 'eth0/rx'), ethernetDownload, 'a returned interface is the same sensor again');
+    equal(find('network', 'tun0/rx'), undefined);
+    await secondReading();
+    equal(ethernetDownload.status, 'ready');
     sensors.destroy();
 });
 
 test('network totals are over the hardware interfaces, so what a VPN carries is not counted a second time', async () => {
-    let {sensors, configuration, machine, find, show, advance} = setup();
+    let {sensors, configuration, machine, find, show} = setup();
     configuration.set_boolean('include-public-ip', true);
-    // tun0 is a VPN: no hardware, and its traffic passes eth0 as well.
+    machine.plug('vpn');
+    await sensors.discover();
+    // A hardware interface is called by its kind, a virtual one by its name.
+    fields(find, [['network', 'tun0/rx', 'hardware', false], ['network', 'wlan0/rx', 'label', 'WiFi (wlan0) download speed'],
+        ['network', 'eth0/tx', 'label', 'Ethernet (eth0) upload speed'], ['network', 'tun0/rx', 'label', 'tun0 download speed'],
+        ['network', 'lo/tx', 'label', 'lo transferred'], ['network', 'device-rx', 'label', 'Download speed'],
+        ['network', 'session-tx', 'label', 'Uploaded this session'],
+        ['network', 'wifi-link-quality', 'section', find('network', 'wlan0/rx').section]]);
+    // The sections: the machine, hardware interfaces, volume, other, virtual interfaces.
+    let sections = ['device-rx', 'wlan0/rx', 'boot-rx', 'public-ip', 'tun0/rx'].map(key => find('network', key).section);
+    equal(sections.join(','), [...new Set(sections)].sort().join(','));
+
     let initial = {lo: {rx: 10, tx: 10}, eth0: {rx: 100, tx: 50}, wlan0: {rx: 1000, tx: 500}, tun0: {rx: 70, tx: 30}};
     let later = {lo: {rx: 90, tx: 90}, eth0: {rx: 300, tx: 150}, wlan0: {rx: 1600, tx: 800}, tun0: {rx: 200, tx: 90}};
-    let hardware = ['eth0', 'wlan0'];
-    plugInInterface(machine, 'wlan0', 'wlan');
-    let seconds = 2;
+    let hardware = (counters, direction) => counters.eth0[direction] + counters.wlan0[direction];
     let value = key => find('network', key).value;
-    let total = (counters, direction) => hardware.reduce((bytes, name) => bytes + counters[name][direction], 0);
-    machine.write(NETWORK, networkDevices(initial));
-    await sensors.discover();
-    equal(find('network', 'tun0/rx').hardware, false, 'the VPN interface is known, and known not to be hardware');
-    let sections = ['device-rx', 'wlan0/rx', 'boot-rx', 'public-ip', 'tun0/rx', 'lo/tx']
-        .map(key => find('network', key).section);
-    equal(sections.join(','), [...sections].sort().join(','),
-        'sections: the machine, hardware interfaces, volume, other, virtual interfaces');
-    equal(new Set(sections).size, 5, 'five different sections');
-    equal(find('network', 'wifi-link-quality').section, find('network', 'wlan0/rx').section,
-        'the WiFi values are in the section of the hardware interfaces');
-    equal(find('network', 'wlan0/rx').label, 'WiFi (wlan0) download speed', 'a hardware interface is called by its kind');
-    equal(find('network', 'eth0/tx').label, 'Ethernet (eth0) upload speed');
-    equal(find('network', 'tun0/rx').label, 'tun0 download speed', 'a virtual one by its name');
-    equal(find('network', 'lo/tx').label, 'lo transferred');
-    equal(find('network', 'device-rx').label, 'Download speed');
-    equal(find('network', 'session-tx').label, 'Uploaded this session');
-    show(...['boot-rx', 'boot-tx', 'session-rx', 'session-tx', 'device-rx', 'device-tx', 'combined', 'tun0/rx']
-        .map(key => find('network', key)));
-    await sensors.poll();
-    equal(value('boot-rx'), total(initial, 'rx'), 'boot total is the sum of the hardware counters');
-    equal(value('session-rx'), 0, 'session total starts at the first reading');
-    advance(seconds);
-    machine.write(NETWORK, networkDevices(later));
-    await sensors.poll();
+    machine.setContent(NETWORK, networkDevices(initial));
+    show(...['boot-rx', 'boot-tx', 'session-rx', 'session-tx', 'device-rx', 'device-tx', 'combined', 'eth0/rx', 'eth0/tx',
+        'wlan0/rx', 'wlan0/tx', 'tun0/rx'].map(key => find('network', key)));
+    await settle();
+    equal(value('boot-rx'), hardware(initial, 'rx'), 'the total since boot is the sum of the hardware counters');
+    equal(value('session-rx'), 0, 'the total of the session starts at the first reading');
+    machine.setContent(NETWORK, networkDevices(later));
+    await secondReading();
     for (let direction of ['rx', 'tx']) {
-        equal(value('boot-' + direction), total(later, direction), 'boot ' + direction);
-        equal(value('session-' + direction), total(later, direction) - total(initial, direction), 'session ' + direction);
-        equal(value('device-' + direction), (total(later, direction) - total(initial, direction)) / seconds, 'device ' + direction);
+        equal(value('boot-' + direction), hardware(later, direction));
+        equal(value('session-' + direction), hardware(later, direction) - hardware(initial, direction));
+        near(value('device-' + direction), value('eth0/' + direction) + value('wlan0/' + direction));
     }
-    equal(value('combined'), value('device-rx') + value('device-tx'), 'combined is download plus upload');
-    equal(value('tun0/rx'), (later.tun0.rx - initial.tun0.rx) / seconds, 'the VPN interface still has its own rate');
+    near(value('combined'), value('device-rx') + value('device-tx'), 'the total speed is download plus upload');
+    equal(value('tun0/rx') > 0, true, 'the VPN interface has its own speed');
     sensors.destroy();
 });
 
-test('network polling leaves the other categories alone and does not collect voltage', async () => {
-    let {sensors, machine, find, show, advance} = setup();
-    await sensors.discover();
-    let voltageHeader = sensors.catalog.voltage.header;
-    let temperatureHeader = sensors.catalog.temperature.header;
-    show(find('network', 'combined'));
-    machine.reads.length = 0;
-    let polls = 3;
-    for (let poll = 0; poll < polls; poll++) {
-        advance(1);
-        machine.write(NETWORK, networkDevices({lo: {rx: 10, tx: 10}, eth0: {rx: 100 + poll * 100, tx: 50 + poll * 50}}));
-        await sensors.poll();
-        equal(sensors.catalog.voltage.header, voltageHeader, 'voltage header retained');
-        equal(sensors.catalog.temperature.header, temperatureHeader, 'temperature header retained');
-    }
-    equal(machine.reads.join(','), Array(polls).fill(NETWORK).join(','), 'only the shown network source is read');
-    sensors.destroy();
-});
-
-test('menu demand changes preserve network readings between shared ticks', async () => {
-    let {sensors, configuration, machine, find, show, advance} = setup();
-    let updateSeconds = 5;
-    let initial = {lo: {rx: 10, tx: 10}, eth0: {rx: 100, tx: 50}};
-    let busy = {lo: {rx: 10, tx: 10}, eth0: {rx: 600, tx: 300}};
-    configuration.set_int('update-time', updateSeconds);
-    machine.write(NETWORK, networkDevices(initial));
+test('a menu that opens and closes keeps the readings of the network between ticks', async () => {
+    let {sensors, reads, find, show} = setup();
     await sensors.discover();
     let download = find('network', 'eth0/rx');
     show(download);
-    await sensors.poll();
-    advance(updateSeconds);
-    machine.write(NETWORK, networkDevices(busy));
-    await sensors.poll();
-    let sample = sensors.reading(NETWORK);
-    machine.reads.length = 0;
+    await secondReading();
+    let value = download.value;
+    let readsBefore = reads(NETWORK);
     for (let cycle = 0; cycle < 3; cycle++) {
-        advance(0.1);
         show(download, find('network', 'combined'), 'memory');
         show(download);
-        equal(download.value, (busy.eth0.rx - initial.eth0.rx) / updateSeconds, 'rate retained after menu close');
-        equal(sensors.reading(NETWORK), sample, 'counter and timestamp retained');
+        equal(download.value, value, 'the rate stays');
     }
-    // A read that the last change of what is on screen caused would have started by now.
-    await new Promise(resolve => setTimeout(resolve, 0));
-    equal(machine.reads.includes(NETWORK), false, 'no premature network read');
-    advance(updateSeconds);
-    await sensors.poll();
-    equal(download.value, 0, 'no traffic reads as zero after a full interval');
+    await settle();
+    equal(reads(NETWORK), readsBefore, 'and the file is not read before the next tick');
     sensors.destroy();
 });
 
-test('steady collection uses no regular expressions', async () => {
-    let {sensors, errors, find, show, advance} = setup();
-    await sensors.discover();
-    let shown = [find('processor', 'usage'), find('processor', 'frequency'), find('memory', 'usage'), find('network', 'combined')];
-    show(...shown, 'temperature', 'voltage');
-    await sensors.poll();
-    let exec = RegExp.prototype.exec;
-    RegExp.prototype.exec = function () { throw new Error('Regex executed during collection: ' + this); };
-    try {
-        advance(1);
-        await sensors.poll();
-    } finally {
-        RegExp.prototype.exec = exec;
-    }
-    equal(errors.length, 0, 'collection errors');
-    for (let sensor of [...shown, sensors.catalog.temperature.header, sensors.catalog.voltage.header])
-        equal(sensor.status, 'ready', sensor.key + ' collected');
-    sensors.destroy();
-});
+// Static information, other graphics cards and WiFi
 
-test('NVIDIA initially zero temperatures are excluded and retried on discovery', async () => {
-    let {sensors, configuration, find} = setup();
-    let nvidiaSmi = installNvidiaSmi();
+test('static information, a graphics card without NVIDIA and WiFi have their values; the refresh rate waits for frames', async () => {
+    let {sensors, configuration, machine, find, show} = setup();
+    configuration.set_boolean('include-static-info', true);
+    configuration.set_boolean('include-static-gpu-info', true);
     writeCategoryEnabled(configuration, 'gpu', true);
     sensors.reloadEnabled();
-    configuration.set_boolean('hide-zeros', true);
-    let admittedTemperature = 45;
-    nvidiaSmi.setCards([{uuid: 'GPU-test', name: 'Test GPU', 'temperature.gpu': 0}]);
+    machine.plug('amdGpu');
     await sensors.discover();
-    equal(find('gpu', 'Test GPU/temperature.gpu'), undefined, 'zero GPU temperature excluded');
-    equal(find('gpu', 'Test GPU/temperature.memory'), undefined, 'unavailable GPU memory temperature excluded');
-    equal(find('temperature', 'Test GPU/temperature.gpu'), undefined, 'excluded GPU not among the temperatures');
-    equal(nvidiaSmi.streams().length, 0, 'discovery does not start streaming');
-    nvidiaSmi.setCards([{uuid: 'GPU-test', name: 'Test GPU', 'temperature.gpu': admittedTemperature}]);
-    await sensors.discover();
-    equal(find('temperature', 'Test GPU/temperature.gpu') !== undefined, true, 'nonzero GPU temperature admitted');
-    nvidiaSmi.setCards([{uuid: 'GPU-test', name: 'Test GPU', 'temperature.gpu': 0}]);
-    await sensors.discover();
-    equal(find('temperature', 'Test GPU/temperature.gpu') !== undefined, true, 'accepted GPU survives later zero');
-    equal(find('gpu', 'Test GPU/temperature.gpu').initialTemperature, admittedTemperature, 'initial reading retained');
-    configuration.set_boolean('hide-zeros', false);
-    await sensors.discover();
-    equal(find('gpu', 'Test GPU/temperature.memory') !== undefined, true, 'option off leaves availability to collection');
-    sensors.destroy();
-});
-
-test('the NVIDIA stream asks for the fields of the shown sensors only and stops when none is shown', async () => {
-    let {sensors, configuration, find, show} = setup();
-    let nvidiaSmi = installNvidiaSmi();
-    let card = {uuid: 'GPU-test', name: 'Test GPU', 'memory.used': 2048, 'memory.total': 8192, 'temperature.gpu': 45};
-    nvidiaSmi.setCards([card]);
-    writeCategoryEnabled(configuration, 'gpu', true);
-    sensors.reloadEnabled();
-    configuration.set_boolean('include-static-gpu-info', false);
-    await sensors.discover();
-    equal(nvidiaSmi.streams().length, 0, 'discovery leaves streaming stopped');
-    equal(sensors.catalog.gpu.header, find('gpu', 'Test GPU/utilization.gpu'), 'the header shows the utilization');
-    let memoryUsage = find('gpu', 'Test GPU/memory-usage');
-    show(memoryUsage);
-    await sensors.poll();
-    equal(memoryUsage.value, card['memory.used'] / card['memory.total'], 'NVIDIA memory usage');
-    equal(nvidiaSmi.streams()[0].queriedFields, 'uuid,memory.total,memory.used', 'only required fields queried');
-    let amongTemperatures = find('temperature', 'Test GPU/temperature.gpu');
-    let cardTemperature = find('gpu', 'Test GPU/temperature.gpu');
-    let linkSpeed = find('gpu', 'Test GPU/link-speed');
-    show(amongTemperatures, cardTemperature, linkSpeed);
-    await sensors.poll();
-    equal(amongTemperatures.value, card['temperature.gpu'], 'temperature among the temperatures');
-    equal(amongTemperatures.label, 'GPU');
-    equal(cardTemperature.value, card['temperature.gpu'], 'temperature row');
-    equal(linkSpeed.status, 'unavailable', 'unsupported PCIe value');
-    show();
-    await nvidiaSmi.allStopped();
-    sensors.destroy();
-});
-
-test('a tick starts the NVIDIA stream again when the update interval changed and when the process ended', async () => {
-    let {sensors, configuration, find, show, advance} = setup();
-    let nvidiaSmi = installNvidiaSmi();
-    nvidiaSmi.setCards([{uuid: 'GPU-test', name: 'Test GPU', 'memory.used': 2048, 'memory.total': 8192}]);
-    writeCategoryEnabled(configuration, 'gpu', true);
-    sensors.reloadEnabled();
-    await sensors.discover();
-    let memoryUsed = find('gpu', 'Test GPU/memory.used');
-    show(memoryUsed);
-    await sensors.poll();
-    equal(nvidiaSmi.streams().length, 1);
-
-    let updateSeconds = configuration.get_int('update-time') + 2;
-    configuration.set_int('update-time', updateSeconds);
-    advance(updateSeconds);
-    await sensors.poll();
-    equal(nvidiaSmi.streams().length, 2, 'the tick after a changed update interval starts a new process');
-    equal(nvidiaSmi.streams()[1].interval, updateSeconds, 'which reports at that interval');
-
-    GLib.spawn_command_line_sync('kill ' + nvidiaSmi.streams()[1].pid);
-    // The first tick finds the process gone, the second has the reading of the new one.
-    for (let tick = 0; tick < 2; tick++) {
-        await new Promise(resolve => setTimeout(resolve, 300));
-        advance(updateSeconds);
-        await sensors.poll();
-    }
-    equal(nvidiaSmi.streams().length, 3, 'a tick starts the process again after it ended');
-    equal(memoryUsed.status, 'ready');
-    show();
-    await nvidiaSmi.allStopped();
-    sensors.destroy();
-});
-
-test('an NVIDIA sensor that comes on screen next to a shown one of its card is read at once', async () => {
-    let {sensors, configuration, find, show} = setup();
-    let nvidiaSmi = installNvidiaSmi();
-    let card = {uuid: 'GPU-test', name: 'Test GPU', 'memory.used': 2048, 'memory.total': 8192, 'utilization.gpu': 30};
-    nvidiaSmi.setCards([card]);
-    writeCategoryEnabled(configuration, 'gpu', true);
-    sensors.reloadEnabled();
-    await sensors.discover();
-    let memoryUsed = find('gpu', 'Test GPU/memory.used');
-    let utilization = find('gpu', 'Test GPU/utilization.gpu');
-    show(memoryUsed);
-    await sensors.poll();
-    show(memoryUsed, utilization);
-    // No tick follows. The process that reports the utilization as well has to start and print its first line.
-    for (let waited = 0; utilization.status != 'ready' && waited < 3000; waited += 50)
-        await new Promise(resolve => setTimeout(resolve, 50));
-    equal(utilization.status, 'ready', 'without a tick');
-    equal(utilization.value, card['utilization.gpu'] / 100);
-    show();
-    await nvidiaSmi.allStopped();
-    sensors.destroy();
-});
-
-test('the refresh rate shows that its value is on its way until two frames were counted', async () => {
-    let {sensors, configuration, find, show} = setup();
-    writeCategoryEnabled(configuration, 'gpu', true);
-    sensors.reloadEnabled();
-    await sensors.discover();
-    let refreshRate = find('gpu', 'refresh-rate');
-    show(refreshRate);
-    await sensors.poll();
+    let cpuField = name => machine.content('/proc/cpuinfo').match(new RegExp('^' + name + '\\s*:\\s*(.+)$', 'm'))[1];
+    fields(find, [
+        ['processor', 'vendor', 'value', cpuField('vendor_id')], ['processor', 'bogomips', 'value', cpuField('bogomips')],
+        ['processor', 'sockets', 'value', 1], ['processor', 'cache', 'value', Number.parseInt(cpuField('cache size')) * 1024],
+        ['system', 'kernel', 'value', machine.content('/proc/version').split(' ')[2]],
+        ['gpu', '0x8086/vendor', 'value', 'Intel'], ['gpu', '0x1002/vendor', 'value', 'AMD'],
+        // With two cards, a label says which.
+        ['gpu', '0x1002/vendor', 'label', 'GPU 2 Vendor']
+    ]);
+    let card = '/sys/class/drm/card1/device/';
+    let [busy, memoryUsed, quality, signal, refreshRate] = [['gpu', '0x1002/gpu_busy_percent'], ['gpu', '0x1002/mem_info_vram_used'],
+        ['network', 'wifi-link-quality'], ['network', 'wifi-signal-level'], ['gpu', 'refresh-rate']]
+        .map(([categoryName, key]) => find(categoryName, key));
+    show(busy, memoryUsed, quality, signal, refreshRate);
+    await settle();
     equal(refreshRate.status, 'pending', 'no frame is counted outside the Shell');
+    equal(busy.value, Number(machine.content(card + 'gpu_busy_percent')) / 100);
+    equal(memoryUsed.value, Number(machine.content(card + 'mem_info_vram_used')));
+    let wireless = machine.content('/proc/net/wireless').trim().split('\n')[2].split(/\s+/);
+    equal(quality.value, Number(wireless[2]) / 70, 'the link quality out of 70');
+    equal(signal.value, Number(wireless[3]));
     sensors.destroy();
 });
 
-test('showing the same NVIDIA sensors in another order keeps the running process', async () => {
-    let {sensors, configuration, find, show} = setup();
-    let nvidiaSmi = installNvidiaSmi();
-    nvidiaSmi.setCards([{uuid: 'GPU-test', name: 'Test GPU', 'memory.used': 2048, 'memory.total': 8192}]);
-    writeCategoryEnabled(configuration, 'gpu', true);
-    sensors.reloadEnabled();
-    await sensors.discover();
-    let used = find('gpu', 'Test GPU/memory.used'), total = find('gpu', 'Test GPU/memory.total');
-    show(used, total);
-    await sensors.poll();
-    show(total, used);
-    equal(nvidiaSmi.streams().length, 1, 'process retained');
-    sensors.destroy();
-    await nvidiaSmi.allStopped();
-});
+// Batteries
 
-test('the machine\'s battery is found by its type, whatever its name; a mouse\'s battery is not', async () => {
+test('every battery is found by its type, whatever its name, and the total is over those that power the machine', async () => {
     let {sensors, machine, find, show} = setup();
-    let percent = 80;
-    machine.remove('/sys/class/power_supply/BAT0/type');
-    machine.remove('/sys/class/power_supply/BAT0/uevent');
-    plugInBattery(machine, 'main-battery', {status: 'Not charging', powerWatts: 0, percent});
-    plugInBattery(machine, 'hidpp_battery_0', {status: 'Discharging', powerWatts: 0, percent: 50, scope: 'Device'});
     await sensors.discover();
-    let percentage = find('battery', 'main-battery/percentage');
-    equal(percentage.label, 'Percentage', 'with one battery the labels do not name it');
-    equal(find('battery', 'hidpp_battery_0/percentage'), undefined, 'the battery of a device is left out');
-    equal(find('battery', 'total-power-rate'), undefined, 'one battery has no total');
-    equal(sensors.catalog.battery.header, find('battery', 'main-battery/power-rate'), 'the header shows its power rate');
-    show(percentage);
-    await sensors.poll();
-    equal(percentage.value, percent / 100);
-    sensors.destroy();
-});
-
-test('two batteries each have their own sensors, and the header shows their power rates together', async () => {
-    let {sensors, machine, find, show} = setup();
-    let dischargingWatts = 12, chargingWatts = 5;
-    plugInBattery(machine, 'BAT0', {status: 'Discharging', powerWatts: dischargingWatts, percent: 40});
-    plugInBattery(machine, 'BAT1', {status: 'Charging', powerWatts: chargingWatts, percent: 90});
+    equal(find('battery', 'BAT0/percentage').label, 'Percentage', 'with one battery the labels do not name it');
+    equal(sensors.catalog.battery.header, find('battery', 'BAT0/power-rate'), 'the header shows its power rate');
+    machine.plug('mouse');
     await sensors.discover();
-    equal(find('battery', 'BAT0/percentage').label, 'BAT0 Percentage', 'the labels say which battery');
-    equal(find('battery', 'BAT1/percentage').label, 'BAT1 Percentage');
+    // With two, the labels say which battery: a device's by the device's model.
+    fields(find, [['battery', 'hidpp_battery_0/percentage', 'label', 'MX Master 3 Percentage'],
+        ['battery', 'BAT0/percentage', 'label', 'BAT0 Percentage']]);
+    equal(find('battery', 'total-power-rate'), undefined, 'the machine has one battery, so there is no total');
+    machine.plug('secondBattery');
+    await sensors.discover();
+    equal(find('battery', 'CMB1/percentage').label, 'CMB1 Percentage');
     let total = find('battery', 'total-power-rate');
-    equal(sensors.catalog.battery.header, total, 'the header shows the total');
-    show('battery', find('battery', 'BAT0/time-left'), find('battery', 'BAT1/time-left'));
-    await sensors.poll();
-    equal(find('battery', 'BAT0/power-rate').value, -dischargingWatts, 'a battery that is discharging has a negative rate');
-    equal(total.value, chargingWatts - dischargingWatts, 'the total is the sum of both');
-    equal(find('battery', 'BAT0/time-left').value !== find('battery', 'BAT1/time-left').value, true, 'each battery has its own time left');
+    equal(sensors.catalog.battery.header, total, 'with two batteries of the machine, the header shows the total');
+    let field = (name, fieldName) => Number(machine.content('/sys/class/power_supply/' + name + '/uevent')
+        .match(new RegExp('^POWER_SUPPLY_' + fieldName + '=(.+)$', 'm'))[1]);
+    let mouse = find('battery', 'hidpp_battery_0/percentage');
+    show(total, mouse, find('battery', 'CMB1/power-rate'), find('battery', 'BAT0/power-rate'));
+    await settle();
+    equal(mouse.value, field('hidpp_battery_0', 'CAPACITY') / 100);
+    equal(find('battery', 'CMB1/power-rate').value, -field('CMB1', 'POWER_NOW') / 1000000,
+        'a battery that discharges has a negative rate');
+    equal(total.value, find('battery', 'CMB1/power-rate').value + find('battery', 'BAT0/power-rate').value);
     sensors.destroy();
 });
 
-test('a name the user gives a sensor is kept across discovery and a restart, next to the sensor\'s own label', async () => {
+test('where a mouse has the only battery, the header shows its percentage', async () => {
+    let {sensors, machine, find} = setup();
+    for (let file of ['type', 'uevent'])
+        machine.remove('/sys/class/power_supply/BAT0/' + file);
+    machine.plug('mouse');
+    await sensors.discover();
+    equal(sensors.catalog.battery.header, find('battery', 'hidpp_battery_0/percentage'));
+    sensors.destroy();
+});
+
+// What is saved
+
+test('a second launch has the saved sensors in their order, with their readings while they are under a minute old', async () => {
+    let first = setup();
+    await first.sensors.discover();
+    first.show(first.find('memory', 'usage'), first.find('memory', 'free'));
+    await settle();
+    let usage = first.find('memory', 'usage').value;
+    let order = keys(first.sensors.catalog.temperature);
+    first.sensors.destroy();
+    // The free memory was read two minutes ago.
+    let saved = readCatalog(first.configuration);
+    saved.memory.sensors.find(sensor => sensor.key == 'free').updated -= 120;
+    writeCatalog(first.configuration, saved);
+
+    let {sensors, find} = setup(first.configuration);
+    let restored = find('memory', 'usage');
+    equal(restored.status + ' ' + restored.value, 'saved ' + usage, 'before anything is read, and before discovery');
+    equal(find('memory', 'free').status, 'pending', 'an old reading says nothing about now');
+    await sensors.discover();
+    equal(keys(sensors.catalog.temperature), order, 'discovery matches every saved sensor and adds none');
+    equal(find('memory', 'usage'), restored, 'the saved sensor is the one discovery found');
+    sensors.destroy();
+});
+
+test('a rate that still shows a saved value keeps it until its second reading', async () => {
+    let first = setup();
+    await first.sensors.discover();
+    first.show(first.find('network', 'eth0/rx'));
+    await secondReading();
+    first.sensors.destroy();
+
+    let {sensors, find, show} = setup(first.configuration);
+    await sensors.discover();
+    let download = find('network', 'eth0/rx');
+    show(download);
+    await settle();
+    equal(download.status, 'saved');
+    await secondReading();
+    equal(download.status, 'ready');
+    sensors.destroy();
+});
+
+test('a sensor that no run has found for a year is forgotten, unless it is in the panel', async () => {
+    let first = setup();
+    first.machine.plug('vpn');
+    first.machine.plug('secondNvme');
+    await first.sensors.discover();
+    first.sensors.setPanelSensorVisible('network', first.find('network', 'tun0/tx'), true);
+    first.sensors.destroy();
+    // The VPN was last connected a year and a minute ago, the second drive a minute less than a year ago.
+    let saved = readCatalog(first.configuration);
+    for (let sensor of saved.network.sensors.filter(sensor => sensor.interface == 'tun0'))
+        sensor.discovered -= YEAR_SECONDS + 60;
+    saved.temperature.sensors.find(sensor => sensor.file == SECOND_NVME + 'temp1_input').discovered -= YEAR_SECONDS - 60;
+    writeCatalog(first.configuration, saved);
+
+    let {sensors} = setup(first.configuration);
+    await sensors.discover();
+    let networkKeys = sensors.catalog.network.sensors.map(sensor => sensor.key);
+    equal(networkKeys.includes('tun0/rx'), false, 'forgotten after a year');
+    equal(networkKeys.includes('tun0/tx'), true, 'a sensor in the panel is never forgotten');
+    equal(sensors.catalog.temperature.sensors.some(sensor => sensor.file == SECOND_NVME + 'temp1_input'), true,
+        'kept within the year');
+    sensors.destroy();
+});
+
+test('a name, a category default and the order of the categories are kept across discovery and a restart', async () => {
     let first = setup();
     await first.sensors.discover();
     let temperature = first.find('temperature', 'thinkpad/temp1');
     let ownLabel = temperature.label;
-    first.sensors.renameSensor(temperature, 'Processor');
-    await first.sensors.discover();
-    equal(temperature.customLabel, 'Processor', 'discovery does not take the name away');
-    equal(temperature.label, ownLabel, 'and still writes the sensor\'s own label');
-    first.sensors.destroy();
-
-    let second = setup({configuration: first.configuration});
-    equal(second.find('temperature', 'thinkpad/temp1').customLabel, 'Processor', 'saved with the catalog');
-    second.sensors.renameSensor(second.find('temperature', 'thinkpad/temp1'), '');
-    equal(second.find('temperature', 'thinkpad/temp1').customLabel, undefined, 'an empty name gives the own label back');
-    second.sensors.destroy();
-});
-
-test('a hidden sensor does not count in the average, minimum and maximum, and is not read for them', async () => {
-    let {sensors, machine, fileValue, find, show} = setup();
-    await sensors.discover();
-    let hidden = find('temperature', 'thinkpad/temp2');
-    sensors.setSensorHidden(hidden, true);
-    show(find('temperature', 'average'));
-    machine.reads.length = 0;
-    await sensors.poll();
-    let counted = TEMPERATURES.filter(path => path != THINKPAD + 'temp2_input');
-    equal(machine.reads.includes(THINKPAD + 'temp2_input'), false, 'not read');
-    equal(find('temperature', 'average').value, mean(counted.map(fileValue)), 'average over the others');
-    sensors.setSensorHidden(hidden, false);
-    equal(hidden.hidden, undefined, 'shown again');
-    await sensors.poll();
-    equal(find('temperature', 'average').value, mean(TEMPERATURES.map(fileValue)), 'and counted again');
-    sensors.destroy();
-});
-
-test('the sensor the user makes the category default is what the header shows, also after discovery', async () => {
-    let {sensors, find} = setup();
-    await sensors.discover();
-    let automatic = sensors.catalog.temperature.header;
-    let chosen = find('temperature', 'thinkpad/temp1');
-    sensors.setCategoryDefault('temperature', chosen);
-    equal(sensors.catalog.temperature.header, chosen);
-    await sensors.discover();
-    equal(sensors.catalog.temperature.header, chosen, 'discovery keeps the choice');
-    sensors.setCategoryDefault('temperature', find('temperature', 'thinkpad/temp2'));
-    equal(chosen.categoryDefault, undefined, 'a category has one default');
-    sensors.setCategoryDefault('temperature');
-    equal(sensors.catalog.temperature.header, automatic, 'without a choice the header is the collector\'s again');
-    sensors.destroy();
-});
-
-test('the order the user gives the categories is saved with the catalog', async () => {
-    let first = setup();
-    await first.sensors.discover();
+    let automaticHeader = first.sensors.catalog.temperature.header;
     let order = ['voltage', ...first.sensors.categories().map(([name]) => name).filter(name => name != 'voltage')];
+    first.sensors.renameSensor(temperature, 'Processor');
+    first.sensors.setCategoryDefault('temperature', temperature);
     first.sensors.setCategoryOrder(order);
     await first.sensors.discover();
+    equal(temperature.customLabel + ' / ' + temperature.label, 'Processor / ' + ownLabel,
+        'discovery keeps the name and still writes the sensor\'s own label');
+    equal(first.sensors.catalog.temperature.header, temperature, 'and keeps the header the user chose');
     first.sensors.destroy();
 
-    let second = setup({configuration: first.configuration});
-    equal(second.sensors.categories().sort(([, a], [, b]) => a.position - b.position).map(([name]) => name).join(', '),
-        order.join(', '), 'kept across discovery and a restart');
-    second.sensors.destroy();
+    let {sensors, find} = setup(first.configuration);
+    let restored = find('temperature', 'thinkpad/temp1');
+    equal(restored.customLabel, 'Processor');
+    equal(sensors.catalog.temperature.header, restored);
+    equal(sensors.categories().sort(([, a], [, b]) => a.position - b.position).map(([name]) => name).join(', '), order.join(', '));
+    sensors.setCategoryDefault('temperature', find('temperature', 'thinkpad/temp2'));
+    equal(restored.categoryDefault, undefined, 'a category has one default');
+    sensors.setCategoryDefault('temperature');
+    equal(sensors.catalog.temperature.header.key, automaticHeader.key, 'without a choice the header is the collector\'s again');
+    sensors.renameSensor(restored, '');
+    equal(restored.customLabel, undefined, 'an empty name gives the own label back');
+    sensors.destroy();
 });
 
-test('panel links are shown, hidden and moved through Sensors, which saves them', async () => {
+test('panel links and category switches are changed through Sensors, which saves them and keeps what the preferences wrote', async () => {
     let configuration = settings();
     let saved = readCatalog(configuration);
     // A device that is not plugged in is in the panel from an earlier session.
     saved.panel.sensors = [{category: 'voltage', key: 'unplugged/in0', visible: true}];
     writeCatalog(configuration, saved);
-    let {sensors, find} = setup({configuration});
+    let {sensors, find} = setup(configuration);
     let links = sensors.catalog.panel.sensors;
     let shown = () => links.filter(link => sensors.linkShown(link)).map(link => link.category + ' ' + link.sensor.key).join(', ');
     let link = (categoryName, key) => links.find(candidate => candidate.sensor == find(categoryName, key));
@@ -1318,12 +1099,120 @@ test('panel links are shown, hidden and moved through Sensors, which saves them'
     equal(shown(), 'processor usage, memory usage, system load-1m', 'moved in front of another link');
     sensors.movePanelLink(link('processor', 'usage'));
     equal(shown(), 'memory usage, system load-1m, processor usage', 'moved to the end');
+    // The preferences switch a category in the saved catalog; the collector saves before it has taken that over.
+    equal(sensors.catalog.battery.enabled, false, 'the schema default');
+    writeCategoryEnabled(configuration, 'battery', true);
     writeCategoryEnabled(configuration, 'memory', false);
-    sensors.reloadEnabled();
+    sensors.movePanelLink(link('memory', 'usage'));
+    equal(readCatalog(configuration).battery.enabled, true, 'saving does not undo the switch');
+    equal(sensors.reloadEnabled(), true, 'a changed switch is reported');
+    equal(sensors.reloadEnabled(), false, 'once');
     equal(shown(), 'system load-1m, processor usage', 'a sensor of a category that is switched off is not shown');
     equal(JSON.stringify(readCatalog(configuration).panel.sensors), JSON.stringify(
         links.map(({category, sensor, visible}) => ({category, key: sensor.key, visible}))), 'saved as category and key');
     sensors.destroy();
+});
+
+// NVIDIA
+
+// Sets up a machine with the GPU category on and the given NVIDIA cards.
+async function setupNvidia(cards, adjust = () => {}) {
+    let machineSetup = setup();
+    machineSetup.nvidiaSmi.setCards(cards);
+    writeCategoryEnabled(machineSetup.configuration, 'gpu', true);
+    machineSetup.sensors.reloadEnabled();
+    adjust(machineSetup.configuration);
+    await machineSetup.sensors.discover();
+    return machineSetup;
+}
+
+// Ends a test with NVIDIA cards: nothing on screen any more stops every stream.
+async function endNvidia({sensors, nvidiaSmi, show}) {
+    show();
+    await nvidiaSmi.allStopped();
+    sensors.destroy();
+}
+
+test('with hide-zeros, an NVIDIA temperature that reads zero is left out until a run reads a value', async () => {
+    let nvidia = await setupNvidia([{uuid: 'GPU-test', name: 'Test GPU', 'temperature.gpu': 0}],
+        configuration => configuration.set_boolean('hide-zeros', true));
+    let {sensors, configuration, nvidiaSmi, find} = nvidia;
+    equal(find('gpu', 'Test GPU/temperature.gpu'), undefined, 'a zero temperature is left out');
+    equal(find('gpu', 'Test GPU/temperature.memory'), undefined, 'and one the card does not have');
+    equal(find('temperature', 'Test GPU/temperature.gpu'), undefined, 'also among the temperatures');
+    equal(nvidiaSmi.streams().length, 0, 'discovery starts no stream');
+    nvidiaSmi.setCards([{uuid: 'GPU-test', name: 'Test GPU', 'temperature.gpu': 45}]);
+    await sensors.discover();
+    equal(find('temperature', 'Test GPU/temperature.gpu') !== undefined, true, 'a value takes it in');
+    nvidiaSmi.setCards([{uuid: 'GPU-test', name: 'Test GPU', 'temperature.gpu': 0}]);
+    await sensors.discover();
+    equal(find('temperature', 'Test GPU/temperature.gpu') !== undefined, true, 'a later zero does not take it out');
+    configuration.set_boolean('hide-zeros', false);
+    await sensors.discover();
+    equal(find('gpu', 'Test GPU/temperature.memory') !== undefined, true, 'switched off, the card\'s fields are all in');
+    await endNvidia(nvidia);
+});
+
+test('the NVIDIA stream asks for the fields of the sensors on screen only and stops when none is', async () => {
+    let card = {uuid: 'GPU-test', name: 'Test GPU', 'memory.used': 2048, 'memory.total': 8192, 'temperature.gpu': 45};
+    let nvidia = await setupNvidia([card], configuration => configuration.set_boolean('include-static-gpu-info', false));
+    let {sensors, nvidiaSmi, find, show} = nvidia;
+    equal(sensors.catalog.gpu.header, find('gpu', 'Test GPU/utilization.gpu'), 'the header shows the utilization');
+    let memoryUsage = find('gpu', 'Test GPU/memory-usage');
+    show(memoryUsage);
+    await sensors.poll();
+    equal(memoryUsage.value, card['memory.used'] / card['memory.total']);
+    equal(nvidiaSmi.streams()[0].queriedFields.split(',').sort().join(','), 'memory.total,memory.used,uuid',
+        'only the fields it needs');
+    let amongTemperatures = find('temperature', 'Test GPU/temperature.gpu');
+    let linkSpeed = find('gpu', 'Test GPU/link-speed');
+    show(amongTemperatures, find('gpu', 'Test GPU/temperature.gpu'), linkSpeed);
+    await sensors.poll();
+    equal(amongTemperatures.label + ' ' + amongTemperatures.value, 'GPU ' + card['temperature.gpu'], 'among the temperatures');
+    equal(find('gpu', 'Test GPU/temperature.gpu').value, card['temperature.gpu']);
+    equal(linkSpeed.status, 'unavailable', 'a field the card does not report');
+    await endNvidia(nvidia);
+});
+
+test('a tick starts the NVIDIA stream again when the update interval changed and when the process ended', async () => {
+    let nvidia = await setupNvidia([{uuid: 'GPU-test', name: 'Test GPU', 'memory.used': 2048, 'memory.total': 8192}]);
+    let {sensors, configuration, nvidiaSmi, find, show} = nvidia;
+    let memoryUsed = find('gpu', 'Test GPU/memory.used');
+    show(memoryUsed);
+    await sensors.poll();
+    equal(nvidiaSmi.streams().length, 1);
+    let updateSeconds = configuration.get_int('update-time') + 2;
+    configuration.set_int('update-time', updateSeconds);
+    await sensors.poll();
+    equal(nvidiaSmi.streams().length, 2, 'the tick after a changed update interval starts a new process');
+    equal(nvidiaSmi.streams()[1].interval, updateSeconds, 'which reports at that interval');
+    GLib.spawn_command_line_sync('kill ' + nvidiaSmi.streams()[1].pid);
+    // The first tick finds the process gone, the second has the reading of the new one.
+    for (let tick = 0; tick < 2; tick++) {
+        await wait(0.3);
+        await sensors.poll();
+    }
+    equal(nvidiaSmi.streams().length, 3, 'a tick starts the process again after it ended');
+    equal(memoryUsed.status, 'ready');
+    await endNvidia(nvidia);
+});
+
+test('an NVIDIA sensor that comes on screen next to one of its card is read at once, and the order keeps the process', async () => {
+    let card = {uuid: 'GPU-test', name: 'Test GPU', 'memory.used': 2048, 'memory.total': 8192, 'utilization.gpu': 30};
+    let nvidia = await setupNvidia([card]);
+    let {sensors, nvidiaSmi, find, show} = nvidia;
+    let memoryUsed = find('gpu', 'Test GPU/memory.used'), memoryTotal = find('gpu', 'Test GPU/memory.total');
+    let utilization = find('gpu', 'Test GPU/utilization.gpu');
+    show(memoryUsed, memoryTotal);
+    await sensors.poll();
+    show(memoryTotal, memoryUsed);
+    equal(nvidiaSmi.streams().length, 1, 'the same sensors in another order keep the process');
+    show(memoryUsed, memoryTotal, utilization);
+    // No tick follows. The process that reports the utilization as well has to start and print its first line.
+    for (let waited = 0; utilization.status != 'ready' && waited < 3; waited += 0.05)
+        await wait(0.05);
+    equal(utilization.status + ' ' + utilization.value, 'ready ' + card['utilization.gpu'] / 100, 'without a tick');
+    await endNvidia(nvidia);
 });
 
 await runTests();

@@ -78,7 +78,6 @@ clean-env:
 
 test: compile
 	@echo ":: Running the unit tests..."
-	gjs -m tests/sensors.collection.test.js
 	gjs -m tests/sensorMath.test.js
 	gjs -m tests/formatter.test.js
 	gjs -m tests/colors.test.js

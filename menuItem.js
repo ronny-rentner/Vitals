@@ -1,6 +1,6 @@
 import Clutter from 'gi://Clutter';
 import GObject from 'gi://GObject';
-import St from 'gi://St'
+import St from 'gi://St';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 
 // The room of one menu icon, left empty. A sensor's row starts with it, so that the row's icon stands under the
@@ -20,6 +20,7 @@ export const CATEGORY_PIN_ICON = 'non-starred-symbolic';
 const HIDDEN_ROW_OPACITY = 120;
 
 export const MenuItem = GObject.registerClass({
+    GTypeName: 'VitalsMenuItem',
 
     Signals: {
         // A click on the row with either mouse button, or Enter or Space on it. It asks for the row's actions.
@@ -107,8 +108,7 @@ export const MenuItem = GObject.registerClass({
 
     set gicon(icon) {
         this._gIcon = icon;
-        if (this._iconActor)
-            this._iconActor.gicon = icon;
+        this._iconActor.gicon = icon;
     }
 
     set value(value) {
@@ -144,6 +144,7 @@ export const MenuItem = GObject.registerClass({
 
 // One of the actions in a sensor's panel. Choosing it does not close the menu.
 export const MenuAction = GObject.registerClass({
+    GTypeName: 'VitalsMenuAction',
 
     Signals: {
         'chosen': {},
@@ -177,7 +178,7 @@ export const MenuAction = GObject.registerClass({
     // still uses the row until the click that chose it is over. So a click is answered when it has ended.
     activate() {
         let click = this._clickGesture;
-        if (!click?.pressed) {
+        if (!click.pressed) {
             this.emit('chosen');
             return;
         }
@@ -191,6 +192,7 @@ export const MenuAction = GObject.registerClass({
 // The head of the panel that holds a sensor's actions: the sensor's icon and its name, laid out exactly like the
 // sensor's row, so that both stand under the row's. The name is where the sensor is renamed.
 export const SensorHeader = GObject.registerClass({
+    GTypeName: 'VitalsSensorHeader',
 }, class SensorHeader extends PopupMenu.PopupBaseMenuItem {
 
     // `menuActor` is the actor of the menu the panel is in; see editLabel.

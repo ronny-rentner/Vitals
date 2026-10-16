@@ -46,9 +46,6 @@ const CPU_FREQUENCIES = 'cpu-frequencies';
 const PUBLIC_IP = 'public-ip';
 const FRAMES = 'frames';
 const NVIDIA = 'nvidia';
-// A reading taken when its sensor came on screen can be followed by a tick at once. A rate over less time than this
-// says nothing.
-const SHORTEST_RATE_SECONDS = 0.5;
 // A rate has no value after the first reading of its source. The second reading follows this much later and does
 // not wait for the next tick, which can be a minute away.
 const SECOND_READING_SECONDS = 1;
@@ -198,11 +195,7 @@ const FIXED = {
             {section: NETWORK_SECTION.hardwareInterfaces, ...LOW_IS_BAD}),
         'wifi-signal-level': fixed('WiFi Signal Level', 'string', WIRELESS, s => s.value.signal,
             {section: NETWORK_SECTION.hardwareInterfaces}),
-        'public-ip': fixed('Public IP', 'string', PUBLIC_IP, (s, sensor) => {
-            // The renderer shows this country's flag next to the address.
-            sensor.country = s.value.country;
-            return s.value.ip;
-        }, {section: NETWORK_SECTION.other})
+        'public-ip': fixed('Public IP', 'string', PUBLIC_IP, s => s.value.ip, {section: NETWORK_SECTION.other})
     },
     storage: {
         'total': fixed('Total', 'storage', undefined, s => s.value.total),
@@ -259,21 +252,28 @@ const BATTERY_FIELD_KEYS = {
     full: 'energy-full', design: 'energy-design', now: 'energy-now'
 };
 
+// Seconds that only move forward, for the time between two readings.
+function clock() {
+    return GLib.get_monotonic_time() / 1000000;
+}
+
+// Seconds of calendar time, for the timestamps that are saved with the catalog.
+function now() {
+    return GLib.get_real_time() / 1000000;
+}
+
+// Closes the output stream of a stopped nvidia-smi process, on which no read is out any more.
+function closeNvidiaStream(stream) {
+    stream.close_async(GLib.PRIORITY_DEFAULT, null, (stream, result) => {
+        try { stream.close_finish(result); }
+        catch (error) { console.error(NVIDIA, error); }
+    });
+}
+
 // The collector. It knows every sensor, reads the ones that are shown, and saves the catalog. The catalog is plain
 // data, described in docs/catalog-design.md: categories with their sensors, and the panel as a category of links.
 export class Sensors {
     constructor(settings, gettext) {
-        // Seconds that only move forward, for the time between two readings.
-        this.clock = () => GLib.get_monotonic_time() / 1000000;
-        // Seconds of calendar time, for the timestamps that are saved with the catalog.
-        this.now = () => GLib.get_real_time() / 1000000;
-        this.createCancellation = () => new Gio.Cancellable();
-        // Calls `callback` once after so many seconds. What it returns calls that off when given to `unschedule`.
-        this.schedule = (seconds, callback) => GLib.timeout_add(GLib.PRIORITY_DEFAULT, seconds * 1000, () => {
-            callback();
-            return GLib.SOURCE_REMOVE;
-        });
-        this.unschedule = scheduled => GLib.Source.remove(scheduled);
         // Everything that is read, by its id: a file's path, or the name of a source that is not a file. Each holds
         // how it is read, its last reading, the read that is under way, and a second reading that is scheduled.
         this.sources = new Map();
@@ -287,7 +287,6 @@ export class Sensors {
         this.destroyed = false;
         this.onCatalogChanged = () => {};
         this.onValuesChanged = () => {};
-        this.onError = (id, error) => console.error(id, error);
         this._settings = settings;
         this._gettext = gettext;
         this._discovery = null;
@@ -315,7 +314,7 @@ export class Sensors {
             let {header, sensors = [], ...category} = saved[name];
             // 'saved' is a recent reading from the session before. It is shown like a 'ready' one until this session has its own.
             for (let sensor of sensors)
-                sensor.status = this.now() - sensor.updated <= SAVED_READING_SECONDS ? 'saved' : 'pending';
+                sensor.status = now() - sensor.updated <= SAVED_READING_SECONDS ? 'saved' : 'pending';
             catalog[name] = {...category, sensors, header: sensors.find(sensor => sensor.key == header)};
         }
         catalog.panel = {sensors: saved.panel.sensors.map(({category, key, visible}) => {
@@ -567,7 +566,7 @@ export class Sensors {
         let source = this.sources.get(id);
         let sample = source.reading;
         let interval = typeof source.interval == 'function' ? source.interval() : source.interval;
-        return sample !== undefined && sample.status != 'pending' && this.clock() - sample.time < interval;
+        return sample !== undefined && sample.status != 'pending' && clock() - sample.time < interval;
     }
 
     _cancelRead(source) {
@@ -584,9 +583,20 @@ export class Sensors {
         if (source.stop) source.stop();
     }
 
+    // Reads the source again a second after its first reading, which left a sensor without a value.
+    _scheduleSecondReading(id, source) {
+        source.secondReading = GLib.timeout_add(GLib.PRIORITY_DEFAULT, SECOND_READING_SECONDS * 1000, () => {
+            source.secondReading = null;
+            // No sensor is read during a discovery run, so the reading waits for the end of one.
+            let read = () => this._readSources(candidate => candidate == id);
+            Promise.resolve(this._discovery).then(read, read);
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
     _callOffSecondReading(source) {
         if (source.secondReading) {
-            this.unschedule(source.secondReading);
+            GLib.Source.remove(source.secondReading);
             source.secondReading = null;
         }
     }
@@ -597,7 +607,8 @@ export class Sensors {
         // No sensor is read while a discovery run is in progress. This tick is skipped, not made up for later.
         if (this.destroyed || this._discovery) return;
         this._select();
-        await this._readSources(id => force || !this._withinInterval(id));
+        // A source that waits for its second reading is left to it, so its rate spans that second. Refresh reads it.
+        await this._readSources(id => force || (!this.sources.get(id).secondReading && !this._withinInterval(id)));
     }
 
     // Reads what just came on screen, without waiting for a tick: the sources on screen that have no reading.
@@ -623,18 +634,21 @@ export class Sensors {
             if (!due(id))
                 continue;
 
-            let ticket = {cancellation: this.createCancellation()};
+            let ticket = {cancellation: new Gio.Cancellable()};
             source.pending = ticket;
             ticket.promise = Promise.resolve().then(() => {
                 if (source.pending == ticket) return source.read(ticket.cancellation);
             }).then(value => {
                 if (source.pending != ticket || this.destroyed) return;
-                let time = source.sampleTime ? source.sampleTime(value) : this.clock();
+                let time = source.sampleTime ? source.sampleTime(value) : clock();
                 let last = source.reading;
-                // A rate is computed against the last reading that succeeded, never across a failure or a stop, and
-                // against the one before it when the last one is only a moment old.
+                // A rate is computed against the last reading that succeeded, never across a failure or a stop. One
+                // younger than half the update interval, such as a tick or Refresh right after another reading, is
+                // passed over for the one it was computed against, so the rate does not span a moment. A second
+                // reading has only the first.
+                let tooYoung = last && time - last.time < this._settings.get_int('update-time') / 2;
                 let previous = last?.status != 'ready' ? null
-                    : time - last.time < SHORTEST_RATE_SECONDS ? last.previous : {value: last.value, time: last.time};
+                    : tooYoung && last.previous ? last.previous : {value: last.value, time: last.time};
                 source.reading = {value, time, status: 'ready', previous};
             }).catch(error => {
                 if (source.pending != ticket || this.destroyed) return;
@@ -642,25 +656,16 @@ export class Sensors {
                 // A failed read is an expected state, handled by marking the reading unavailable. It is not an error.
                 if (!previous || previous.status != 'unavailable')
                     console.debug(id, error);
-                source.reading = {...previous, time: this.clock(), status: 'unavailable'};
+                source.reading = {...previous, time: clock(), status: 'unavailable'};
             }).finally(() => {
                 if (source.pending != ticket || this.destroyed) return;
                 source.pending = null;
                 let written = this._write(id);
                 this.onValuesChanged(new Set(written));
                 // A first reading that leaves a sensor without a value, as it does a rate, is followed by a second.
-                // When a tick was first to bring the value, that second reading is called off.
                 let withoutValue = written.some(sensor => sensor.status == 'pending' || sensor.status == 'saved');
-                if (!withoutValue) {
-                    this._callOffSecondReading(source);
-                } else if (!source.reading.previous && !source.secondReading) {
-                    source.secondReading = this.schedule(SECOND_READING_SECONDS, () => {
-                        source.secondReading = null;
-                        // No sensor is read during a discovery run, so the reading waits for the end of one.
-                        let read = () => this._readSources(candidate => candidate == id);
-                        Promise.resolve(this._discovery).then(read, read);
-                    });
-                }
+                if (withoutValue && !source.reading.previous && !source.secondReading)
+                    this._scheduleSecondReading(id, source);
             });
             reads.push(ticket.promise);
         }
@@ -693,7 +698,7 @@ export class Sensors {
         } else {
             sensor.status = 'ready';
             sensor.value = value;
-            sensor.updated = this.now();
+            sensor.updated = now();
         }
     }
 
@@ -777,7 +782,7 @@ export class Sensors {
         } finally {
             enumerator.close_async(GLib.PRIORITY_DEFAULT, null, (enumerator, result) => {
                 try { enumerator.close_finish(result); }
-                catch (error) { this.onError(directoryPath, error); }
+                catch (error) { console.error(directoryPath, error); }
             });
         }
     }
@@ -889,8 +894,7 @@ export class Sensors {
             read: async cancellation => {
                 let provider = this._settings.get_int('network-public-ip-provider');
                 let answer = JSON.parse(await this._read(PUBLIC_IP_URLS[provider], cancellation));
-                let country = provider == 0 ? answer.countryCode : provider == 1 ? answer.cc : '';
-                return {provider, ip: provider == 0 ? answer.IPv4 : answer.ip, country: (country || '').toLowerCase()};
+                return {provider, ip: provider == 0 ? answer.IPv4 : answer.ip};
             }
         });
         this.addSource(FRAMES, {
@@ -914,7 +918,7 @@ export class Sensors {
     // "found in this run" can be told from "found in the last one" even when two runs start in the same second
     // or the system clock was set back.
     _startRun() {
-        this._lastRun = Math.max(Math.floor(this.now()), this._lastRun + 1);
+        this._lastRun = Math.max(Math.floor(now()), this._lastRun + 1);
         return this._lastRun;
     }
 
@@ -941,7 +945,7 @@ export class Sensors {
 
     // A value that does not change while the extension runs. Discovery writes it; nothing reads it again.
     _foundConstant(run, categoryName, key, value) {
-        this._foundFixed(run, categoryName, key, {value, status: 'ready', updated: this.now()});
+        this._foundFixed(run, categoryName, key, {value, status: 'ready', updated: now()});
     }
 
     _sensorCount() {
@@ -982,7 +986,7 @@ export class Sensors {
                     catch (error) {
                         for (let name of fedCategories)
                             incomplete.add(name);
-                        if (!this.destroyed) this.onError('discover:' + stepName, error);
+                        if (!this.destroyed) console.error('discover:' + stepName, error);
                     }
                 }));
                 if (this.destroyed) return;
@@ -1009,7 +1013,7 @@ export class Sensors {
 
     // Drops the sensors that no run has found for a year, except those in the panel.
     _forget() {
-        let oldest = this.now() - FORGET_AFTER_SECONDS;
+        let oldest = now() - FORGET_AFTER_SECONDS;
         let linked = new Set(this.catalog.panel.sensors.map(link => link.sensor));
         for (let [, category] of this.categories())
             category.sensors = category.sensors.filter(sensor => linked.has(sensor) || sensor.discovered >= oldest);
@@ -1032,8 +1036,10 @@ export class Sensors {
                 // The battery's voltage before the system's, and a USB supply's only when there is nothing else.
                 return this._measured(category).sort((a, b) => a.priority - b.priority || a.key.localeCompare(b.key))[0];
             case 'battery':
-                // With one battery there is no total row; the header then shows that battery's power rate.
-                return withKey('total-power-rate') ?? present.find(sensor => sensor.field == 'power-rate');
+                // With one battery there is no total row; the header then shows that battery's power rate. A device's
+                // battery, such as a mouse's, has none and shows its percentage.
+                return withKey('total-power-rate') ?? present.find(sensor => sensor.field == 'power-rate') ??
+                    present.find(sensor => sensor.field == 'percentage');
             case 'storage':
                 // The free space of the first location, which is "/" while that one is monitored.
                 return present.find(sensor => sensor.field == 'free' && sensor.section == 1);
@@ -1281,25 +1287,30 @@ export class Sensors {
         }
         let batteries = [];
         for (let name of supplies) {
-            if (await this._optionalRead(root + name + '/type') != 'Battery') continue;
-            // The battery of a mouse or a keyboard is listed here too; the kernel marks it as a device's.
-            if (await this._optionalRead(root + name + '/scope') == 'Device') continue;
-            batteries.push(name);
+            if (await this._optionalRead(root + name + '/type') == 'Battery')
+                batteries.push(name);
         }
+        let machineBatteries = 0;
         for (let name of batteries) {
             let file = root + name + '/uevent';
-            let batteryFields = SensorMath.parseBattery(await this._read(file, this._discoveryCancellation));
+            let description = await this._read(file, this._discoveryCancellation);
+            // The battery of a mouse or a keyboard powers that device, not the machine, and reports no power rate.
+            let peripheral = await this._optionalRead(root + name + '/scope') == 'Device';
+            if (!peripheral) machineBatteries++;
+            let batteryFields = SensorMath.parseBattery(description);
             let found = Object.entries(BATTERY_FIELD_KEYS).filter(([batteryField]) => batteryFields[batteryField] !== undefined &&
                 !(typeof batteryFields[batteryField] == 'number' && !Number.isFinite(batteryFields[batteryField])))
                 .map(([, field]) => field);
+            // With several batteries, the labels say which one a value belongs to: a device's battery by the
+            // device's model.
+            let shownName = peripheral && description.match(/^POWER_SUPPLY_MODEL_NAME=(.+)$/m)?.[1] || name;
             for (let field of [...found, 'capacity', 'time-left']) {
                 let {label, ...fields} = FIXED.battery[field].fields;
-                // With several batteries, the labels say which one a value belongs to.
                 this._found(run, 'battery', {key: name + '/' + field, ...fields, field, file,
-                    label: batteries.length > 1 ? name + ' ' + label : label});
+                    label: batteries.length > 1 ? shownName + ' ' + label : label});
             }
         }
-        if (batteries.length > 1) {
+        if (machineBatteries > 1) {
             this._found(run, 'battery', {key: 'total-power-rate', label: 'Total power rate', format: 'watt',
                 aggregate: true, section: 1});
         }
@@ -1359,7 +1370,7 @@ export class Sensors {
                 let output = await this._command(['nvidia-smi', '--query-gpu=' + nvidiaFields.join(','), '--format=csv,noheader,nounits']);
                 nvidiaCards = output.split('\n').filter(line => line.trim()).map(line => line.split(',').map(part => part.trim()));
             } catch (error) {
-                if (!this.destroyed) this.onError('nvidia discovery', error);
+                if (!this.destroyed) console.error('nvidia discovery', error);
             }
         }
         let otherCards = [];
@@ -1382,17 +1393,17 @@ export class Sensors {
             let part = field => parts[nvidiaFields.indexOf(field)];
             if (staticInfo) {
                 this._found(run, 'gpu', {key: cardName + '/name', label: labelPrefix() + 'Vendor', format: 'string',
-                    value: cardName, status: 'ready', updated: this.now()});
+                    value: cardName, status: 'ready', updated: now()});
                 for (let [label, field, format] of nvidiaStaticFields) {
                     if (part(field) == 'N/A' || part(field) == '[N/A]') continue;
                     this._found(run, 'gpu', {key: cardName + '/' + field, label: labelPrefix() + label, format,
-                        value: format == 'string' ? part(field) : Number(part(field)), status: 'ready', updated: this.now()});
+                        value: format == 'string' ? part(field) : Number(part(field)), status: 'ready', updated: now()});
                 }
                 let generation = part('pcie.link.gen.max');
                 let width = part('pcie.link.width.max');
                 if (Number.isFinite(Number(generation)) && Number.isFinite(Number(width)))
                     this._found(run, 'gpu', {key: cardName + '/pcie.link.max', label: labelPrefix() + 'Maximum Link Speed',
-                        format: 'pcie', value: generation + 'x' + width, status: 'ready', updated: this.now()});
+                        format: 'pcie', value: generation + 'x' + width, status: 'ready', updated: now()});
             }
             let hasTemperature = false;
             for (let [label, field, format] of [
@@ -1428,7 +1439,7 @@ export class Sensors {
                 let vendors = {'0x1002': 'AMD', '0x10de': 'NVIDIA', '0x13b5': 'ARM',
                     '0x5143': 'Qualcomm', '0x8086': 'Intel', '0x1234': 'QEMU'};
                 this._found(run, 'gpu', {key: vendor + '/vendor', label: labelPrefix() + 'Vendor', format: 'string',
-                    value: vendors[vendor] || vendor, status: 'ready', updated: this.now()});
+                    value: vendors[vendor] || vendor, status: 'ready', updated: now()});
             }
             for (let [label, file, format] of [
                 ['Usage', 'gpu_busy_percent', 'percent'],
@@ -1471,7 +1482,11 @@ export class Sensors {
         };
         this._nvidia = state;
         let read = () => state.stream.read_line_async(GLib.PRIORITY_DEFAULT, state.cancellation, (stream, result) => {
-            if (this._nvidia != state) return;
+            // The read that was out when the process was stopped closes its stream.
+            if (this._nvidia != state) {
+                closeNvidiaStream(stream);
+                return;
+            }
             try {
                 let [line] = stream.read_line_finish_utf8(result);
                 if (line === null) throw new Error('nvidia-smi stopped producing readings');
@@ -1479,7 +1494,7 @@ export class Sensors {
                 if (parts.length != fields.length) throw new Error('Incomplete nvidia-smi reading: ' + line);
                 state.rows.set(parts[0], Object.fromEntries(fields.map((field, index) => [field, parts[index]])));
                 if (state.rows.size == uuids.length) {
-                    let sample = {gpus: state.rows, time: this.clock()};
+                    let sample = {gpus: state.rows, time: clock()};
                     state.rows = new Map();
                     if (state.waiter) {
                         state.waiter.resolve(sample);
@@ -1519,19 +1534,18 @@ export class Sensors {
         state.cancellation.cancel();
         state.process.force_exit();
         if (state.waiter) state.waiter.reject(new Error('GPU collection stopped'));
-        state.stream.close_async(GLib.PRIORITY_DEFAULT, null, (stream, result) => {
-            try { stream.close_finish(result); }
-            catch (error) { this.onError(NVIDIA, error); }
-        });
+        // A stream with a read out cannot be closed; that read closes it when it ends. After an error none is out.
+        if (state.error)
+            closeNvidiaStream(state.stream);
     }
 
     _startFrames() {
         this._frameTimes = [];
         if (typeof global == 'undefined' || !global.stage) return;
         this._frameSignal = global.stage.connect('after-paint', () => {
-            let now = this.clock();
-            this._frameTimes.push(now);
-            while (this._frameTimes.length > 2 && this._frameTimes[0] < now - 0.5)
+            let frameTime = clock();
+            this._frameTimes.push(frameTime);
+            while (this._frameTimes.length > 2 && this._frameTimes[0] < frameTime - 0.5)
                 this._frameTimes.shift();
         });
     }

@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <schemalist gettext-domain="gnome-shell-extensions">
+  <enum id="org.gnome.shell.extensions.vitals.position-in-panel">
+    <value nick="far-left" value="0"/>
+    <value nick="left" value="1"/>
+    <value nick="center" value="2"/>
+    <value nick="right" value="3"/>
+    <value nick="far-right" value="4"/>
+  </enum>
   <schema id="org.gnome.shell.extensions.vitals" path="/org/gnome/shell/extensions/vitals/">
     <key name="catalog" type="a{sv}">
       <default>{
@@ -27,10 +34,10 @@
       <summary>Seconds between updates</summary>
       <description>How often sensors are read. Only sensors on screen are read: those in the top bar and in the open menu. The preferences offer 1, 2, 3, 5, 10, 15, 30 and 60 seconds.</description>
     </key>
-    <key type="i" name="position-in-panel">
-      <default>2</default>
+    <key name="position-in-panel" enum="org.gnome.shell.extensions.vitals.position-in-panel">
+      <default>'right'</default>
       <summary>Position in top bar</summary>
-      <description>Where Vitals sits in the top bar. 0=left, 1=center, 2=right, 3=far left, 4=far right</description>
+      <description>Far left and far right are the outer ends of the bar.</description>
     </key>
     <key type="b" name="allow-panel-dragging">
       <default>true</default>
@@ -78,13 +85,10 @@
       <description>Display public IP address of internet connection</description>
     </key>
     <key type="i" name="network-public-ip-interval">
-      <default>60</default>
-      <range min="15" max="1440"/>
+      <default>5</default>
+      <range min="1" max="1440"/>
       <summary>Public IP refresh interval in minutes</summary>
-    </key>
-    <key name="network-public-ip-show-flag" type="b">
-        <default>true</default>
-        <summary>Show country flag for public IP</summary>
+      <description>Each lookup is a request to the provider. Refresh in the menu looks it up at once.</description>
     </key>
     <key type="i" name="network-public-ip-provider">
       <default>0</default>

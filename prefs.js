@@ -57,7 +57,7 @@ export default class VitalsPrefs extends ExtensionPreferences {
         this._page('top-bar', _('Top Bar'), 'focus-top-bar-symbolic',
             this._group(_('Placement'),
                 this._comboRow('position-in-panel', _('Position'), _('Far left and far right are the outer ends of the bar.'),
-                    [_('Left'), _('Center'), _('Right'), _('Far left'), _('Far right')]),
+                    [_('Far left'), _('Left'), _('Center'), _('Right'), _('Far right')]),
                 this._switchRow('allow-panel-dragging', _('Reorder sensors by drag and drop'))),
             this._group(_('Appearance'),
                 this._switchRow('fixed-widths', _('Steady widths'),
@@ -108,10 +108,8 @@ export default class VitalsPrefs extends ExtensionPreferences {
             this._group(_('Public IP Address'),
                 this._switchRow('include-public-ip', _('Show public IP address'), _('Looked up over the internet from the provider below.')),
                 this._toggleRow('network-public-ip-provider', _('Provider'), '', [_('Core Coding'), _('MyIP.com'), _('ipify')]),
-                this._numberRow('network-public-ip-interval', _('Minutes between lookups'), 15, 1440),
-                // ipify is the third provider, and it gives no country.
-                this._usableWhile('network-public-ip-provider', provider => provider != 2,
-                    this._switchRow('network-public-ip-show-flag', _('Show country flag'), _('Not available with ipify.')))));
+                this._numberRow('network-public-ip-interval', _('Minutes between lookups'), 1, 1440,
+                    _('Each lookup is a request to the provider. Refresh in the menu looks it up at once.'))));
 
         this._categoryPage('storage', _('Monitor storage'), '', [],
             this._group(_('Units'), ...this._radioRows('storage-measurement', [
@@ -431,9 +429,15 @@ export default class VitalsPrefs extends ExtensionPreferences {
         return this._bound(key, new Adw.SwitchRow({ title, subtitle }), 'active');
     }
 
-    // A list to choose from. The setting holds the position of the chosen entry.
+    // A combo row for the enum setting `key`, whose values are the positions of `entries`.
+    // Gio.Settings.bind cannot bind an enum to the row's `selected`, so the two follow each other by hand.
     _comboRow(key, title, subtitle, entries) {
-        return this._bound(key, new Adw.ComboRow({ title, subtitle, model: Gtk.StringList.new(entries) }), 'selected');
+        let row = new Adw.ComboRow({ title, subtitle, model: Gtk.StringList.new(entries) });
+        let follow = () => row.selected = this._settings.get_enum(key);
+        follow();
+        this._settings.connect('changed::' + key, follow);
+        row.connect('notify::selected', () => this._settings.set_enum(key, row.selected));
+        return row;
     }
 
     // A number, in a field that takes digits only. Adw.SpinRow is not used: it shows the number without a field.

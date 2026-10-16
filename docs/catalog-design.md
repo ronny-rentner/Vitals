@@ -147,11 +147,9 @@ An average, minimum or maximum is not read from anything. When one of them is ma
 
 After it changed the marks, the renderer tells the collector so (`shownChanged`); see the last section. What came on screen is then read at once and does not wait for the next tick, which can be a minute away (`_readNewlyShown`, decided on 2026-10-10). Only that is read: a source that is on screen and has no reading. A source whose reading is current is not read again, and one that is still inside its own interval, such as the public IP, keeps the reading it has. The same happens when the catalog changed, for instance when another sensor became a category's header.
 
-A rate needs two readings, and all sensors of one file share them: with download speed in the top bar, `/proc/net/dev` always has two, and every network speed has its value the moment its row appears. A rate whose file was not on screen before starts from nothing, and it is not computed across the time its file was off screen. So a first reading that leaves a sensor without a value is followed by a second reading one second later (`SECOND_READING_SECONDS`), and the rate shows what happened in that second until the next tick. The second reading is called off when the source leaves the screen before it or a tick was first to bring the value, and when it falls into a discovery run it waits for the end of that run.
+A rate needs two readings, and all sensors of one file share them: with download speed in the top bar, `/proc/net/dev` always has two, and every network speed has its value the moment its row appears. A rate whose file was not on screen before starts from nothing, and it is not computed across the time its file was off screen. So a first reading that leaves a sensor without a value is followed by a second reading one second later (`SECOND_READING_SECONDS`), and the rate shows what happened in that second until the next tick. A tick before the second reading does not read the source, so the rate spans that second. A rate is not computed against a reading younger than half the update interval but against the one that reading was computed against: a tick right after the second reading spans from the first reading, and Refresh right after a tick from the tick before. Only the second reading is computed against the first, however young. The second reading is called off when the source leaves the screen before it, and when it falls into a discovery run it waits for the end of that run.
 
 A reading from `nvidia-smi` holds only the fields that were asked for. When another sensor of a card comes on screen, the process is started again with more fields, and the reading it left counts as none, so the new sensor is read at once like any other.
-
-A tick can follow a first reading within a moment. A rate over less than half a second says nothing (processor usage over 4 ms reads 0), so a reading that arrives that soon after the last one is compared with the reading before the last one, or gives no rate when there is none (`SHORTEST_RATE_SECONDS`).
 
 ## Sensors with the same key
 
@@ -235,7 +233,6 @@ No sensor is read while a discovery run is in progress.
 That way no sensor is ever read through a path that the run is about to turn off.
 
 The readings taken before the run are kept. A rate, such as network speed, is then computed between the last reading before the run and the first one after it, over the time that really passed, so it does not start over with "…" after each discovery.
-
 ## Links on disk
 
 A link, in the panel or as a category's `header`, is a pointer to its sensor while the extension runs. On disk it is written as the category and the key of that sensor. At launch each link is turned back into a pointer, to the sensor with that key in that category.

@@ -1,14 +1,8 @@
-import {PENDING, cpuUsage, parseCpuStat, parseNetwork, parseMountTable, isRemoteMount, parseTypesWithoutDevice, parseMemory, parseBattery, batteryTime} from '../helpers/sensorMath.js';
+import {PENDING, cpuUsage, parseCpuStat, parseNetwork, parseMountTable, isRemoteMount, parseTypesWithoutDevice, parseBattery, batteryTime} from '../helpers/sensorMath.js';
 import {test, equal, runTests} from './harness.js';
 
-test('network snapshot parses every interface and rejects incomplete rows', () => {
+test('a network snapshot with an incomplete row is rejected', () => {
     let header = 'Inter-| Receive | Transmit\n face |bytes packets errs drop fifo frame compressed multicast|bytes packets errs drop fifo colls carrier compressed\n';
-    let row = (name, {rx, tx}) => name + ': ' + rx + ' 0 0 0 0 0 0 0 ' + tx + ' 0 0 0 0 0 0 0\n';
-    let vpn = {rx: 100, tx: 50};
-    let snapshot = parseNetwork(header + row('lo', {rx: 2, tx: 2}) + row('vpn0', vpn) + row('br0', {rx: 200, tx: 75}));
-    equal(snapshot.get('vpn0').rx, vpn.rx);
-    equal(snapshot.get('vpn0').tx, vpn.tx);
-    equal(snapshot.has('br0'), true);
     let rejected = false;
     try {
         parseNetwork(header + 'vpn0: 100 0');
@@ -28,10 +22,7 @@ test('CPU rates use counter deltas and a zero counter is a valid baseline', () =
     equal(cpuUsage({value}, 'cpu'), PENDING);
 });
 
-test('memory and battery inputs use canonical units', () => {
-    let kilobytes = 1024;
-    equal(parseMemory('MemTotal: ' + kilobytes + ' kB\n').MemTotal, kilobytes * 1024);
-
+test('a battery that reports charge instead of energy has its values in watts and watt-hours', () => {
     // sysfs reports microvolts, microamperes and microampere-hours.
     let micro = 1000000;
     let volts = 12, amperes = 1, ampereHoursNow = 2, ampereHoursFull = 4;

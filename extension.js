@@ -2,7 +2,7 @@ import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
-import St from 'gi://St'
+import St from 'gi://St';
 
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
@@ -44,6 +44,10 @@ const LABEL_ORDER = new Intl.Collator(undefined, {numeric: true, sensitivity: 'b
 // How strongly a top-bar icon is drawn, with the option on and with it off. 255 is fully opaque.
 const PANEL_ICON_OPACITY = {true: 165, false: 255};
 
+// Where Vitals sits in the top bar for each value of the enum `position-in-panel`, far left to far right: a box of
+// the top bar and the index in it, 0 for the box's start and -1 for its end.
+const PANEL_POSITIONS = [['left', 0], ['left', -1], ['center', -1], ['right', 0], ['right', -1]];
+
 var VitalsMenuButton = GObject.registerClass({
     GTypeName: 'VitalsMenuButton',
 }, class VitalsMenuButton extends PanelMenu.Button {
@@ -51,8 +55,7 @@ var VitalsMenuButton = GObject.registerClass({
         // 0.5: the menu's middle is under the point of this item that the menu is attached to (see _alignMenu).
         super._init(0.5);
 
-        if (this._clickGesture)
-            this._clickGesture.set_recognize_on_press(false);
+        this._clickGesture.set_recognize_on_press(false);
 
         this._extensionObject = extensionObject;
         this._settings = extensionObject.getSettings();
@@ -137,7 +140,7 @@ var VitalsMenuButton = GObject.registerClass({
 
         for (let setting of [
             'use-higher-precision', 'fixed-widths', 'hide-icons', 'unit', 'icon-style',
-            'memory-measurement', 'network-public-ip-show-flag', 'network-speed-format', 'network-speed-unit',
+            'memory-measurement', 'network-speed-format', 'network-speed-unit',
             'storage-measurement'
         ])
             this._settings.connectObject('changed::' + setting, this._redrawMenu.bind(this), this);
@@ -179,14 +182,14 @@ var VitalsMenuButton = GObject.registerClass({
 
         // custom round refresh button
         let refreshButton = this._createRoundButton('view-refresh-symbolic', _('Refresh'));
-        refreshButton.connect('clicked', (self) => {
+        refreshButton.connect('clicked', () => {
             this._refresh();
         });
         customButtonBox.add_child(refreshButton);
 
         // custom round monitor button
         let monitorButton = this._createRoundButton('org.gnome.SystemMonitor-symbolic', _('System Monitor'));
-        monitorButton.connect('clicked', (self) => {
+        monitorButton.connect('clicked', () => {
             this.menu._getTopMenu().close();
             Util.spawn(this._settings.get_string('monitor-cmd').split(" "));
         });
@@ -194,7 +197,7 @@ var VitalsMenuButton = GObject.registerClass({
 
         // custom round preferences button
         let prefsButton = this._createRoundButton('preferences-system-symbolic', _('Preferences'));
-        prefsButton.connect('clicked', (self) => {
+        prefsButton.connect('clicked', () => {
             this.menu._getTopMenu().close();
             this._extensionObject.openPreferences();
         });
@@ -263,7 +266,6 @@ var VitalsMenuButton = GObject.registerClass({
 
         this._groups[groupName]._statusLabel = this._defaultLabel();
         this._groups[groupName].actor.insert_child_at_index(this._groups[groupName]._statusLabel, 4);
-        this._groups[groupName]._statusLabel.text = _('No Data');
 
         // GNOME Shell slides a submenu open and shut only when it needs no scrollbar, and shows one with a scrollbar
         // at once. So that every category behaves the same, the Shell's slide is never used: with the
@@ -423,7 +425,7 @@ var VitalsMenuButton = GObject.registerClass({
         this._refreshTimeoutId = GLib.timeout_add_seconds(
             GLib.PRIORITY_DEFAULT,
             update_time,
-            (self) => {
+            () => {
                 this._querySensors();
                 return GLib.SOURCE_CONTINUE;
             }
@@ -450,7 +452,7 @@ var VitalsMenuButton = GObject.registerClass({
         }
     }
 
-    _createPanelItem(link, gicon) {
+    _createPanelItem(link) {
         let sensor = link.sensor;
         let emphasizeValues = this._settings.get_boolean('emphasize-values');
         let item = new St.BoxLayout({
@@ -464,7 +466,7 @@ var VitalsMenuButton = GObject.registerClass({
                 style_class: 'system-status-icon',
                 opacity: PANEL_ICON_OPACITY[emphasizeValues],
                 reactive: true,
-                gicon: gicon || Gio.icon_new_for_string(this._sensorIconPath(link.category, this._iconName(sensor)))
+                gicon: Gio.icon_new_for_string(this._sensorIconPath(link.category, this._iconName(sensor)))
             }));
         }
 
@@ -605,9 +607,8 @@ var VitalsMenuButton = GObject.registerClass({
         }
 
         for (let link of shownLinks) {
-            // A public IP's row may show a country flag; its top-bar item starts with the same icon.
             if (!this._panelItems.has(link))
-                this._createPanelItem(link, this._rows.get(link.sensor)?.gicon);
+                this._createPanelItem(link);
             this._menuLayout.set_child_above_sibling(this._panelItems.get(link).item, null);
         }
     }
@@ -695,9 +696,8 @@ var VitalsMenuButton = GObject.registerClass({
                 let row = this._rows.get(sensor);
                 if (row.label != this._label(sensor))
                     row.label = this._label(sensor);
-                // Once a reading gives the public IP a country, its row's icon follows that reading, not the catalog.
                 let gicon = Gio.icon_new_for_string(this._sensorIconPath(name, this._iconName(sensor)));
-                if (sensor.country === undefined && !row.gicon.equal(gicon))
+                if (!row.gicon.equal(gicon))
                     row.gicon = gicon;
                 row.pinned = pinnedSensors.has(sensor);
                 // The star marks the sensor whose value the category's header shows, whoever chose it.
@@ -798,20 +798,17 @@ var VitalsMenuButton = GObject.registerClass({
         panel.actor.ease({height: openHeight, duration: animate ? SENSOR_PANEL_MILLISECONDS : 0,
             onStopped: () => panel.actor.set_height(-1)});
 
-        // While the panel is open, a click anywhere else and the Escape key close it and do nothing else. The Shell
-        // sends every event to the open menu only, so that is where they are seen. While the sensor's name is
-        // typed, both belong to the field for it.
+        // While the panel is open, a click anywhere else closes it and does nothing else. The Shell sends every event
+        // to the open menu only, so that is where it is seen. While the sensor's name is typed, the click belongs to
+        // the field for it.
         this.menu.actor.connectObject('captured-event', (menuActor, event) => {
             if (header.editing) return Clutter.EVENT_PROPAGATE;
-            let escape = event.type() == Clutter.EventType.KEY_PRESS && event.get_key_symbol() == Clutter.KEY_Escape;
-            let press = event.type() == Clutter.EventType.BUTTON_PRESS || event.type() == Clutter.EventType.TOUCH_BEGIN;
-            if (press) {
-                let [x, y] = event.get_coords();
-                let [left, top] = panel.actor.get_transformed_position();
-                let [width, height] = panel.actor.get_transformed_size();
-                press = x < left || x >= left + width || y < top || y >= top + height;
-            }
-            if (!escape && !press) return Clutter.EVENT_PROPAGATE;
+            if (event.type() != Clutter.EventType.BUTTON_PRESS && event.type() != Clutter.EventType.TOUCH_BEGIN)
+                return Clutter.EVENT_PROPAGATE;
+            let [x, y] = event.get_coords();
+            let [left, top] = panel.actor.get_transformed_position();
+            let [width, height] = panel.actor.get_transformed_size();
+            if (x >= left && x < left + width && y >= top && y < top + height) return Clutter.EVENT_PROPAGATE;
             this._closeRowActions(true);
             return Clutter.EVENT_STOP;
         }, panel.actor);
@@ -907,12 +904,6 @@ var VitalsMenuButton = GObject.registerClass({
     _render(changedSensors = null) {
         if (this._dragging || this._sensors.destroyed) return;
         let changed = sensor => !changedSensors || changedSensors.has(sensor);
-        let showFlag = this._settings.get_boolean('network-public-ip-show-flag');
-        let flagIcon = sensor => {
-            let country = showFlag ? sensor.country : '';
-            let icon = country && /^[a-z]{2}$/.test(country) && country != 'xx' ? 'icon-' + country : 'icon';
-            return Gio.icon_new_for_string(this._sensorIconPath('network', icon));
-        };
         for (let [name, category] of this._sensors.categories()) {
             let headerLabel = this._groups[name]._statusLabel;
             let header = category.header;
@@ -937,8 +928,6 @@ var VitalsMenuButton = GObject.registerClass({
             row.visible = sensor.status != 'unavailable';
             if (row.value != formatted.text) row.value = formatted.text;
             if (row.valueStyle != formatted.style) row.valueStyle = formatted.style;
-            if (sensor.country !== undefined && !row.gicon.equal(flagIcon(sensor)))
-                row.gicon = flagIcon(sensor);
         }
         for (let [link, {item, value}] of this._panelItems) {
             let sensor = link.sensor;
@@ -948,9 +937,6 @@ var VitalsMenuButton = GObject.registerClass({
             if (value.text != formatted.text) this._setPanelText(value, formatted);
             if (value.style != formatted.style) value.style = formatted.style;
             this._reserveWidth(sensor, value);
-            let icon = item.get_first_child();
-            if (sensor.country !== undefined && icon instanceof St.Icon && !icon.gicon.equal(flagIcon(sensor)))
-                icon.gicon = flagIcon(sensor);
         }
         let visible = [...this._panelItems.values()].some(({item}) => item.visible);
         if (!visible && !this._defaultItem)
@@ -975,46 +961,13 @@ var VitalsMenuButton = GObject.registerClass({
     }
 
     _sensorIconPath(sensor, icon = 'icon') {
-        // allows country flags to show
         const icons = this._sensorIcons[sensor];
-        if (sensor === 'network' && icon.startsWith('icon-') && !(icons && icons[icon])) {
-            let cc = icon.slice('icon-'.length);
-            if (/^[a-z]{2}$/.test(cc))
-                return this._extensionObject.path + '/icons/flags/1x1/' + cc + '.svg';
-        }
-
         const iconPathPrefixIndex = this._settings.get_int('icon-style');
         return this._extensionObject.path + this._sensorsIconPathPrefix[iconPathPrefixIndex] + icons[icon];
     }
 
     _positionInPanel() {
-        let alignment = '';
-        let gravity = 0;
-
-        switch (this._settings.get_int('position-in-panel')) {
-            case 0: // left
-                alignment = 'left';
-                gravity = -1;
-                break;
-            case 1: // center
-                alignment = 'center';
-                gravity = -1;
-                break;
-            case 2: // right
-                alignment = 'right';
-                gravity = 0;
-                break;
-            case 3: // far left
-                alignment = 'left';
-                gravity = 0;
-                break;
-            case 4: // far right
-                alignment = 'right';
-                gravity = -1;
-                break;
-        }
-
-        return [alignment, gravity];
+        return PANEL_POSITIONS[this._settings.get_enum('position-in-panel')];
     }
 
     async _discoverSensors() {
