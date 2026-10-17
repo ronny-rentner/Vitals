@@ -13,12 +13,7 @@ By default, the top bar shows memory usage, system load and download speed. For 
 | General › **Use higher precision** enabled. Values have one more decimal place, and uptimes include seconds. Shown: battery charge, battery power rate, processor frequency and uptime. | ![](top-bar-precision.png) ![](top-bar-precision-light.png) |
 | Temperature › **Unit** set to °F and Network › **Measure in** set to Bits. Shown: download and upload speed, downloaded and uploaded since boot, and the processor's temperature. | ![](top-bar-fahrenheit-bits.png) ![](top-bar-fahrenheit-bits-light.png) |
 | **Threshold Colors** defined on the Temperature and Memory pages. A color applies from its threshold value up to the next one. | ![](top-bar-colors.png) ![](top-bar-colors-light.png) |
-
-Any value in the menu can be pinned to the top bar. The following screenshots show four others: the WiFi signal with its bars, battery charge, screen redraws and free storage.
-
-![](top-bar-many.png)
-
-![](top-bar-many-light.png)
+| Default settings. Any value in the menu can be pinned to the top bar; shown: the WiFi signal with its bars, battery charge, screen redraws and free storage. | ![](top-bar-many.png) ![](top-bar-many-light.png) |
 
 ## Menu
 
