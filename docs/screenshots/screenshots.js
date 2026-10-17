@@ -69,9 +69,9 @@ export async function run() {
     // read while the extension looks for hardware, which it does after a setting changed and when the menu opens.
     let read = async () => {
         await button._discoverSensors();
-        await button._querySensors();
+        await button._readSensors();
         await Scripting.sleep(1100);
-        await button._querySensors();
+        await button._readSensors();
         await Scripting.sleep(400);
     };
     let set = options => {
@@ -95,7 +95,7 @@ export async function run() {
             if (sensor)
                 sensors.setPanelSensorVisible(categoryName, sensor, visible);
         }
-        button._syncCatalog();
+        button._syncMenuRows();
         // The item has its new size from the next frame on, and the menu opens where the item is.
         await Scripting.sleep(300);
     };
@@ -104,7 +104,7 @@ export async function run() {
     let topBar = async (name, options = {}) => {
         set(options);
         // Each picture shows its values in the room they need, not in the room the picture before left reserved.
-        button._widths.clear();
+        button._reservedWidths.clear();
         button._redrawPanelItems();
         await read();
         await capture(name, button);
@@ -114,7 +114,7 @@ export async function run() {
     let menu = async (name, categoryName = null, actionsOf = null) => {
         button.menu.open();
         if (categoryName)
-            button._groups[categoryName].menu.open();
+            button._categoryMenus[categoryName].menu.open();
         await read();
         if (actionsOf) {
             button._rows.get(actionsOf).activate();
@@ -125,7 +125,7 @@ export async function run() {
             button._rows.get(actionsOf).activate();
         // A category stays open while the menu is closed, and the next picture may want all of them closed.
         if (categoryName)
-            button._groups[categoryName].menu.close(true);
+            button._categoryMenus[categoryName].menu.close(true);
         button.menu.close();
     };
 

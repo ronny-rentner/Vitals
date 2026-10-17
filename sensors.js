@@ -292,13 +292,13 @@ export class Sensors {
         // Everything that is read, by its id: a file's path, or the name of a source that is not a file. Each holds
         // how it is read, its last reading, the read that is under way, and a second reading that is scheduled.
         this.sources = new Map();
-        // The sources that are read at the moment, each with the sensors that are written from its reading, as
+        // The sources that are read at the moment, each with the sensors that are updated from its reading, as
         // pairs of category name and sensor.
         this.activeSources = new Map();
-        // The names of the categories that show a value over all their sensors at the moment (see _select).
-        this.summarised = new Set();
-        // The reads that each of those categories waits for before it writes that value (see _readSources).
-        this.summaryReads = new Map();
+        // The names of the categories that show a value over all their sensors at the moment (see _updateActiveSources).
+        this.aggregatedCategories = new Set();
+        // The reads that each of those categories waits for before it updates that value (see _readSources).
+        this.aggregateReads = new Map();
         this.destroyed = false;
         this.onCatalogChanged = () => {};
         this.onValuesChanged = () => {};
@@ -310,7 +310,7 @@ export class Sensors {
         this._nvidia = null;
         this._frameSignal = 0;
         this._frames = 0;
-        this._framesCounted = 0;
+        this._framesCountedSince = 0;
         // For each battery file, the charging state it is in and its last readings of the time left in that state.
         this._batteryTimes = new Map();
         // The read of the mount table that is under way, which every storage location of a tick waits for.
@@ -382,7 +382,7 @@ export class Sensors {
 
     // Whether a panel link has a top-bar item: it is visible, its sensor is on the machine, and that sensor's
     // category is switched on.
-    linkShown(link) {
+    hasPanelItem(link) {
         let category = this.catalog[link.category];
         return link.visible && category.enabled && sensorPresent(category, link.sensor);
     }
@@ -442,7 +442,7 @@ export class Sensors {
         if (this.sources.has(id)) {
             Object.assign(this.sources.get(id), definition);
         } else {
-            this.sources.set(id, {interval: 0, ...definition, pending: null});
+            this.sources.set(id, {interval: 0, ...definition, pendingRead: null});
         }
     }
 
@@ -454,7 +454,7 @@ export class Sensors {
     catalogChanged() {
         if (this.destroyed) return;
         this.onCatalogChanged();
-        this._select();
+        this._updateActiveSources();
         this.onValuesChanged(this._updateActiveSensors());
         this._readNewlyShown();
     }
@@ -463,14 +463,14 @@ export class Sensors {
     // What came on screen is read at once: the next tick can be a whole update interval away. A source nobody
     // shows any more, such as the nvidia-smi process, is stopped at once as well.
     shownChanged() {
-        this._select();
+        this._updateActiveSources();
         this._updateActiveSensors();
         this._readNewlyShown();
     }
 
     // The temperatures, voltages or fan speeds of a category that are read from the machine and that the user has
     // not hidden, without the average, minimum and maximum that temperatures and fans have over them.
-    _measured(category) {
+    _aggregatedSensors(category) {
         return category.sensors.filter(sensor => sensorPresent(category, sensor) && !sensor.aggregate && !sensor.hidden);
     }
 
@@ -492,20 +492,20 @@ export class Sensors {
     // a storage location is the location. A sensor whose value discovery wrote, such as the kernel version, has
     // none, and neither has an average, minimum or maximum.
     _sourceOf(categoryName, sensor) {
-        return sensor.file ?? (sensor.nvidia ? NVIDIA : (sensor.location ?? this._fixed(categoryName, sensor)?.source));
+        return sensor.file ?? (sensor.nvidia ? NVIDIA : (sensor.location ?? this._fixedEntry(categoryName, sensor)?.source));
     }
 
     // The sensor's entry in the FIXED table, if it has one. A machine can have several batteries and several
     // storage locations, so their sensors have the battery's name or the location in their key, and name their
     // entry in `field`.
-    _fixed(categoryName, sensor) {
+    _fixedEntry(categoryName, sensor) {
         return FIXED[categoryName]?.[sensor.field ?? sensor.key];
     }
 
     // A sensor's value, from the reading of its source. The catalog holds no functions; which rule applies
     // follows from the category and the sensor's fields alone.
     _value(categoryName, sensor, reading) {
-        let known = this._fixed(categoryName, sensor);
+        let known = this._fixedEntry(categoryName, sensor);
         if (known?.value)
             return known.value(reading, sensor, this);
         if (sensor.interface) {
@@ -527,20 +527,20 @@ export class Sensors {
     }
 
     // Goes over the catalog once and works out what is read: the source of every sensor that is on screen, with
-    // the sensors that are written from its reading. A category that shows a value over all its sensors, an
+    // the sensors that are updated from its reading. A category that shows a value over all its sensors, an
     // average, minimum or maximum, has all of them read.
-    _select() {
+    _updateActiveSources() {
         let activeSources = new Map();
-        let summarised = new Set();
+        let aggregatedCategories = new Set();
         if (!this.destroyed) {
             for (let [name, category] of this.categories()) {
                 let onScreen = sensor => (sensor.shown || (category.shown && sensor == category.header)) &&
                     sensorPresent(category, sensor);
                 if (category.sensors.some(sensor => sensor.aggregate && onScreen(sensor)))
-                    summarised.add(name);
+                    aggregatedCategories.add(name);
                 for (let sensor of category.sensors) {
-                    let summarisedSensor = summarised.has(name) && sensorPresent(category, sensor) && !sensor.hidden;
-                    if (!onScreen(sensor) && !summarisedSensor) continue;
+                    let aggregatedCategoriesSensor = aggregatedCategories.has(name) && sensorPresent(category, sensor) && !sensor.hidden;
+                    if (!onScreen(sensor) && !aggregatedCategoriesSensor) continue;
                     let id = this._sourceOf(name, sensor);
                     if (id === undefined) continue;
                     if (!this.sources.has(id) && id == sensor.location) {
@@ -559,9 +559,9 @@ export class Sensors {
 
         for (let id of this.activeSources.keys()) {
             if (!activeSources.has(id))
-                this._stopSource(id);
+                this._stopReading(id);
         }
-        for (let [id, written] of activeSources) {
+        for (let [id, fed] of activeSources) {
             let source = this.sources.get(id);
             if (!this.activeSources.has(id)) {
                 // A reading still inside its interval stays as it is; reading the source again is not due yet. So does
@@ -574,10 +574,10 @@ export class Sensors {
                 if (source.start) source.start();
             }
             if (source.configure)
-                source.configure(written.map(([, sensor]) => sensor));
+                source.configure(fed.map(([, sensor]) => sensor));
         }
         this.activeSources = activeSources;
-        this.summarised = summarised;
+        this.aggregatedCategories = aggregatedCategories;
     }
 
     // Whether the source's last read, successful or failed, is younger than its interval.
@@ -589,13 +589,13 @@ export class Sensors {
     }
 
     _cancelRead(source) {
-        if (source.pending) {
-            source.pending.cancellation.cancel();
-            source.pending = null;
+        if (source.pendingRead) {
+            source.pendingRead.cancellation.cancel();
+            source.pendingRead = null;
         }
     }
 
-    _stopSource(id) {
+    _stopReading(id) {
         let source = this.sources.get(id);
         this._cancelRead(source);
         this._callOffSecondReading(source);
@@ -625,13 +625,13 @@ export class Sensors {
     async poll(force = false) {
         // No sensor is read while a discovery run is in progress. This tick is skipped, not made up for later.
         if (this.destroyed || this._discovery) return;
-        this._select();
+        this._updateActiveSources();
         // A source that waits for its second reading is left to it, so its rate spans that second. Refresh reads it.
         await this._readSources(id => force || (!this.sources.get(id).secondReading && !this._withinInterval(id)));
     }
 
     // Reads what just came on screen, without waiting for a tick: the sources on screen that have no reading.
-    // One that was read before has none when _select found its reading older than its interval.
+    // One that was read before has none when _updateActiveSources found its reading older than its interval.
     _readNewlyShown() {
         // Nothing is read during a discovery run. The run calls this when it ends.
         if (this._discovery) return;
@@ -646,20 +646,20 @@ export class Sensors {
         let reads = [];
         for (let id of this.activeSources.keys()) {
             let source = this.sources.get(id);
-            if (source.pending) {
-                reads.push(source.pending.promise);
+            if (source.pendingRead) {
+                reads.push(source.pendingRead.promise);
                 continue;
             }
             if (!due(id))
                 continue;
 
             let pendingRead = {cancellation: new Gio.Cancellable()};
-            source.pending = pendingRead;
+            source.pendingRead = pendingRead;
             pendingRead.promise = Promise.resolve().then(() => {
-                if (source.pending == pendingRead) return source.read(pendingRead.cancellation);
+                if (source.pendingRead == pendingRead) return source.read(pendingRead.cancellation);
             }).then(value => {
-                if (source.pending != pendingRead || this.destroyed) return;
-                let time = source.sampleTime ? source.sampleTime(value) : clock();
+                if (source.pendingRead != pendingRead || this.destroyed) return;
+                let time = source.readingTime ? source.readingTime(value) : clock();
                 let last = source.reading;
                 // A rate is computed against the last reading that succeeded, never across a failure or a stop. One
                 // younger than half the update interval, such as a tick or Refresh right after another reading, is
@@ -670,36 +670,36 @@ export class Sensors {
                     : tooYoung && last.previous ? last.previous : {value: last.value, time: last.time};
                 source.reading = {value, time, status: 'ready', previous};
             }).catch(error => {
-                if (source.pending != pendingRead || this.destroyed) return;
+                if (source.pendingRead != pendingRead || this.destroyed) return;
                 let previous = source.reading;
                 // A failed read is an expected state, handled by marking the reading unavailable. It is not an error.
                 if (!previous || previous.status != 'unavailable')
                     console.debug(id, error);
                 source.reading = {...previous, time: clock(), status: 'unavailable'};
             }).finally(() => {
-                if (source.pending != pendingRead || this.destroyed) return;
-                source.pending = null;
-                let written = this._updateSensors(id);
-                this.onValuesChanged(new Set(written));
+                if (source.pendingRead != pendingRead || this.destroyed) return;
+                source.pendingRead = null;
+                let updated = this._updateSensors(id);
+                this.onValuesChanged(new Set(updated));
                 // A first reading that leaves a sensor without a value, as it does a rate, is followed by a second.
-                let withoutValue = written.some(sensor => sensor.status == 'pending');
+                let withoutValue = updated.some(sensor => sensor.status == 'pending');
                 if (withoutValue && !source.reading.previous && !source.secondReading)
                     this._scheduleSecondReading(id, source);
             });
             reads.push(pendingRead.promise);
         }
-        // What a category shows over all its sensors is written once, when the reads of its sensors are in.
+        // What a category shows over all its sensors is updated once, when the reads of its sensors are in.
         let summaries = [];
-        for (let name of this.summarised) {
-            let categoryReads = [...this.activeSources].filter(([, written]) => written.some(([categoryName]) => categoryName == name))
-                .map(([id]) => this.sources.get(id).pending?.promise).filter(Boolean);
+        for (let name of this.aggregatedCategories) {
+            let categoryReads = [...this.activeSources].filter(([, fed]) => fed.some(([categoryName]) => categoryName == name))
+                .map(([id]) => this.sources.get(id).pendingRead?.promise).filter(Boolean);
             if (!categoryReads.length) continue;
-            this.summaryReads.set(name, categoryReads);
+            this.aggregateReads.set(name, categoryReads);
             summaries.push(Promise.all(categoryReads).then(() => {
-                // Reads started since then have the category wait anew, so it is written once. A discovery run or
+                // Reads started since then have the category wait anew, so it is updated once. A discovery run or
                 // another choice of what is shown has called these reads off.
-                if (this.summaryReads.get(name) != categoryReads || this.destroyed || this._discovery || !this.summarised.has(name)) return;
-                this.onValuesChanged(new Set(this._summarise(name)));
+                if (this.aggregateReads.get(name) != categoryReads || this.destroyed || this._discovery || !this.aggregatedCategories.has(name)) return;
+                this.onValuesChanged(new Set(this._updateAggregates(name)));
             }));
         }
         await Promise.all([...reads, ...summaries]);
@@ -725,7 +725,7 @@ export class Sensors {
         return this.activeSources.get(id).map(([categoryName, sensor]) => {
             if (reading?.status == 'ready') {
                 this._assign(sensor, this._value(categoryName, sensor, reading));
-                let icon = this._fixed(categoryName, sensor)?.icon;
+                let icon = this._fixedEntry(categoryName, sensor)?.icon;
                 if (icon)
                     sensor.icon = icon(reading);
             } else
@@ -734,12 +734,13 @@ export class Sensors {
         });
     }
 
-    // Writes what a category shows over all its sensors, and returns the sensors it wrote.
-    _summarise(name) {
+    // Updates what a category shows over all its sensors, its average, minimum and maximum or the batteries' total,
+    // and returns those sensors.
+    _updateAggregates(name) {
         let category = this.catalog[name];
         // The batteries' total is over their power rates; an average, minimum or maximum is over every sensor.
         // A sensor that cannot be read is left out, so one of them does not take the summary away.
-        let readable = this._measured(category).filter(sensor =>
+        let readable = this._aggregatedSensors(category).filter(sensor =>
             sensor.status != 'unavailable' && (name != 'battery' || sensor.field == 'power-rate'));
         let pending = readable.some(sensor => sensor.status == 'pending');
         let aggregates = category.sensors.filter(sensor => sensor.aggregate && sensorPresent(category, sensor));
@@ -751,17 +752,17 @@ export class Sensors {
     // Updates every sensor that is read at the moment from the reading its source has, without reading anything,
     // and returns those sensors. The sensors of a source whose read is under way are updated when it is in.
     _updateActiveSensors() {
-        let written = new Set();
+        let updated = new Set();
         for (let id of this.activeSources.keys()) {
-            if (this.sources.get(id).pending) continue;
+            if (this.sources.get(id).pendingRead) continue;
             for (let sensor of this._updateSensors(id))
-                written.add(sensor);
+                updated.add(sensor);
         }
-        for (let name of this.summarised) {
-            for (let sensor of this._summarise(name))
-                written.add(sensor);
+        for (let name of this.aggregatedCategories) {
+            for (let sensor of this._updateAggregates(name))
+                updated.add(sensor);
         }
-        return written;
+        return updated;
     }
 
     // Reads a file, or the answer of an https address.
@@ -877,7 +878,7 @@ export class Sensors {
         };
     }
 
-    // The sources that are not one file whose content is read as it is. A file gets its source when it is first read (see _select).
+    // The sources that are not one file whose content is read as it is. A file gets its source when it is first read (see _updateActiveSources).
     _registerSystemSources() {
         this.addSource(NETWORK, {read: async cancellation => {
             let interfaces = SensorMath.parseNetwork(await this._read(NETWORK, cancellation));
@@ -938,7 +939,7 @@ export class Sensors {
             configure: sensors => this._configureNvidia(sensors),
             stop: () => this._stopNvidia(),
             read: () => this._readNvidia(),
-            sampleTime: sample => sample.time
+            readingTime: sample => sample.time
         });
     }
 
@@ -1059,10 +1060,10 @@ export class Sensors {
             case 'temperature':
             case 'fan':
                 // With one sensor there is no average row; the header then shows that sensor.
-                return withKey('average') ?? this._measured(category)[0];
+                return withKey('average') ?? this._aggregatedSensors(category)[0];
             case 'voltage':
                 // The battery's voltage before the system's, and a USB supply's only when there is nothing else.
-                return this._measured(category).sort((a, b) => a.priority - b.priority || a.key.localeCompare(b.key))[0];
+                return this._aggregatedSensors(category).sort((a, b) => a.priority - b.priority || a.key.localeCompare(b.key))[0];
             case 'battery':
                 // With one battery there is no total row; the header then shows that battery's power rate. A device's
                 // battery, such as a mouse's, has none and shows its percentage.
@@ -1347,7 +1348,7 @@ export class Sensors {
     // The average, minimum and maximum over the temperatures and over the fans the machine has.
     _discoverAggregates(run) {
         for (let [categoryName, format] of Object.entries(AGGREGATED)) {
-            if (this._measured(this.catalog[categoryName]).length < 2) continue;
+            if (this._aggregatedSensors(this.catalog[categoryName]).length < 2) continue;
             // `aggregate` marks a value that is computed over the sensors and not read from the machine. In the
             // menu these are a section of their own, below the sensors.
             for (let [key, label] of [['average', 'Average'], ['minimum', 'Minimum'], ['maximum', 'Maximum']])
@@ -1355,7 +1356,7 @@ export class Sensors {
         }
     }
 
-    async _command(args) {
+    async _runProgram(args) {
         this._discoveryCancellation.set_error_if_cancelled();
         let process = Gio.Subprocess.new(args, Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE);
         this._commands.add(process);
@@ -1395,7 +1396,7 @@ export class Sensors {
             if (staticInfo)
                 nvidiaFields.push(...nvidiaStaticFields.map(([, field]) => field), 'pcie.link.gen.max', 'pcie.link.width.max');
             try {
-                let output = await this._command(['nvidia-smi', '--query-gpu=' + nvidiaFields.join(','), '--format=csv,noheader,nounits']);
+                let output = await this._runProgram(['nvidia-smi', '--query-gpu=' + nvidiaFields.join(','), '--format=csv,noheader,nounits']);
                 nvidiaCards = output.split('\n').filter(line => line.trim()).map(line => line.split(',').map(part => part.trim()));
             } catch (error) {
                 if (!this.destroyed) console.error('nvidia discovery', error);
@@ -1488,7 +1489,7 @@ export class Sensors {
         let interval = this._settings.get_int('update-time');
         let signature = [fields.join(','), uuids.join(','), interval].join(';');
         if (this._nvidia && this._nvidia.signature == signature && !this._nvidia.error) return;
-        this._stopSource(NVIDIA);
+        this._stopReading(NVIDIA);
         // The reading of the process that ran so far lacks the fields that are asked for from now on.
         let source = this.sources.get(NVIDIA);
         if (source.reading)
@@ -1571,7 +1572,7 @@ export class Sensors {
     // monitor is drawn on its own, so with several, a frame counts once per monitor.
     _startFrames() {
         this._frames = 0;
-        this._framesCounted = clock();
+        this._framesCountedSince = clock();
         if (typeof global == 'undefined' || !global.stage) return;
         this._frameSignal = global.stage.connect('after-paint', () => this._frames++);
     }
@@ -1580,10 +1581,10 @@ export class Sensors {
     _readFrames() {
         let now = clock();
         // Right after the start too few frames are counted for a rate; the second reading a second later has one.
-        if (now - this._framesCounted < SECOND_READING_SECONDS) return SensorMath.PENDING;
-        let rate = this._frames / (now - this._framesCounted);
+        if (now - this._framesCountedSince < SECOND_READING_SECONDS) return SensorMath.PENDING;
+        let rate = this._frames / (now - this._framesCountedSince);
         this._frames = 0;
-        this._framesCounted = now;
+        this._framesCountedSince = now;
         return rate;
     }
 
@@ -1596,7 +1597,7 @@ export class Sensors {
 
     destroy() {
         this.destroyed = true;
-        this._select();
+        this._updateActiveSources();
         this._discoveryCancellation.cancel();
         for (let process of this._commands)
             process.force_exit();

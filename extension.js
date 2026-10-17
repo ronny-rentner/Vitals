@@ -78,13 +78,13 @@ var VitalsMenuButton = GObject.registerClass({
         }, this);
 
         // Category name to its submenu in the dropdown.
-        this._groups = {};
-        // What is on screen, held by the thing it shows: sensor to its menu row, panel link to its top-bar item
-        // and value, and sensor to the width kept free for its top-bar text (for fixed widths, see _reservedWidth).
+        this._categoryMenus = {};
         this._clock = () => GLib.get_monotonic_time() / 1000000;
+        // What is on screen, held by the thing it shows: sensor to its menu row, panel link to its top-bar item
+        // and value, and sensor to the width kept free for its top-bar text (for fixed widths, see _widthToReserve).
         this._rows = new Map();
         this._panelItems = new Map();
-        this._widths = new Map();
+        this._reservedWidths = new Map();
         // Category name to the sensor whose value its header shows.
         this._headerSensors = new Map();
         // The panel with a sensor's actions that is open under the sensor's row, with what belongs to it: the
@@ -96,7 +96,7 @@ var VitalsMenuButton = GObject.registerClass({
         // Category name to the line above the rows that are set apart at its end, where there is one.
         this._separators = new Map();
         // The icon shown in the top bar while no sensor is.
-        this._defaultItem = null;
+        this._placeholderIcon = null;
         // The place on screen, as an x position, that the open menu is centred under.
         this._menuAnchorX = 0;
         this._dragging = false;
@@ -121,9 +121,9 @@ var VitalsMenuButton = GObject.registerClass({
 
         this._initializeMenu();
         // Shows the saved catalog at once, before the hardware has been looked for.
-        this._syncCatalog();
+        this._syncMenuRows();
 
-        this._sensors.onCatalogChanged = () => this._syncCatalog();
+        this._sensors.onCatalogChanged = () => this._syncMenuRows();
         this._sensors.onValuesChanged = recomputedSensors => this._render(recomputedSensors);
         // The collector reads what is on screen when the run ends; the timer's first tick is a whole update interval away.
         this._discoverSensors();
@@ -141,12 +141,12 @@ var VitalsMenuButton = GObject.registerClass({
             'changed::category-order', this._rebuildCategories.bind(this),
             'changed::emphasize-values', () => {
                 // The texts get another width with another font.
-                this._widths.clear();
+                this._reservedWidths.clear();
                 this._redrawPanelItems();
             },
             'changed::catalog', this._enabledCategoriesChanged.bind(this),
-            'changed::network-hardware-only', this._syncCatalog.bind(this),
-            'changed::include-aggregates', this._syncCatalog.bind(this),
+            'changed::network-hardware-only', this._syncMenuRows.bind(this),
+            'changed::include-aggregates', this._syncMenuRows.bind(this),
             this);
 
         for (let setting of [
@@ -221,7 +221,7 @@ var VitalsMenuButton = GObject.registerClass({
         // A button that stays pressed in: while it is, the hidden sensors are in the menu, marked as hidden.
         this._hiddenButton = this._createRoundButton('view-conceal-symbolic', _('Show hidden sensors'));
         this._hiddenButton.toggle_mode = true;
-        this._hiddenButton.connect('clicked', () => this._syncCatalog());
+        this._hiddenButton.connect('clicked', () => this._syncMenuRows());
         customButtonBox.add_child(this._hiddenButton);
 
         // now add the buttons to the top bar
@@ -272,20 +272,20 @@ var VitalsMenuButton = GObject.registerClass({
 
     // `position` is the category's place among the items of the menu; without one it is added at the end.
     _initializeMenuGroup(groupName, category, position) {
-        this._groups[groupName] = new PopupMenu.PopupSubMenuMenuItem(_(SensorCategories.sensorCategories[groupName].name), true);
-        this._groups[groupName].icon.gicon = this._gicon(groupName);
+        this._categoryMenus[groupName] = new PopupMenu.PopupSubMenuMenuItem(_(SensorCategories.sensorCategories[groupName].name), true);
+        this._categoryMenus[groupName].icon.gicon = this._gicon(groupName);
 
         // hide menu items that user has requested to not include
         if (!category.enabled)
-            this._groups[groupName].actor.hide();
+            this._categoryMenus[groupName].actor.hide();
 
-        this._groups[groupName]._statusLabel = this._defaultLabel();
-        this._groups[groupName].actor.insert_child_at_index(this._groups[groupName]._statusLabel, 4);
+        this._categoryMenus[groupName]._statusLabel = this._defaultLabel();
+        this._categoryMenus[groupName].actor.insert_child_at_index(this._categoryMenus[groupName]._statusLabel, 4);
 
         // GNOME Shell slides a submenu open and shut only when it needs no scrollbar, and shows one with a scrollbar
         // at once. So that every category behaves the same, the Shell's slide is never used: with the
         // "animate categories" option, every category slides the way described below, and without it none does.
-        let submenu = this._groups[groupName].menu;
+        let submenu = this._categoryMenus[groupName].menu;
         let openSubmenu = submenu.open.bind(submenu);
         let closeSubmenu = submenu.close.bind(submenu);
         submenu.open = () => {
@@ -294,7 +294,7 @@ var VitalsMenuButton = GObject.registerClass({
             this._menuFrame = Math.max(this._menuFrame ?? 0,
                 this.menu.actor.get_preferred_height(-1)[1] - this.menu.box.get_preferred_height(-1)[1]);
             // A category that is still sliding shut is closed for good now, so that only this one moves.
-            for (let group of Object.values(this._groups))
+            for (let group of Object.values(this._categoryMenus))
                 group.menu.actor.remove_all_transitions();
             // Inside this call the Shell closes the category that was open; see submenu.close.
             this._slideShutOnOpen = null;
@@ -312,7 +312,7 @@ var VitalsMenuButton = GObject.registerClass({
             let overflow = this.menu.box.get_preferred_height(-1)[1] + this._menuFrame - this.menu.actor.get_preferred_height(-1)[1];
             // The category that was open until now slides shut at the same time, as in a menu of GNOME Shell. It
             // starts only here, after the measuring above, which is of the menu without it.
-            this._slideShutOnOpen?.(this._groups[groupName].actor);
+            this._slideShutOnOpen?.(this._categoryMenus[groupName].actor);
             this._slideShutOnOpen = null;
             // A long category has its scrollbar from the start of the slide: the rows are narrower next to it, and
             // would jump sideways if it came at the end.
@@ -335,7 +335,7 @@ var VitalsMenuButton = GObject.registerClass({
                 submenu.actor.height = openHeight - submenu.actor.margin_top - submenu.actor.margin_bottom;
                 // A category above the one that opens pulls that one up as it shuts. At the opening speed, the top and
                 // the bottom of the opening category move in step.
-                let above = openingHeader && this._groups[groupName].actor.get_transformed_position()[1] < openingHeader.get_transformed_position()[1];
+                let above = openingHeader && this._categoryMenus[groupName].actor.get_transformed_position()[1] < openingHeader.get_transformed_position()[1];
                 let duration = above ? CATEGORY_OPEN_MILLISECONDS : CATEGORY_CLOSE_MILLISECONDS;
                 submenu.actor.ease({height: 0, duration, mode: Clutter.AnimationMode.EASE_OUT_EXPO, onStopped: () => {
                     submenu.actor.hide();
@@ -351,7 +351,7 @@ var VitalsMenuButton = GObject.registerClass({
                 this._slideShutOnOpen = slideShut;
         };
 
-        this._groups[groupName].menu.connectObject('open-state-changed', () => {
+        this._categoryMenus[groupName].menu.connectObject('open-state-changed', () => {
             if (!this.menu.isOpen) return;
             this._markShown();
             this._render();
@@ -360,10 +360,10 @@ var VitalsMenuButton = GObject.registerClass({
         // A category is dragged onto another one to take that one's place. The Shell's drag and drop asks the
         // dragged actor's delegate, which for a menu item is the item itself, for what is dragged, and the item
         // under the pointer whether it takes the drop.
-        let group = this._groups[groupName];
+        let group = this._categoryMenus[groupName];
         group.getDragActor = () => new Clutter.Clone({source: group, width: group.width, height: group.height});
         group.getDragActorSource = () => group;
-        let draggedCategory = source => Object.keys(this._groups).find(name => this._groups[name] == source);
+        let draggedCategory = source => Object.keys(this._categoryMenus).find(name => this._categoryMenus[name] == source);
         group.handleDragOver = source => draggedCategory(source) && source != group
             ? DND.DragMotionResult.MOVE_DROP : DND.DragMotionResult.CONTINUE;
         group.acceptDrop = source => {
@@ -390,16 +390,16 @@ var VitalsMenuButton = GObject.registerClass({
         this._rows.clear();
         for (let categoryName of [...this._separators.keys()])
             this._removeSeparator(categoryName);
-        for (let group of Object.values(this._groups)) {
+        for (let group of Object.values(this._categoryMenus)) {
             // An open category closes when it is destroyed, and says so; by then other categories are gone.
             group.menu.disconnectObject(this);
             group.destroy();
         }
-        this._groups = {};
+        this._categoryMenus = {};
         this._headerSensors.clear();
         for (let [position, name] of this._categoriesInMenuOrder().entries())
             this._initializeMenuGroup(name, this._sensors.catalog[name], position);
-        this._syncCatalog();
+        this._syncMenuRows();
     }
 
     // The names of the categories from the top of the menu to its end.
@@ -416,9 +416,9 @@ var VitalsMenuButton = GObject.registerClass({
         names.splice(targetPosition, 0, movedName);
         this._sensors.setCategoryOrder(names);
         for (let [position, name] of names.entries()) {
-            this.menu.moveMenuItem(this._groups[name], position);
+            this.menu.moveMenuItem(this._categoryMenus[name], position);
             // The Shell moves a category without its rows, which are an actor of their own after it.
-            this.menu.box.set_child_above_sibling(this._groups[name].menu.actor, this._groups[name]);
+            this.menu.box.set_child_above_sibling(this._categoryMenus[name].menu.actor, this._categoryMenus[name]);
         }
     }
 
@@ -445,29 +445,29 @@ var VitalsMenuButton = GObject.registerClass({
             GLib.PRIORITY_DEFAULT,
             update_time,
             () => {
-                this._querySensors();
+                this._readSensors();
                 return GLib.SOURCE_CONTINUE;
             }
         );
     }
 
-    _createDefaultItem() {
-        this._defaultItem = new St.BoxLayout({
+    _createPlaceholderIcon() {
+        this._placeholderIcon = new St.BoxLayout({
             style_class: 'vitals-panel-item',
             reactive: true,
         });
-        this._menuLayout.add_child(this._defaultItem);
-        this._defaultItem.add_child(new St.Icon({
+        this._menuLayout.add_child(this._placeholderIcon);
+        this._placeholderIcon.add_child(new St.Icon({
             style_class: 'system-status-icon',
             reactive: true,
             gicon: this._gicon('system')
         }));
     }
 
-    _removeDefaultItem() {
-        if (this._defaultItem) {
-            this._defaultItem.destroy();
-            this._defaultItem = null;
+    _removePlaceholderIcon() {
+        if (this._placeholderIcon) {
+            this._placeholderIcon.destroy();
+            this._placeholderIcon = null;
         }
     }
 
@@ -504,14 +504,14 @@ var VitalsMenuButton = GObject.registerClass({
             };
             let draggable = DND.makeDraggable(item);
             draggable.connect('drag-begin', () => {
-                // While this is set, _render and _syncCatalog do nothing, so the items hold still under the pointer.
+                // While this is set, _render and _syncMenuRows do nothing, so the items hold still under the pointer.
                 this._dragging = true;
                 this.menu.close();
             });
             draggable.connect('drag-end', () => {
                 if (!this._dragging) return;
                 this._dragging = false;
-                this._syncCatalog();
+                this._syncMenuRows();
             });
         }
 
@@ -526,7 +526,7 @@ var VitalsMenuButton = GObject.registerClass({
         item.add_child(value);
         this._setPanelText(value, formatted);
 
-        this._reserveWidth(sensor, value);
+        this._applyReservedWidth(sensor, value);
     }
 
     // Writes a top-bar value. With the "emphasize values" option the unit is smaller, thinner and lighter than the
@@ -543,10 +543,10 @@ var VitalsMenuButton = GObject.registerClass({
     }
 
     // support for fixed widths #55: gives a top-bar value the width kept free for it.
-    _reserveWidth(sensor, value) {
+    _applyReservedWidth(sensor, value) {
         // With the option off no width is remembered, so a width is kept from the moment the option is switched on.
         if (!this._settings.get_boolean('fixed-widths')) {
-            this._widths.delete(sensor);
+            this._reservedWidths.delete(sensor);
             return;
         }
         // A value has the font of the theme, and so its real width, only while it is on the stage. Items are
@@ -554,19 +554,19 @@ var VitalsMenuButton = GObject.registerClass({
         if (!value.get_stage()) return;
         // The width the text needs, whatever width is set on the value. It has the theme's font once it is styled.
         value.ensure_style();
-        let reservedWidth = this._reservedWidth(sensor, value.clutter_text.get_preferred_width(-1)[1]);
+        let reservedWidth = this._widthToReserve(sensor, value.clutter_text.get_preferred_width(-1)[1]);
         if (value.width != reservedWidth)
             value.set_width(reservedWidth);
     }
 
     // Notes how wide a sensor's top-bar text is now and returns the width to keep free for it: the width it has
     // kept so far, unless the text needs more, or has needed less for WIDTH_MEMORY_SECONDS.
-    _reservedWidth(sensor, textWidth) {
+    _widthToReserve(sensor, textWidth) {
         let now = this._clock();
-        let reserved = this._widths.get(sensor);
+        let reserved = this._reservedWidths.get(sensor);
         if (!reserved || textWidth >= reserved.width || now - reserved.lastFilled >= WIDTH_MEMORY_SECONDS) {
             reserved = {width: textWidth, lastFilled: now};
-            this._widths.set(sensor, reserved);
+            this._reservedWidths.set(sensor, reserved);
         }
         return reserved.width;
     }
@@ -606,7 +606,7 @@ var VitalsMenuButton = GObject.registerClass({
     _enabledCategoriesChanged() {
         if (!this._sensors.reloadEnabled()) return;
         for (let [name, category] of this._sensors.categories())
-            this._groups[name].visible = category.enabled;
+            this._categoryMenus[name].visible = category.enabled;
         if (this._dragging) return;
         this._syncPanelItems();
         this._markShown();
@@ -617,13 +617,13 @@ var VitalsMenuButton = GObject.registerClass({
     // Brings the top bar in line with the panel links to show: removes the items whose link is no longer among
     // them and creates the ones that are missing, in the order of the links. Every other item stays as it is.
     _syncPanelItems() {
-        let shownLinks = this._sensors.catalog.panel.sensors.filter(link => this._sensors.linkShown(link));
+        let shownLinks = this._sensors.catalog.panel.sensors.filter(link => this._sensors.hasPanelItem(link));
         for (let link of [...this._panelItems.keys()]) {
             if (!shownLinks.includes(link))
                 this._removePanelItem(link);
         }
         if (shownLinks.length == 0) {
-            if (!this._defaultItem) this._createDefaultItem();
+            if (!this._placeholderIcon) this._createPlaceholderIcon();
             return;
         }
 
@@ -653,7 +653,7 @@ var VitalsMenuButton = GObject.registerClass({
         if (this._dragging) return;
         for (let link of [...this._panelItems.keys()])
             this._removePanelItem(link);
-        this._removeDefaultItem();
+        this._removePlaceholderIcon();
         this._syncPanelItems();
         this._markShown();
         this._render();
@@ -665,9 +665,9 @@ var VitalsMenuButton = GObject.registerClass({
         this._rows.clear();
         for (let categoryName of [...this._separators.keys()])
             this._removeSeparator(categoryName);
-        for (let groupName in this._groups)
-            this._groups[groupName].icon.gicon = this._gicon(groupName);
-        this._syncCatalog();
+        for (let groupName in this._categoryMenus)
+            this._categoryMenus[groupName].icon.gicon = this._gicon(groupName);
+        this._syncMenuRows();
         this._redrawPanelItems();
     }
 
@@ -681,7 +681,7 @@ var VitalsMenuButton = GObject.registerClass({
     // Brings the menu in line with the catalog: a sensor that is on the machine and has no row gets one, a row
     // whose sensor is gone is removed, and a row whose sensor got another label, icon or place is relabelled, gets the
     // icon or is moved. Every other row stays as it is.
-    _syncCatalog() {
+    _syncMenuRows() {
         if (this._dragging || this._sensors.destroyed) return;
         // Rows are placed by counting them, and the panel with a sensor's actions is not a row. So it is taken out
         // here and put back at the end, under its row where that is now.
@@ -726,7 +726,7 @@ var VitalsMenuButton = GObject.registerClass({
                 row.hidden = Boolean(sensor.hidden);
                 return row;
             });
-            let menu = this._groups[name].menu;
+            let menu = this._categoryMenus[name].menu;
             let rowsInMenu = menu._getMenuItems().filter(item => item instanceof MenuItem.MenuItem);
             if (rowsInOrder.some((row, position) => rowsInMenu[position] != row)) {
                 this._removeSeparator(name);
@@ -778,7 +778,7 @@ var VitalsMenuButton = GObject.registerClass({
             [_('Pin to top bar'), () => {
                 this._sensors.setPanelSensorVisible(categoryName, sensor, !pinned);
                 // Brings the top bar in line and puts the panel back, where this action then has its check mark or not.
-                this._syncCatalog();
+                this._syncMenuRows();
             }, pinned],
             // The action has its mark only for a sensor the user pinned there. A sensor the extension chose for the
             // header has the star in the list too, but here the action is still to be taken, and a click shows it.
@@ -789,7 +789,7 @@ var VitalsMenuButton = GObject.registerClass({
                 this._sensors.renameSensor(sensor, customLabel == _(sensor.label) ? '' : customLabel))],
             [_('Hide'), () => this._sensors.setSensorHidden(sensor, !sensor.hidden), Boolean(sensor.hidden)]
         ];
-        let menu = this._groups[categoryName].menu;
+        let menu = this._categoryMenus[categoryName].menu;
         // The Shell's style class for such a menu gives the panel its colours in every theme; its sizes, which are
         // made for the large quick settings, are replaced in the stylesheet by those of this menu's rows.
         let panel = new PopupMenu.PopupMenuSection();
@@ -881,7 +881,7 @@ var VitalsMenuButton = GObject.registerClass({
         if (firstRowSetApart <= 0) return;
         let separator = new PopupMenu.PopupSeparatorMenuItem();
         this._separators.set(categoryName, separator);
-        this._groups[categoryName].menu.addMenuItem(separator, firstRowSetApart);
+        this._categoryMenus[categoryName].menu.addMenuItem(separator, firstRowSetApart);
     }
 
     // Marks in the catalog what is on screen: the header of every category in the open menu, the rows of every
@@ -895,10 +895,10 @@ var VitalsMenuButton = GObject.registerClass({
             }
         };
         let sensorsInPanel = new Set(this._sensors.catalog.panel.sensors
-            .filter(link => this._sensors.linkShown(link)).map(link => link.sensor));
+            .filter(link => this._sensors.hasPanelItem(link)).map(link => link.sensor));
         for (let [name, category] of this._sensors.categories()) {
             mark(category, this.menu.isOpen && category.enabled);
-            let rowsOnScreen = category.shown && this._groups[name].menu.isOpen;
+            let rowsOnScreen = category.shown && this._categoryMenus[name].menu.isOpen;
             for (let sensor of category.sensors)
                 mark(sensor, sensorsInPanel.has(sensor) || (rowsOnScreen && this._rows.has(sensor)));
         }
@@ -919,7 +919,7 @@ var VitalsMenuButton = GObject.registerClass({
         if (this._dragging || this._sensors.destroyed) return;
         let changed = sensor => !changedSensors || changedSensors.has(sensor);
         for (let [name, category] of this._sensors.categories()) {
-            let headerLabel = this._groups[name]._statusLabel;
+            let headerLabel = this._categoryMenus[name]._statusLabel;
             let header = category.header;
 
             if (!header || !sensorPresent(category, header)) {
@@ -955,13 +955,13 @@ var VitalsMenuButton = GObject.registerClass({
             item.visible = sensor.status != 'unavailable';
             if (value.text != formatted.text) this._setPanelText(value, formatted);
             if (value.style != formatted.style) value.style = formatted.style;
-            this._reserveWidth(sensor, value);
+            this._applyReservedWidth(sensor, value);
         }
         let visible = [...this._panelItems.values()].some(({item}) => item.visible);
-        if (!visible && !this._defaultItem)
-            this._createDefaultItem();
+        if (!visible && !this._placeholderIcon)
+            this._createPlaceholderIcon();
         else if (visible)
-            this._removeDefaultItem();
+            this._removePlaceholderIcon();
     }
 
     _addRow(categoryName, category, sensor) {
@@ -969,7 +969,7 @@ var VitalsMenuButton = GObject.registerClass({
         let row = new MenuItem.MenuItem(gicon, categoryName, this._label(sensor), '…');
         row.connect('clicked', () => this._toggleRowActions(categoryName, sensor));
         this._rows.set(sensor, row);
-        this._groups[categoryName].menu.addMenuItem(row, this._sensorsInRowOrder(category).indexOf(sensor));
+        this._categoryMenus[categoryName].menu.addMenuItem(row, this._sensorsInRowOrder(category).indexOf(sensor));
     }
 
     _defaultLabel() {
@@ -1011,7 +1011,7 @@ var VitalsMenuButton = GObject.registerClass({
         this._markShown();
     }
 
-    _querySensors(force = false) {
+    _readSensors(force = false) {
         this._markShown();
         return this._sensors.poll(force);
     }
@@ -1020,7 +1020,7 @@ var VitalsMenuButton = GObject.registerClass({
     async _refresh() {
         await this._discoverSensors();
         if (this._sensors.destroyed) return;
-        await this._querySensors(true);
+        await this._readSensors(true);
     }
 
     destroy() {
@@ -1035,10 +1035,10 @@ var VitalsMenuButton = GObject.registerClass({
         this._hiddenButton = null;
         this._rowActions = {sensor: null, items: []};
         this._panelItems.clear();
-        this._widths.clear();
+        this._reservedWidths.clear();
         this._headerSensors.clear();
         this._separators.clear();
-        this._defaultItem = null;
+        this._placeholderIcon = null;
 
         super.destroy();
     }

@@ -1069,7 +1069,7 @@ test('panel links and category switches are changed through Sensors, which saves
     writeCatalog(configuration, saved);
     let {sensors, find} = setup(configuration);
     let links = sensors.catalog.panel.sensors;
-    let shown = () => links.filter(link => sensors.linkShown(link)).map(link => link.category + ' ' + link.sensor.key).join(', ');
+    let shown = () => links.filter(link => sensors.hasPanelItem(link)).map(link => link.category + ' ' + link.sensor.key).join(', ');
     let link = (categoryName, key) => links.find(candidate => candidate.sensor == find(categoryName, key));
     await sensors.discover();
     equal(shown(), '', 'a link whose sensor is not on the machine is not shown');
