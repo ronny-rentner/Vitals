@@ -1,26 +1,18 @@
 /* Sensor categories shared by shell and preferences. */
 // `name` is what a category is called wherever it is shown: in the menu, and in the sidebar and on the page of the
-// preferences. It is in English here and translated where it is shown.
+// preferences. It is in English here and translated where it is shown. `icon` is the name of the category's icon in
+// the icon theme, which a sensor has unless it names one of its own.
 export const sensorCategories = {
-    'temperature' : { 'name': 'Temperature', 'icon': 'temperature-symbolic.svg' },
-        'voltage' : { 'name': 'Voltage', 'icon': 'voltage-symbolic.svg' },
-            'fan' : { 'name': 'Fan', 'icon': 'fan-symbolic.svg' },
-         'memory' : { 'name': 'Memory', 'icon': 'memory-symbolic.svg' },
-      'processor' : { 'name': 'Processor', 'icon': 'cpu-symbolic.svg',
-                   'icon-frequency': 'cpu-frequency-symbolic.svg',
-                   'icon-power': 'cpu-power-symbolic.svg'
-        },
-         'system' : { 'name': 'System', 'icon': 'system-symbolic.svg' },
-        'network' : { 'name': 'Network', 'icon': 'network-symbolic.svg',
-                   'icon-rx': 'network-download-symbolic.svg',
-                   'icon-tx': 'network-upload-symbolic.svg'
-        },
-        'storage' : { 'name': 'Storage', 'icon': 'storage-symbolic.svg',
-                   'icon-read': 'storage-read-symbolic.svg',
-                   'icon-write': 'storage-write-symbolic.svg'
-        },
-        'battery' : { 'name': 'Battery', 'icon': 'battery-symbolic.svg' },
-            'gpu' : { 'name': 'GPU', 'icon': 'gpu-symbolic.svg' }
+    'temperature' : { 'name': 'Temperature', 'icon': 'vitals-temperature-symbolic' },
+        'voltage' : { 'name': 'Voltage', 'icon': 'vitals-voltage-symbolic' },
+            'fan' : { 'name': 'Fan', 'icon': 'vitals-fan-symbolic' },
+         'memory' : { 'name': 'Memory', 'icon': 'vitals-memory-symbolic' },
+      'processor' : { 'name': 'Processor', 'icon': 'vitals-cpu-symbolic' },
+         'system' : { 'name': 'System', 'icon': 'vitals-system-symbolic' },
+        'network' : { 'name': 'Network', 'icon': 'vitals-network-symbolic' },
+        'storage' : { 'name': 'Storage', 'icon': 'vitals-storage-symbolic' },
+        'battery' : { 'name': 'Battery', 'icon': 'vitals-battery-symbolic' },
+            'gpu' : { 'name': 'GPU', 'icon': 'vitals-gpu-symbolic' }
         };
 
 // The value of the `category-order` setting for the order the user gave the categories; 0 is alphabetical.

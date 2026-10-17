@@ -88,12 +88,7 @@
       <default>5</default>
       <range min="1" max="1440"/>
       <summary>Public IP refresh interval in minutes</summary>
-      <description>Each lookup is a request to the provider. Refresh in the menu looks it up at once.</description>
-    </key>
-    <key type="i" name="network-public-ip-provider">
-      <default>0</default>
-      <summary>Public IP provider</summary>
-      <description>Service used to look up public IP address. 0=Core Coding, 1=MyIP.com, 2=ipify</description>
+      <description>Refresh in the menu looks it up at once.</description>
     </key>
     <key type="i" name="network-speed-format">
       <default>0</default>

@@ -33,7 +33,7 @@ export UUID EXTENSION_FILES SCALE TEXT_SCALE
 .ONESHELL:
 .SHELLFLAGS := -ec
 
-.PHONY: preview test-shell screenshots compile zip test clean clean-env
+.PHONY: preview test-shell screenshots compile zip test clean clean-env country-icons
 # What `make` alone runs.
 .DEFAULT_GOAL := preview
 
@@ -71,6 +71,10 @@ zip: compile
 
 clean:
 	rm -f $(ZIP)
+
+country-icons:
+	@echo ":: Drawing the country icons..."
+	gjs -m country-icons.js
 
 # What the three Shells keep: their settings and their copy of the extension.
 clean-env:

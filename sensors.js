@@ -72,16 +72,19 @@ const PARSERS = {
         return {quality: Number(fields[2]) / 70, signal: Number(fields[3])};
     }
 };
-const PUBLIC_IP_URLS = ['https://ipv4.corecoding.com', 'https://api.myip.com', 'https://api.ipify.org?format=json'];
+// We query these services in order to find the public outgoing IP and its country.
+const PUBLIC_IP_SERVICES = [
+    ['https://1.1.1.1/cdn-cgi/trace', text => ({ip: text.match(/^ip=(.*)$/m)[1], country: text.match(/^loc=(.*)$/m)[1]})],
+    ['https://get.geojs.io/v1/ip/country.json', text => JSON.parse(text)],
+    ['https://api.country.is/', text => JSON.parse(text)]
+];
+const PUBLIC_IP_TIMEOUT_SECONDS = 3;
 // Thermal zone types that are control interfaces, not sensors.
 // INT3400 is Intel's thermal policy switch; its zone reports a fixed dummy temperature.
 const NON_SENSOR_THERMAL_ZONE_LABELS = ['INT3400 Thermal'];
 // Thermal zones that report what an hwmon driver also reports: zone label to that driver's hwmon name.
 // Such a zone is left out while the hwmon device exists. x86_pkg_temp and coretemp both report the CPU package temperature.
 const THERMAL_ZONE_HWMON_EQUIVALENTS = {x86_pkg_temp: 'coretemp'};
-// A saved reading is shown at start when it is at most this old, as after the screen was locked for a moment.
-// An older one says nothing about now, and "…" is shown until the first reading.
-const SAVED_READING_SECONDS = 60;
 // A sensor that is not in the panel is dropped from the catalog when no discovery has found it for this long.
 const FORGET_AFTER_SECONDS = 365 * 86400;
 
@@ -116,13 +119,23 @@ const HEADER_KEYS = {
 // A sensor that is found by its key alone: what the catalog says about it, and how its value follows from the
 // reading of its source. `source` is the file the sensor is read from, which becomes its `file` field, or one of
 // the sources that are not a file. An entry without a source gets its file, its storage location or its value from
-// discovery. An entry without `value` follows the rule for its fields (see Sensors._value).
-function fixed(label, format, source, value, fields = {}) {
+// discovery. An entry without `value` follows the rule for its fields (see Sensors._value). `icon`, when given, names
+// the sensor's icon from each reading, and an icon in `fields` is the one it has from discovery on.
+function fixed(label, format, source, value, fields = {}, icon) {
     let catalogFields = {label, format, ...fields};
     if (source?.startsWith('/'))
         catalogFields.file = source;
-    return {fields: catalogFields, source, value};
+    return {fields: catalogFields, source, value, icon};
 }
+
+// The icon of a WiFi signal, at the steps of GNOME Shell's network indicator (`signalToIcon` in its status/network.js).
+function wifiSignalIcon(sample) {
+    let strength = sample.value.quality * 100;
+    let step = strength < 20 ? 'none' : strength < 40 ? 'weak' : strength < 50 ? 'ok' : strength < 80 ? 'good' : 'excellent';
+    return 'network-wireless-signal-' + step + '-symbolic';
+}
+
+const DIRECTION_ICONS = {rx: 'vitals-network-download-symbolic', tx: 'vitals-network-upload-symbolic'};
 
 // A reading of the CPU frequencies is the text of /proc/cpuinfo, or the list that the frequency files gave.
 function cpuFrequencies(sample) {
@@ -164,12 +177,12 @@ const FIXED = {
         'frequency': fixed('Frequency', 'hertz', CPU_FREQUENCIES, s => {
             let frequencies = cpuFrequencies(s);
             return frequencies.reduce((sum, frequency) => sum + frequency, 0) / frequencies.length;
-        }, {icon: 'frequency'}),
-        'min-frequency': fixed('Min frequency', 'hertz', CPU_FREQUENCIES, s => Math.min(...cpuFrequencies(s)), {icon: 'frequency'}),
-        'max-frequency': fixed('Max frequency', 'hertz', CPU_FREQUENCIES, s => Math.max(...cpuFrequencies(s)), {icon: 'frequency'}),
+        }, {icon: 'vitals-cpu-frequency-symbolic'}),
+        'min-frequency': fixed('Min frequency', 'hertz', CPU_FREQUENCIES, s => Math.min(...cpuFrequencies(s)), {icon: 'vitals-cpu-frequency-symbolic'}),
+        'max-frequency': fixed('Max frequency', 'hertz', CPU_FREQUENCIES, s => Math.max(...cpuFrequencies(s)), {icon: 'vitals-cpu-frequency-symbolic'}),
         'process-time': fixed('Process Time', 'uptime', UPTIME, (s, sensor, sensors) =>
             s.value[0] - s.value[1] / sensors._cores().length),
-        'powercap': fixed('Powercap', 'watt-limit', undefined, undefined, {icon: 'power'}),
+        'powercap': fixed('Powercap', 'watt-limit', undefined, undefined, {icon: 'vitals-cpu-power-symbolic'}),
         'vendor': fixed('Vendor', 'string'),
         'bogomips': fixed('Bogomips', 'string'),
         'sockets': fixed('Sockets', 'string'),
@@ -192,10 +205,12 @@ const FIXED = {
             {section: NETWORK_SECTION.machineSpeed}),
         // The two WiFi values are with the hardware interfaces, next to the WiFi interface's speeds.
         'wifi-link-quality': fixed('WiFi Link Quality', 'percent', WIRELESS, s => s.value.quality,
-            {section: NETWORK_SECTION.hardwareInterfaces, ...LOW_IS_BAD}),
+            {section: NETWORK_SECTION.hardwareInterfaces, ...LOW_IS_BAD}, wifiSignalIcon),
         'wifi-signal-level': fixed('WiFi Signal Level', 'string', WIRELESS, s => s.value.signal,
-            {section: NETWORK_SECTION.hardwareInterfaces}),
-        'public-ip': fixed('Public IP', 'string', PUBLIC_IP, s => s.value.ip, {section: NETWORK_SECTION.other})
+            {section: NETWORK_SECTION.hardwareInterfaces}, wifiSignalIcon),
+        // A country that the service does not name, or one without an icon, has the category's icon.
+        'public-ip': fixed('Public IP', 'string', PUBLIC_IP, s => s.value.ip, {section: NETWORK_SECTION.other},
+            s => s.value.country ? 'vitals-country-' + s.value.country.toLowerCase() + '-symbolic' : undefined)
     },
     storage: {
         'total': fixed('Total', 'storage', undefined, s => s.value.total),
@@ -205,13 +220,13 @@ const FIXED = {
         'used-percent': fixed('Used %', 'percent', undefined, s => s.value.used / s.value.total),
         'free-percent': fixed('Free %', 'percent', undefined, s => (s.value.total - s.value.used) / s.value.total, LOW_IS_BAD),
         'read-total': fixed('Read total', 'storage', DISKSTATS, (s, sensor) => s.value.get(sensor.device)?.read,
-            {icon: 'read'}),
+            {icon: 'vitals-storage-read-symbolic'}),
         'read-rate': fixed('Read rate', 'storage-rate', DISKSTATS, (s, sensor) =>
-            SensorMath.counterRate(s, disks => disks.get(sensor.device)?.read), {icon: 'read'}),
+            SensorMath.counterRate(s, disks => disks.get(sensor.device)?.read), {icon: 'vitals-storage-read-symbolic'}),
         'write-total': fixed('Write total', 'storage', DISKSTATS, (s, sensor) => s.value.get(sensor.device)?.write,
-            {icon: 'write'}),
+            {icon: 'vitals-storage-write-symbolic'}),
         'write-rate': fixed('Write rate', 'storage-rate', DISKSTATS, (s, sensor) =>
-            SensorMath.counterRate(s, disks => disks.get(sensor.device)?.write), {icon: 'write'}),
+            SensorMath.counterRate(s, disks => disks.get(sensor.device)?.write), {icon: 'vitals-storage-write-symbolic'}),
         'arc-target': fixed('ARC Target', 'storage', ARCSTATS, s => s.value.c),
         'arc-maximum': fixed('ARC Maximum', 'storage', ARCSTATS, s => s.value.c_max),
         'arc-current': fixed('ARC Current', 'storage', ARCSTATS, s => s.value.size)
@@ -230,21 +245,21 @@ const FIXED = {
         'time-left': fixed('Time left', 'runtime', undefined, (s, sensor, sensors) => sensors._batteryTimeLeft(s, sensor.file), LOW_IS_BAD)
     },
     gpu: {
-        'refresh-rate': fixed('Refresh Rate', 'hertz', FRAMES, s => s.value)
+        'refresh-rate': fixed('Screen Redraws', 'hertz', FRAMES, s => s.value)
     }
 };
 for (let [direction, moving, moved] of [['rx', 'Download', 'Downloaded'], ['tx', 'Upload', 'Uploaded']]) {
     // The network totals are over the hardware interfaces. What a virtual interface carries, such as a bridge, a
     // container's or a VPN's, passes a hardware interface as well when it leaves the machine, and would count twice.
     FIXED.network['device-' + direction] = fixed(moving + ' speed', 'speed', NETWORK,
-        (s, sensor, sensors) => hardwareSpeed(s, sensors, [direction]), {direction, section: NETWORK_SECTION.machineSpeed});
+        (s, sensor, sensors) => hardwareSpeed(s, sensors, [direction]), {direction, icon: DIRECTION_ICONS[direction], section: NETWORK_SECTION.machineSpeed});
     // An interface the catalog has can be missing from a reading for the moment in which it is unplugged.
     FIXED.network['boot-' + direction] = fixed(moved + ' since boot', 'storage', NETWORK,
         (s, sensor, sensors) => [...sensors._hardwareInterfaces()].reduce((bytes, name) =>
             bytes + (s.value.interfaces.get(name)?.[direction] ?? 0), 0),
-        {direction, section: NETWORK_SECTION.volume});
+        {direction, icon: DIRECTION_ICONS[direction], section: NETWORK_SECTION.volume});
     FIXED.network['session-' + direction] = fixed(moved + ' this session', 'storage', NETWORK,
-        s => s.value.session[direction], {direction, section: NETWORK_SECTION.volume});
+        s => s.value.session[direction], {direction, icon: DIRECTION_ICONS[direction], section: NETWORK_SECTION.volume});
 }
 // The fields of a battery's uevent file, as SensorMath.parseBattery names them, and the sensor each one becomes.
 const BATTERY_FIELD_KEYS = {
@@ -294,7 +309,8 @@ export class Sensors {
         this._commands = new Set();
         this._nvidia = null;
         this._frameSignal = 0;
-        this._frameTimes = [];
+        this._frames = 0;
+        this._framesCounted = 0;
         // For each battery file, the charging state it is in and its last readings of the time left in that state.
         this._batteryTimes = new Map();
         // The read of the mount table that is under way, which every storage location of a tick waits for.
@@ -312,9 +328,8 @@ export class Sensors {
         let catalog = {};
         for (let name of Object.keys(sensorCategories)) {
             let {header, sensors = [], ...category} = saved[name];
-            // 'saved' is a recent reading from the session before. It is shown like a 'ready' one until this session has its own.
             for (let sensor of sensors)
-                sensor.status = now() - sensor.updated <= SAVED_READING_SECONDS ? 'saved' : 'pending';
+                sensor.status = 'pending';
             catalog[name] = {...category, sensors, header: sensors.find(sensor => sensor.key == header)};
         }
         catalog.panel = {sensors: saved.panel.sensors.map(({category, key, visible}) => {
@@ -339,7 +354,7 @@ export class Sensors {
         for (let [name, category] of this.categories()) {
             catalog[name] = {
                 ...category, enabled: saved[name].enabled, shown: undefined, header: category.header?.key,
-                sensors: category.sensors.map(({shown, status, initialTemperature, ...sensor}) => sensor)
+                sensors: category.sensors.map(({shown, status, value, updated, initialTemperature, ...sensor}) => sensor)
             };
         }
         catalog.panel = {sensors: this.catalog.panel.sensors.map(link =>
@@ -440,7 +455,7 @@ export class Sensors {
         if (this.destroyed) return;
         this.onCatalogChanged();
         this._select();
-        this.onValuesChanged(this._writeActive());
+        this.onValuesChanged(this._updateActiveSensors());
         this._readNewlyShown();
     }
 
@@ -449,7 +464,7 @@ export class Sensors {
     // shows any more, such as the nvidia-smi process, is stopped at once as well.
     shownChanged() {
         this._select();
-        this._writeActive();
+        this._updateActiveSensors();
         this._readNewlyShown();
     }
 
@@ -638,12 +653,12 @@ export class Sensors {
             if (!due(id))
                 continue;
 
-            let ticket = {cancellation: new Gio.Cancellable()};
-            source.pending = ticket;
-            ticket.promise = Promise.resolve().then(() => {
-                if (source.pending == ticket) return source.read(ticket.cancellation);
+            let pendingRead = {cancellation: new Gio.Cancellable()};
+            source.pending = pendingRead;
+            pendingRead.promise = Promise.resolve().then(() => {
+                if (source.pending == pendingRead) return source.read(pendingRead.cancellation);
             }).then(value => {
-                if (source.pending != ticket || this.destroyed) return;
+                if (source.pending != pendingRead || this.destroyed) return;
                 let time = source.sampleTime ? source.sampleTime(value) : clock();
                 let last = source.reading;
                 // A rate is computed against the last reading that succeeded, never across a failure or a stop. One
@@ -655,23 +670,23 @@ export class Sensors {
                     : tooYoung && last.previous ? last.previous : {value: last.value, time: last.time};
                 source.reading = {value, time, status: 'ready', previous};
             }).catch(error => {
-                if (source.pending != ticket || this.destroyed) return;
+                if (source.pending != pendingRead || this.destroyed) return;
                 let previous = source.reading;
                 // A failed read is an expected state, handled by marking the reading unavailable. It is not an error.
                 if (!previous || previous.status != 'unavailable')
                     console.debug(id, error);
                 source.reading = {...previous, time: clock(), status: 'unavailable'};
             }).finally(() => {
-                if (source.pending != ticket || this.destroyed) return;
+                if (source.pending != pendingRead || this.destroyed) return;
                 source.pending = null;
-                let written = this._write(id);
+                let written = this._updateSensors(id);
                 this.onValuesChanged(new Set(written));
                 // A first reading that leaves a sensor without a value, as it does a rate, is followed by a second.
-                let withoutValue = written.some(sensor => sensor.status == 'pending' || sensor.status == 'saved');
+                let withoutValue = written.some(sensor => sensor.status == 'pending');
                 if (withoutValue && !source.reading.previous && !source.secondReading)
                     this._scheduleSecondReading(id, source);
             });
-            reads.push(ticket.promise);
+            reads.push(pendingRead.promise);
         }
         // What a category shows over all its sensors is written once, when the reads of its sensors are in.
         let summaries = [];
@@ -694,9 +709,7 @@ export class Sensors {
     // reading; anything that is not a value makes the sensor unavailable.
     _assign(sensor, value) {
         if (value === SensorMath.PENDING) {
-            // A reading from an earlier session stays on screen while this session's first one is on its way.
-            if (sensor.status != 'saved')
-                sensor.status = 'pending';
+            sensor.status = 'pending';
         } else if (value === undefined || value === null || (typeof value == 'number' && !Number.isFinite(value))) {
             sensor.status = 'unavailable';
         } else {
@@ -706,13 +719,16 @@ export class Sensors {
         }
     }
 
-    // Writes the sensors of a source from the reading it has, and returns them.
-    _write(id) {
+    // Updates the sensors of a source from the reading it has, and returns them.
+    _updateSensors(id) {
         let reading = this.sources.get(id).reading;
         return this.activeSources.get(id).map(([categoryName, sensor]) => {
-            if (reading?.status == 'ready')
+            if (reading?.status == 'ready') {
                 this._assign(sensor, this._value(categoryName, sensor, reading));
-            else
+                let icon = this._fixed(categoryName, sensor)?.icon;
+                if (icon)
+                    sensor.icon = icon(reading);
+            } else
                 this._assign(sensor, reading?.status == 'unavailable' ? undefined : SensorMath.PENDING);
             return sensor;
         });
@@ -732,13 +748,13 @@ export class Sensors {
         return aggregates;
     }
 
-    // Writes every sensor that is read at the moment from the reading its source has, without reading anything,
-    // and returns those sensors. The sensors of a source whose read is under way are written when it is in.
-    _writeActive() {
+    // Updates every sensor that is read at the moment from the reading its source has, without reading anything,
+    // and returns those sensors. The sensors of a source whose read is under way are updated when it is in.
+    _updateActiveSensors() {
         let written = new Set();
         for (let id of this.activeSources.keys()) {
             if (this.sources.get(id).pending) continue;
-            for (let sensor of this._write(id))
+            for (let sensor of this._updateSensors(id))
                 written.add(sensor);
         }
         for (let name of this.summarised) {
@@ -890,25 +906,33 @@ export class Sensors {
         // One file per core, for a machine whose /proc/cpuinfo does not list the frequencies.
         this.addSource(CPU_FREQUENCIES, {read: cancellation => Promise.all(this._cores().map(async core =>
             Number(await this._read('/sys/devices/system/cpu/' + core + '/cpufreq/scaling_cur_freq', cancellation)) * 1000))});
-        // The public-IP service the user chose.
         this.addSource(PUBLIC_IP, {
-            // An answer is kept for the interval the user set, unless it is from another service than the one chosen now.
-            interval: () => this.reading(PUBLIC_IP)?.value?.provider == this._settings.get_int('network-public-ip-provider')
-                ? this._settings.get_int('network-public-ip-interval') * 60 : 0,
-            read: async cancellation => {
-                let provider = this._settings.get_int('network-public-ip-provider');
-                let answer = JSON.parse(await this._read(PUBLIC_IP_URLS[provider], cancellation));
-                return {provider, ip: provider == 0 ? answer.IPv4 : answer.ip};
+            // Keep an answer for the user's interval; after a failure, try again on the next tick.
+            interval: () => this.reading(PUBLIC_IP)?.status == 'ready' ? this._settings.get_int('network-public-ip-interval') * 60 : 0,
+            read: async () => {
+                for (let [url, parse] of PUBLIC_IP_SERVICES) {
+                    let cancellable = new Gio.Cancellable();
+                    let timeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, PUBLIC_IP_TIMEOUT_SECONDS * 1000, () => {
+                        timeout = 0;
+                        cancellable.cancel();
+                        return GLib.SOURCE_REMOVE;
+                    });
+                    try {
+                        return parse(await this._read(url, cancellable));
+                    } catch (error) {
+                        // Try the next service.
+                        console.debug(url, error);
+                    } finally {
+                        if (timeout) GLib.Source.remove(timeout);
+                    }
+                }
+                throw new Error('No public IP service answered');
             }
         });
         this.addSource(FRAMES, {
             start: () => this._startFrames(),
             stop: () => this._stopFrames(),
-            read: async () => {
-                if (this._frameTimes.length < 2) return SensorMath.PENDING;
-                return (this._frameTimes.length - 1) /
-                    (this._frameTimes[this._frameTimes.length - 1] - this._frameTimes[0]);
-            }
+            read: async () => this._readFrames()
         });
         this.addSource(NVIDIA, {
             configure: sensors => this._configureNvidia(sensors),
@@ -964,7 +988,7 @@ export class Sensors {
             this._cancelRead(this.sources.get(id));
         let configuration = () => JSON.stringify([this.catalog.gpu.enabled, ...[
             'include-static-info', 'include-static-gpu-info', 'include-public-ip',
-            'network-public-ip-provider', 'storage-locations', 'storage-monitor-volumes', 'hide-zeros'
+            'storage-locations', 'storage-monitor-volumes', 'hide-zeros'
         ].map(key => this._settings.get_value(key).deep_unpack())]);
         // Each step with the categories it feeds. A category is complete when every step that feeds it succeeded.
         let steps = [
@@ -1208,7 +1232,7 @@ export class Sensors {
             }
             for (let [direction, label] of [['rx', '%s download speed'], ['tx', '%s upload speed']])
                 this._found(run, 'network', {key: name + '/' + direction, label: this._gettext(label).replace('%s', shownName),
-                    format: 'speed', file: NETWORK, interface: name, direction, hardware, section});
+                    format: 'speed', file: NETWORK, interface: name, direction, icon: DIRECTION_ICONS[direction], hardware, section});
         }
         for (let key of ['device-rx', 'boot-rx', 'session-rx', 'device-tx', 'boot-tx', 'session-tx', 'combined',
             'wifi-link-quality', 'wifi-signal-level'])
@@ -1543,15 +1567,24 @@ export class Sensors {
             closeNvidiaStream(state.stream);
     }
 
+    // Counts the frames the Shell draws, which shows a window that redraws all the time without visibly changing. Each
+    // monitor is drawn on its own, so with several, a frame counts once per monitor.
     _startFrames() {
-        this._frameTimes = [];
+        this._frames = 0;
+        this._framesCounted = clock();
         if (typeof global == 'undefined' || !global.stage) return;
-        this._frameSignal = global.stage.connect('after-paint', () => {
-            let frameTime = clock();
-            this._frameTimes.push(frameTime);
-            while (this._frameTimes.length > 2 && this._frameTimes[0] < frameTime - 0.5)
-                this._frameTimes.shift();
-        });
+        this._frameSignal = global.stage.connect('after-paint', () => this._frames++);
+    }
+
+    // The frames per second since the last read, which starts the count anew.
+    _readFrames() {
+        let now = clock();
+        // Right after the start too few frames are counted for a rate; the second reading a second later has one.
+        if (now - this._framesCounted < SECOND_READING_SECONDS) return SensorMath.PENDING;
+        let rate = this._frames / (now - this._framesCounted);
+        this._frames = 0;
+        this._framesCounted = now;
+        return rate;
     }
 
     _stopFrames() {
@@ -1567,7 +1600,5 @@ export class Sensors {
         this._discoveryCancellation.cancel();
         for (let process of this._commands)
             process.force_exit();
-        // The readings are saved when the extension stops, so the next launch can show them until it has its own.
-        this._save();
     }
 }

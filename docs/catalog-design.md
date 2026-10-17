@@ -60,10 +60,11 @@ catalog = {
 - `format`: how its value is formatted.
 - `discovered`: the timestamp of the discovery run that last found it. See "Discovery".
 - `section`: which part of its category's menu a sensor belongs to. The rows of a section stay together, whatever their labels are. The network sensors name one, and so do the average, minimum and maximum, which also carry `aggregate`.
+- `icon`: the name of its icon in the icon theme, when it is not its category's, such as `vitals-storage-read-symbolic`. Discovery writes it, and a few sensors take it from each reading: the WiFi values the bars of their signal, the public IP its country (`vitals-country-de-symbolic`). The renderer shows the category's icon when no theme has an icon of that name.
 - `shown`: whether it is on screen right now. The renderer sets this; see "What is collected".
 - `value` and `updated`: its reading and when it was taken. A few readings are text, such as a battery's state.
-- `status`: `ready` when `value` is current, `pending` while there is none yet (shown as "…"), `unavailable` when it cannot be read (the row is hidden), and `saved` when `value` comes from an earlier session.
-- `file`: the file the sensor is read from. A temperature has a file of its own; the memory sensors all name `/proc/meminfo`. A few sensors are read from something that is not a file and have no `file`: a card read through `nvidia-smi` has `nvidia`, the space of a storage location has `location`, the place where it is mounted, and the public IP, the refresh rate and, on some machines, the CPU frequencies are known by their key. A sensor whose value discovery wrote, such as the kernel version, has none either, and neither has an average, minimum or maximum.
+- `status`: `ready` when `value` is current, `pending` while there is none yet (shown as "…"), and `unavailable` when it cannot be read (the row is hidden).
+- `file`: the file the sensor is read from. A temperature has a file of its own; the memory sensors all name `/proc/meminfo`. A few sensors are read from something that is not a file and have no `file`: a card read through `nvidia-smi` has `nvidia`, the space of a storage location has `location`, the place where it is mounted, and the public IP, the screen redraws and, on some machines, the CPU frequencies are known by their key. A sensor whose value discovery wrote, such as the kernel version, has none either, and neither has an average, minimum or maximum.
 - Fields that say which part of the file is the sensor's: the interface name for a network rate (with `hardware`, whether that interface is a hardware device), the core for a CPU core.
 
 - `lowIsBad`: set by discovery on a sensor whose low values are the ones to watch, such as free memory, a battery's charge or the WiFi link quality (`LOW_IS_BAD` in `sensors.js`). A colour scale on such a sensor colours downwards from its breakpoints; on every other sensor, upwards.
@@ -121,9 +122,7 @@ The whole catalog is stored on disk as it is, in one setting. It is the single s
 - It is written when its structure or state changes: discovery finds a new sensor or forgets one, or the user pins, moves or switches something.
 - There are no migrations. Settings saved by earlier versions are not converted.
 - The preferences window is a separate program. Its category switches write `enabled` in the saved catalog (`writeCategoryEnabled` in `helpers/storedCatalog.js`), and it reads the sensors' labels from there for the colour pages. The extension takes a changed switch over when the setting changes, and when it saves it keeps the `enabled` values that are on disk.
-- Three fields only mean something while the extension runs and are not written: `shown`, `status`, and `initialTemperature` (what the hide-zeros option remembers).
-
-The readings are written when the extension stops, which is at logout and each time the screen locks. They are not written on every tick: they change every 5 seconds by default, and the settings database is one file of about 1 MB that is rewritten as a whole on every change. After the next launch the saved values are shown, with the status `saved`, until the first real reading replaces them.
+- The fields that only mean something while the extension runs are not written: `shown`, `status`, the reading (`value` and `updated`), and `initialTemperature` (what the hide-zeros option remembers). A reading from an earlier session says nothing about now, so every value starts as "…".
 
 The setting holds the catalog as a structure, not as text. GNOME's settings format stores nested records and lists directly (type `a{sv}`). `helpers/storedCatalog.js` turns the catalog's plain data into that format; reading it back is built in.
 

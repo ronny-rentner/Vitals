@@ -18,8 +18,6 @@ const DISKS = '/proc/diskstats';
 const MOUNTS = '/proc/self/mountinfo';
 const USB_DRIVE = '/media/USB drive';
 const SHARE = '/media/share';
-// The public IP services, in the order of the setting `network-public-ip-provider`.
-const PUBLIC_IP_URLS = ['https://ipv4.corecoding.com', 'https://api.myip.com', 'https://api.ipify.org?format=json'];
 // The temperature files Vitals reports. Not among them: thermal_zone1 (the policy zone),
 // thermal_zone8 (the package temperature coretemp reports) and thermal_zone9 (published through hwmon7).
 const TEMPERATURES = [
@@ -29,8 +27,13 @@ const TEMPERATURES = [
 const SECTOR_BYTES = 512;
 const YEAR_SECONDS = 365 * 86400;
 
-// Waits for the second reading that follows the first reading of a rate a second later.
-const secondReading = () => wait(1.2);
+// Lets the first reading of a rate finish, skips the second after which its second reading follows, and lets that
+// finish too.
+const secondReading = async machine => {
+    await settle();
+    machine.skip(1);
+    await settle();
+};
 // Seconds of the machine's clock. The span of a rate after its second reading is at least a second, since the
 // second reading never comes early, and at most the seconds the test measured around both readings.
 const clock = () => GLib.get_monotonic_time() / 1000000;
@@ -291,7 +294,7 @@ test('no sensor is read during a discovery run, and a rate does not start over b
     await sensors.discover();
     let download = find('network', 'eth0/rx');
     show(download);
-    await secondReading();
+    await secondReading(machine);
     let mountsRead = machine.holdNextRead(MOUNTS);
     let run = sensors.discover();
     // Let the run get as far as the read it is held at.
@@ -462,7 +465,7 @@ test('a rate that comes on screen has its value a second later, without a tick, 
     await sensors.poll();
     equal(reads(NETWORK), 2, 'a tick leaves the file to the second reading');
     equal(download.status, 'pending', 'so the rate waits for it');
-    await secondReading();
+    await secondReading(machine);
     equal(download.status, 'ready', 'which gives the rate');
     equal(download.value > 0, true);
     equal(reads(NETWORK), 3);
@@ -477,7 +480,7 @@ test('a rate that comes on screen has its value a second later, without a tick, 
     await settle();
     equal(download.status + ' ' + reads(NETWORK), 'pending 4', 'back later, the file is read and the rate starts over');
     show(uptime);
-    await secondReading();
+    await secondReading(machine);
     equal(reads(NETWORK), 4, 'a second reading is called off when its file leaves the screen');
     show(download, uptime);
     await settle();
@@ -495,11 +498,11 @@ test('a tick right after the second reading computes the rate from the first rea
     show(download);
     await settle();
     machine.setContent(NETWORK, received(2000));
-    await secondReading();
+    await secondReading(machine);
     between(download.value, 1000 / (clock() - start), 1000, 'the second reading gives the bytes received per second');
     await sensors.poll();
     between(download.value, 1000 / (clock() - start), 1000, 'the counter stood since the second reading, but the rate spans from the first');
-    await wait(1);
+    machine.skip(1);
     await sensors.poll();
     equal(download.value, 0, 'the next tick computes against the tick before');
     sensors.destroy();
@@ -510,7 +513,7 @@ test('a rate is never computed across a counter that went back or a failed read'
     await sensors.discover();
     let download = find('network', 'eth0/rx');
     show(download);
-    await secondReading();
+    await secondReading(machine);
     equal(download.status, 'ready');
     machine.setContent(NETWORK, networkDevices({lo: {rx: 0, tx: 0}, eth0: {rx: 5, tx: 5}, wlan0: {rx: 5, tx: 5}}));
     await sensors.poll();
@@ -521,7 +524,7 @@ test('a rate is never computed across a counter that went back or a failed read'
     machine.restore(NETWORK);
     await sensors.poll();
     equal(download.status, 'pending', 'the reading after it starts over');
-    await secondReading();
+    await secondReading(machine);
     equal(download.status, 'ready');
     sensors.destroy();
 });
@@ -546,7 +549,7 @@ test('what comes on screen during a discovery run, and a second reading, wait fo
     run = sensors.discover();
     await settle();
     readsInRun = reads(NETWORK);
-    await secondReading();
+    await secondReading(machine);
     equal(reads(NETWORK), readsInRun, 'the second reading is not taken during the run');
     mountsRead.finish();
     await run;
@@ -643,39 +646,30 @@ test('the voltage header shows the battery, then the system, then a USB supply, 
 
 // Intervals
 
-test('the public IP is asked once per interval, at once on Refresh and for another service', async () => {
-    let {sensors, configuration, machine, reads, find, show} = setup();
+test('the public IP is asked once per interval and at once on Refresh; after a failure, the next tick asks again', async () => {
+    let {sensors, configuration, machine, find, show} = setup();
     configuration.set_boolean('include-public-ip', true);
     let minutes = configuration.get_int('network-public-ip-interval');
+    machine.plug('internet');
     await sensors.discover();
     let publicIp = find('network', 'public-ip');
     show(publicIp);
     await settle();
-    equal(publicIp.value, JSON.parse(machine.content(PUBLIC_IP_URLS[0])).IPv4);
+    // The address and the country every service of the fixture answers.
+    equal(publicIp.value, '203.0.113.7');
+    equal(publicIp.icon, 'vitals-country-de-symbolic', 'its icon names the country');
+    machine.unplug('internet');
     await sensors.poll();
-    equal(reads(PUBLIC_IP_URLS[0]), 1, 'not asked again inside its interval');
-    show();
-    show(publicIp);
-    await settle();
-    equal(reads(PUBLIC_IP_URLS[0]), 1, 'nor when it comes back on screen inside it');
-    equal(publicIp.status, 'ready', 'which shows the answer it has');
+    equal(publicIp.status, 'ready', 'not asked again inside its interval');
     await sensors.poll(true);
-    equal(reads(PUBLIC_IP_URLS[0]), 2, 'Refresh asks at once');
+    equal(publicIp.status, 'unavailable', 'Refresh asks at once');
+    machine.plug('internet');
+    await sensors.poll();
+    equal(publicIp.status, 'ready', 'after a failure, the next tick asks again');
+    machine.unplug('internet');
     machine.skip(minutes * 60);
     await sensors.poll();
-    equal(reads(PUBLIC_IP_URLS[0]), 3, 'a tick after the interval asks again');
-    for (let provider of [1, 2]) {
-        configuration.set_int('network-public-ip-provider', provider);
-        await sensors.poll();
-        equal(reads(PUBLIC_IP_URLS[provider]), 1, 'another service is asked at once');
-        equal(publicIp.value, JSON.parse(machine.content(PUBLIC_IP_URLS[provider])).ip);
-    }
-    machine.remove(PUBLIC_IP_URLS[2]);
-    machine.skip(minutes * 60);
-    await sensors.poll();
-    equal(publicIp.status, 'unavailable');
-    await sensors.poll();
-    equal(reads(PUBLIC_IP_URLS[2]), 2, 'a failed question is not repeated inside the interval');
+    equal(publicIp.status, 'unavailable', 'a tick after the interval asks again');
     sensors.destroy();
 });
 
@@ -816,7 +810,7 @@ test('what a storage location read and wrote is that of its own disk, also at a 
     equal([rootRead.value, usbRead.value, usbWritten.value].join(), [sectors.root, sectors.usb, sectors.usb].map(count => count * SECTOR_BYTES).join());
     let moreSectors = {...sectors, usb: sectors.usb + 20};
     machine.setContent(DISKS, diskStatistics(moreSectors));
-    await secondReading();
+    await secondReading(machine);
     let readBytes = 20 * SECTOR_BYTES;
     between(usbReadRate.value, readBytes / (clock() - start), readBytes, 'the bytes the USB drive read per second');
     machine.setContent(DISKS, diskStatistics({root: sectors.root}));
@@ -824,7 +818,7 @@ test('what a storage location read and wrote is that of its own disk, also at a 
     equal(usbReadRate.status, 'unavailable', 'a disk that is gone has none');
     machine.setContent(DISKS, diskStatistics(moreSectors));
     // Ticks are an update interval apart.
-    await wait(1);
+    machine.skip(1);
     await sensors.poll();
     equal(usbReadRate.status, 'pending', 'back, it starts over');
     sensors.destroy();
@@ -837,7 +831,7 @@ test('interfaces that come and go change the network sensors at the next reading
     await sensors.discover();
     let combined = find('network', 'combined'), ethernetDownload = find('network', 'eth0/rx');
     show(combined, ethernetDownload);
-    await secondReading();
+    await secondReading(machine);
     machine.plug('vpn');
     await sensors.poll();
     equal(find('network', 'tun0/rx') !== undefined, true, 'an interface that appeared');
@@ -855,7 +849,7 @@ test('interfaces that come and go change the network sensors at the next reading
     await sensors.poll();
     equal(find('network', 'eth0/rx'), ethernetDownload, 'a returned interface is the same sensor again');
     equal(find('network', 'tun0/rx'), undefined);
-    await secondReading();
+    await secondReading(machine);
     equal(ethernetDownload.status, 'ready');
     sensors.destroy();
 });
@@ -886,7 +880,7 @@ test('network totals are over the hardware interfaces, so what a VPN carries is 
     equal(value('boot-rx'), hardware(initial, 'rx'), 'the total since boot is the sum of the hardware counters');
     equal(value('session-rx'), 0, 'the total of the session starts at the first reading');
     machine.setContent(NETWORK, networkDevices(later));
-    await secondReading();
+    await secondReading(machine);
     for (let direction of ['rx', 'tx']) {
         equal(value('boot-' + direction), hardware(later, direction));
         equal(value('session-' + direction), hardware(later, direction) - hardware(initial, direction));
@@ -898,11 +892,11 @@ test('network totals are over the hardware interfaces, so what a VPN carries is 
 });
 
 test('a menu that opens and closes keeps the readings of the network between ticks', async () => {
-    let {sensors, reads, find, show} = setup();
+    let {sensors, machine, reads, find, show} = setup();
     await sensors.discover();
     let download = find('network', 'eth0/rx');
     show(download);
-    await secondReading();
+    await secondReading(machine);
     let value = download.value;
     let readsBefore = reads(NETWORK);
     for (let cycle = 0; cycle < 3; cycle++) {
@@ -946,6 +940,11 @@ test('static information, a graphics card without NVIDIA and WiFi have their val
     let wireless = machine.content('/proc/net/wireless').trim().split('\n')[2].split(/\s+/);
     equal(quality.value, Number(wireless[2]) / 70, 'the link quality out of 70');
     equal(signal.value, Number(wireless[3]));
+    // The bars follow the link quality, at the steps of GNOME Shell's network indicator: 56 of 70 is 80 %.
+    equal(quality.icon + ' ' + signal.icon, 'network-wireless-signal-excellent-symbolic network-wireless-signal-excellent-symbolic');
+    machine.setContent('/proc/net/wireless', machine.content('/proc/net/wireless').replace(' 56. ', ' 20. '));
+    await sensors.poll();
+    equal(quality.icon, 'network-wireless-signal-weak-symbolic', 'a weaker signal, 20 of 70, has fewer bars');
     sensors.destroy();
 });
 
@@ -991,44 +990,20 @@ test('where a mouse has the only battery, the header shows its percentage', asyn
 
 // What is saved
 
-test('a second launch has the saved sensors in their order, with their readings while they are under a minute old', async () => {
+test('a second launch has the saved sensors in their order, and no value until it reads them', async () => {
     let first = setup();
     await first.sensors.discover();
-    first.show(first.find('memory', 'usage'), first.find('memory', 'free'));
+    first.show(first.find('memory', 'usage'));
     await settle();
-    let usage = first.find('memory', 'usage').value;
     let order = keys(first.sensors.catalog.temperature);
     first.sensors.destroy();
-    // The free memory was read two minutes ago.
-    let saved = readCatalog(first.configuration);
-    saved.memory.sensors.find(sensor => sensor.key == 'free').updated -= 120;
-    writeCatalog(first.configuration, saved);
 
     let {sensors, find} = setup(first.configuration);
     let restored = find('memory', 'usage');
-    equal(restored.status + ' ' + restored.value, 'saved ' + usage, 'before anything is read, and before discovery');
-    equal(find('memory', 'free').status, 'pending', 'an old reading says nothing about now');
+    equal(restored.status, 'pending', 'a reading of the session before says nothing about now');
     await sensors.discover();
     equal(keys(sensors.catalog.temperature), order, 'discovery matches every saved sensor and adds none');
     equal(find('memory', 'usage'), restored, 'the saved sensor is the one discovery found');
-    sensors.destroy();
-});
-
-test('a rate that still shows a saved value keeps it until its second reading', async () => {
-    let first = setup();
-    await first.sensors.discover();
-    first.show(first.find('network', 'eth0/rx'));
-    await secondReading();
-    first.sensors.destroy();
-
-    let {sensors, find, show} = setup(first.configuration);
-    await sensors.discover();
-    let download = find('network', 'eth0/rx');
-    show(download);
-    await settle();
-    equal(download.status, 'saved');
-    await secondReading();
-    equal(download.status, 'ready');
     sensors.destroy();
 });
 

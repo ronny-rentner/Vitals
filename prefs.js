@@ -106,10 +106,9 @@ export default class VitalsPrefs extends ExtensionPreferences {
                 this._toggleRow('network-speed-format', _('Measure in'), '', [_('Bytes'), _('Bits')]),
                 this._speedUnitRow()),
             this._group(_('Public IP Address'),
-                this._switchRow('include-public-ip', _('Show public IP address'), _('Looked up over the internet from the provider below.')),
-                this._toggleRow('network-public-ip-provider', _('Provider'), '', [_('Core Coding'), _('MyIP.com'), _('ipify')]),
+                this._switchRow('include-public-ip', _('Show public IP address'), _('Looked up over the internet.')),
                 this._numberRow('network-public-ip-interval', _('Minutes between lookups'), 1, 1440,
-                    _('Each lookup is a request to the provider. Refresh in the menu looks it up at once.'))));
+                    _('Refresh in the menu looks it up at once.'))));
 
         this._categoryPage('storage', _('Monitor storage'), '', [],
             this._group(_('Units'), ...this._radioRows('storage-measurement', [
@@ -132,12 +131,13 @@ export default class VitalsPrefs extends ExtensionPreferences {
         this._settings.connect('changed::category-order', () => this._orderCategoryPages());
     }
 
-    // The icons of the categories are the extension's own, in the style the user chose.
+    // The icons of the categories, in the style the user chose. Their folder is searched last, so that an icon of the
+    // same name in the user's icon theme wins, as in the menu.
     _applyIconStyle() {
         let iconTheme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default());
         let ownIcons = `${this.path}/icons/`;
         let style = ICON_STYLE_DIRECTORIES[this._settings.get_int('icon-style')];
-        iconTheme.set_search_path([ownIcons + style, ...iconTheme.get_search_path().filter(directory => !directory.startsWith(ownIcons))]);
+        iconTheme.set_search_path([...iconTheme.get_search_path().filter(directory => !directory.startsWith(ownIcons)), ownIcons + style]);
     }
 
     // The icon styles, each with its category icons as a preview.
@@ -145,7 +145,7 @@ export default class VitalsPrefs extends ExtensionPreferences {
         let previews = ICON_STYLE_DIRECTORIES.map(directory => {
             let preview = new Gtk.Box({ spacing: 12 });
             for (let category of Object.values(sensorCategories))
-                preview.append(new Gtk.Image({ pixel_size: 20, gicon: Gio.icon_new_for_string(`${this.path}/icons/${directory}/${category.icon}`) }));
+                preview.append(new Gtk.Image({ pixel_size: 20, gicon: Gio.icon_new_for_string(`${this.path}/icons/${directory}/${category.icon}.svg`) }));
             return preview;
         });
         return this._radioRows('icon-style', [
@@ -202,7 +202,7 @@ export default class VitalsPrefs extends ExtensionPreferences {
         for (let dependent of [...rows, ...groups])
             categorySwitch.bind_property('active', dependent, 'sensitive', GObject.BindingFlags.SYNC_CREATE);
         // A category has one name and one icon, those of the menu.
-        let page = this._page(name, _(sensorCategories[name].name), sensorCategories[name].icon.replace('.svg', ''),
+        let page = this._page(name, _(sensorCategories[name].name), sensorCategories[name].icon,
             this._group('', categorySwitch, ...rows), ...groups);
         this._colorScales(name, page, categorySwitch);
     }

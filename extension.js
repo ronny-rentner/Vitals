@@ -32,6 +32,9 @@ const WIDTH_MEMORY_SECONDS = 60;
 const SENSOR_PANEL_MILLISECONDS = 150;
 const SENSOR_PANEL_DIMMED_OPACITY = 90;
 
+// The folders under icons/ of the icon styles, in the order of the `icon-style` setting.
+const ICON_STYLE_DIRECTORIES = ['original', 'gnome'];
+
 // How long a category takes to slide open, as a submenu of GNOME Shell does.
 const CATEGORY_OPEN_MILLISECONDS = 250;
 // How long a category takes to slide shut. Shorter than opening, so that a category below the one that opens has
@@ -63,11 +66,16 @@ var VitalsMenuButton = GObject.registerClass({
         this._extensionObject = extensionObject;
         this._settings = extensionObject.getSettings();
 
-        this._sensorIcons = SensorCategories.sensorCategories;
-
-        // list with the prefixes for the according themes, the index of each
-        // item must match the index on the combo box
-        this._sensorsIconPathPrefix = ['/icons/original/', '/icons/gnome/'];
+        // Icons are found by name in the user's icon theme, so that a theme can replace any of ours. The folder of
+        // the chosen icon style is searched last and has all of ours. Each name is looked up once, until the user
+        // switches the icon theme or the style.
+        this._iconTheme = new St.IconTheme();
+        this._icons = new Map();
+        this._applyIconStyle();
+        this._iconTheme.connectObject('changed', () => {
+            this._icons.clear();
+            this._redrawMenu();
+        }, this);
 
         // Category name to its submenu in the dropdown.
         this._groups = {};
@@ -142,14 +150,18 @@ var VitalsMenuButton = GObject.registerClass({
             this);
 
         for (let setting of [
-            'use-higher-precision', 'fixed-widths', 'hide-icons', 'unit', 'icon-style',
+            'use-higher-precision', 'fixed-widths', 'hide-icons', 'unit',
             'memory-measurement', 'network-speed-format', 'network-speed-unit',
             'storage-measurement'
         ])
             this._settings.connectObject('changed::' + setting, this._redrawMenu.bind(this), this);
+        this._settings.connectObject('changed::icon-style', () => {
+            this._applyIconStyle();
+            this._redrawMenu();
+        }, this);
 
         for (let setting of [
-            'include-public-ip', 'network-public-ip-provider', 'include-static-info', 'include-static-gpu-info',
+            'include-public-ip', 'include-static-info', 'include-static-gpu-info',
             'storage-locations', 'storage-monitor-volumes', 'hide-zeros'
         ])
             this._settings.connectObject('changed::' + setting, this._discoverSensors.bind(this), this);
@@ -261,7 +273,7 @@ var VitalsMenuButton = GObject.registerClass({
     // `position` is the category's place among the items of the menu; without one it is added at the end.
     _initializeMenuGroup(groupName, category, position) {
         this._groups[groupName] = new PopupMenu.PopupSubMenuMenuItem(_(SensorCategories.sensorCategories[groupName].name), true);
-        this._groups[groupName].icon.gicon = Gio.icon_new_for_string(this._sensorIconPath(groupName));
+        this._groups[groupName].icon.gicon = this._gicon(groupName);
 
         // hide menu items that user has requested to not include
         if (!category.enabled)
@@ -448,7 +460,7 @@ var VitalsMenuButton = GObject.registerClass({
         this._defaultItem.add_child(new St.Icon({
             style_class: 'system-status-icon',
             reactive: true,
-            gicon: Gio.icon_new_for_string(this._sensorIconPath('system'))
+            gicon: this._gicon('system')
         }));
     }
 
@@ -468,13 +480,15 @@ var VitalsMenuButton = GObject.registerClass({
         });
         this._menuLayout.add_child(item);
 
+        let icon = null;
         if (!this._settings.get_boolean('hide-icons')) {
-            item.add_child(new St.Icon({
+            icon = new St.Icon({
                 style_class: 'system-status-icon',
                 opacity: PANEL_ICON_OPACITY[emphasizeValues],
                 reactive: true,
-                gicon: Gio.icon_new_for_string(this._sensorIconPath(link.category, this._iconName(sensor)))
-            }));
+                gicon: this._gicon(link.category, sensor)
+            });
+            item.add_child(icon);
         }
 
         if (this._settings.get_boolean('allow-panel-dragging')) {
@@ -507,7 +521,7 @@ var VitalsMenuButton = GObject.registerClass({
         // A value is never shortened with "…" (0 is the text engine's "do not shorten"): it gets the width it needs.
         value.clutter_text.ellipsize = 0;
         value.style = formatted.style || null;
-        this._panelItems.set(link, {item, value});
+        this._panelItems.set(link, {item, icon, value});
         // The value is in the item before it gets its text: a text is measured in the font the item gives it.
         item.add_child(value);
         this._setPanelText(value, formatted);
@@ -652,7 +666,7 @@ var VitalsMenuButton = GObject.registerClass({
         for (let categoryName of [...this._separators.keys()])
             this._removeSeparator(categoryName);
         for (let groupName in this._groups)
-            this._groups[groupName].icon.gicon = Gio.icon_new_for_string(this._sensorIconPath(groupName));
+            this._groups[groupName].icon.gicon = this._gicon(groupName);
         this._syncCatalog();
         this._redrawPanelItems();
     }
@@ -703,7 +717,7 @@ var VitalsMenuButton = GObject.registerClass({
                 let row = this._rows.get(sensor);
                 if (row.label != this._label(sensor))
                     row.label = this._label(sensor);
-                let gicon = Gio.icon_new_for_string(this._sensorIconPath(name, this._iconName(sensor)));
+                let gicon = this._gicon(name, sensor);
                 if (!row.gicon.equal(gicon))
                     row.gicon = gicon;
                 row.pinned = pinnedSensors.has(sensor);
@@ -895,16 +909,9 @@ var VitalsMenuButton = GObject.registerClass({
 
     _formatted(categoryName, sensor) {
         // A colour scale for one sensor names it by its category and key.
-        return sensor.status == 'ready' || sensor.status == 'saved'
+        return sensor.status == 'ready'
             ? this._formatter.format(sensor.value, sensor.format, categoryName, categoryName + '/' + sensor.key, sensor.lowIsBad)
             : {text: '…', style: ''};
-    }
-
-    // The icon of the sensor's category, or the one of its kind of value: the arrow for a download or upload value, or
-    // the one the sensor names in `icon`.
-    _iconName(sensor) {
-        let kind = sensor.icon ?? sensor.direction;
-        return kind ? 'icon-' + kind : 'icon';
     }
 
     // Writes the readings of the given sensors to what shows them, or of every sensor on screen when called without any.
@@ -935,11 +942,16 @@ var VitalsMenuButton = GObject.registerClass({
             row.visible = sensor.status != 'unavailable';
             if (row.value != formatted.text) row.value = formatted.text;
             if (row.valueStyle != formatted.style) row.valueStyle = formatted.style;
+            // A reading can change a sensor's icon, such as the bars of a WiFi signal.
+            let gicon = this._gicon(row.categoryName, sensor);
+            if (row.gicon != gicon) row.gicon = gicon;
         }
-        for (let [link, {item, value}] of this._panelItems) {
+        for (let [link, {item, icon, value}] of this._panelItems) {
             let sensor = link.sensor;
             if (!changed(sensor)) continue;
             let formatted = this._formatted(link.category, sensor);
+            let gicon = this._gicon(link.category, sensor);
+            if (icon && icon.gicon != gicon) icon.gicon = gicon;
             item.visible = sensor.status != 'unavailable';
             if (value.text != formatted.text) this._setPanelText(value, formatted);
             if (value.style != formatted.style) value.style = formatted.style;
@@ -953,7 +965,7 @@ var VitalsMenuButton = GObject.registerClass({
     }
 
     _addRow(categoryName, category, sensor) {
-        let gicon = Gio.icon_new_for_string(this._sensorIconPath(categoryName, this._iconName(sensor)));
+        let gicon = this._gicon(categoryName, sensor);
         let row = new MenuItem.MenuItem(gicon, categoryName, this._label(sensor), '…');
         row.connect('clicked', () => this._toggleRowActions(categoryName, sensor));
         this._rows.set(sensor, row);
@@ -967,10 +979,26 @@ var VitalsMenuButton = GObject.registerClass({
         });
     }
 
-    _sensorIconPath(sensor, icon = 'icon') {
-        const icons = this._sensorIcons[sensor];
-        const iconPathPrefixIndex = this._settings.get_int('icon-style');
-        return this._extensionObject.path + this._sensorsIconPathPrefix[iconPathPrefixIndex] + icons[icon];
+    // Puts the folder of the chosen icon style last into the icon theme's search path, in place of another style's,
+    // with the country icons, which are the same in every style.
+    _applyIconStyle() {
+        let ownIcons = this._extensionObject.path + '/icons/';
+        let style = ICON_STYLE_DIRECTORIES[this._settings.get_int('icon-style')];
+        this._iconTheme.set_search_path([...this._iconTheme.get_search_path().filter(directory => !directory.startsWith(ownIcons)),
+            ownIcons + style, ownIcons + 'countries']);
+        this._icons.clear();
+    }
+
+    // The icon a sensor names, or its category's icon when it names none or no theme has an icon of that name, such
+    // as a country without one.
+    _gicon(categoryName, sensor = null) {
+        let name = sensor?.icon ?? SensorCategories.sensorCategories[categoryName].icon;
+        if (!this._icons.has(name)) {
+            // The theme gives a file; a themed icon would be looked up again in the Shell's theme, which lacks ours.
+            let found = this._iconTheme.lookup_icon(name, 16, 0);
+            this._icons.set(name, found ? Gio.icon_new_for_string(found.get_filename()) : null);
+        }
+        return this._icons.get(name) ?? this._gicon(categoryName);
     }
 
     _positionInPanel() {

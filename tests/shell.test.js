@@ -483,17 +483,6 @@ step('the Preferences button opens the preferences', async () => {
     await waitFor(() => !window(), 'the preferences window closed');
 });
 
-step('after the extension was switched off and on, the top bar shows the last values at once', async () => {
-    await waitFor(() => !topBarTexts().includes('…'), 'values');
-    let lastTexts = topBarTexts().join(', ');
-    Main.extensionManager.disableExtension(UUID);
-    await waitFor(() => !Main.panel.statusArea.vitalsMenu, 'switched off');
-    Main.extensionManager.enableExtension(UUID);
-    await waitFor(() => Main.panel.statusArea.vitalsMenu, 'switched on');
-    button = Main.panel.statusArea.vitalsMenu;
-    equal(topBarTexts().join(', '), lastTexts, 'the values it showed when it was switched off');
-});
-
 export async function run() {
     // The Shell's helper process for automation scripts leaves by itself after half a minute, which is before this
     // test is done. Without this, the Shell tries to stop it at the end and ends with a failure.

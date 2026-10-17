@@ -7,7 +7,9 @@ const real = {
     newForPath: Gio.File.new_for_path,
     newForUri: Gio.File.new_for_uri,
     volumeMonitor: Gio.VolumeMonitor.get,
-    monotonicTime: GLib.get_monotonic_time
+    monotonicTime: GLib.get_monotonic_time,
+    timeoutAdd: GLib.timeout_add,
+    sourceRemove: GLib.Source.remove
 };
 
 function notFound(path) {
@@ -28,6 +30,9 @@ export class Machine {
         this._listErrors = new Map();
         this._heldReads = new Map();
         this._skippedMicroseconds = 0;
+        // The timers that are set and not yet due, by their id: when each is due on the machine's clock, and what it calls.
+        this._timers = new Map();
+        this._lastTimer = 0;
         this._builtMicroseconds = real.monotonicTime();
         // Every file read so far, in order.
         this.reads = [];
@@ -41,10 +46,18 @@ export class Machine {
     // interpreter of its own may do that: in the Shell's, the Shell itself would read the machine.
     install() {
         Gio.File.new_for_path = path => this._answers(path) ? this._file(path) : real.newForPath(path);
-        Gio.File.new_for_uri = uri => devices.system[uri] !== undefined ? this._file(uri) : real.newForUri(uri);
+        // The machine answers every web address itself, so that no test reaches the internet. An address without an
+        // answer in the fixture fails like a missing file.
+        Gio.File.new_for_uri = uri => uri.startsWith('https://') ? this._file(uri) : real.newForUri(uri);
         Gio.VolumeMonitor.get = () => ({get_mounts: () => this.volumes.map(path =>
             ({get_root: () => ({get_path: () => path})}))});
         GLib.get_monotonic_time = () => real.monotonicTime() + this._skippedMicroseconds;
+        // Timers run on the machine's clock: they fire when a test skips time past them.
+        GLib.timeout_add = (priority, milliseconds, callback) => {
+            this._timers.set(++this._lastTimer, {due: GLib.get_monotonic_time() + milliseconds * 1000, callback});
+            return this._lastTimer;
+        };
+        GLib.Source.remove = id => this._timers.delete(id);
     }
 
     uninstall() {
@@ -52,6 +65,8 @@ export class Machine {
         Gio.File.new_for_uri = real.newForUri;
         Gio.VolumeMonitor.get = real.volumeMonitor;
         GLib.get_monotonic_time = real.monotonicTime;
+        GLib.timeout_add = real.timeoutAdd;
+        GLib.Source.remove = real.sourceRemove;
     }
 
     plug(name) {
@@ -62,9 +77,16 @@ export class Machine {
         this._plugged = this._plugged.filter(plugged => plugged != name);
     }
 
-    // Lets so many seconds pass at once, as a suspend does, so that a test of an interval does not wait it out.
+    // Lets so many seconds pass at once, as a suspend does, so that a test of an interval does not wait it out. The
+    // timers that fall due meanwhile fire, the earliest first.
     skip(seconds) {
         this._skippedMicroseconds += seconds * 1000000;
+        let nextDue = () => [...this._timers].filter(([, timer]) => timer.due <= GLib.get_monotonic_time())
+            .sort(([, first], [, second]) => first.due - second.due)[0];
+        for (let due = nextDue(); due; due = nextDue()) {
+            this._timers.delete(due[0]);
+            due[1].callback();
+        }
     }
 
     // The file's content as it is now, undefined when there is no such file.

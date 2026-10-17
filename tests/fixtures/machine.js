@@ -72,9 +72,6 @@ export const devices = deepFreeze({
             'Inter-| sta-|   Quality        |   Discarded packets               | Missed | WE\n' +
             ' face | tus | link level noise |  nwid  crypt   frag  retry   misc | beacon | 22\n' +
             'wlan0: 0000   56.  -54.  -256        0      0      0      0     44        0\n',
-        'https://ipv4.corecoding.com': '{"IPv4":"203.0.113.7"}',
-        'https://api.myip.com': '{"ip":"203.0.113.7","country":"Germany","cc":"DE"}',
-        'https://api.ipify.org?format=json': '{"ip":"203.0.113.7"}',
 
         // The root filesystem on a device-mapper volume on the NVMe disk.
         '/proc/self/mountinfo':
@@ -139,6 +136,15 @@ export const devices = deepFreeze({
         '/sys/class/drm/card0-eDP-1/status': 'connected\n',
         '/sys/class/powercap/intel-rapl-mmio:0/constraint_0_power_limit_uw': '45000000\n',
         '/sys/devices/platform/thinkpad_acpi/dytc_lapmode': '1\n'
+    },
+
+    // The connection to the internet: the public IP services, which all answer the machine's address and country.
+    internet: {
+        'https://1.1.1.1/cdn-cgi/trace': 'fl=123f45\nh=1.1.1.1\nip=203.0.113.7\nts=1792229214.123\nvisit_scheme=https\n' +
+            'uag=gvfs/1.58.0\ncolo=TXL\nsliver=none\nhttp=http/2\nloc=DE\ntls=TLSv1.3\nsni=off\nwarp=off\ngateway=off\n' +
+            'rbi=off\nkex=X25519\n',
+        'https://get.geojs.io/v1/ip/country.json': '{"country":"DE","country_3":"DEU","ip":"203.0.113.7","name":"Germany"}',
+        'https://api.country.is/': '{"ip":"203.0.113.7","country":"DE"}'
     },
 
     // A second battery that powers the machine, discharging. Its driver gives it another name than BAT.

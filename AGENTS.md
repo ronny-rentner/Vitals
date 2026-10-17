@@ -64,7 +64,7 @@ Local clone: compile schemas after schema edits (`glib-compile-schemas --strict 
 
 - One `tests/<module>.test.js` per module, all run in GJS, each in an interpreter of its own.
 - Nothing in Vitals is replaced, made up or read from a private member. A test uses `Sensors` as the extension does, the callbacks the extension sets included, and changes only the machine and the settings.
-- A test of `Sensors` drives it through a `Machine` (`tests/machine.js`), the test double for the system that `Sensors` monitors. It stands in for the files under `/sys` and `/proc`, the space of the mounted filesystems, the mounts of `Gio.VolumeMonitor`, the public IP services and the monotonic clock. The test sets and removes files, plugs device groups in and out, fails and holds reads, and skips time instead of waiting out an interval.
+- A test of `Sensors` drives it through a `Machine` (`tests/machine.js`), the test double for the system that `Sensors` monitors. It stands in for the files under `/sys` and `/proc`, the space of the mounted filesystems, the mounts of `Gio.VolumeMonitor`, the public IP services, the monotonic clock and the GLib timers. The test sets and removes files, plugs device groups in and out, fails and holds reads, and skips time instead of waiting out an interval; skipping fires the timers that fall due.
 - Fixtures are frozen constants in `tests/fixtures/`; `machine.js` is a ThinkPad in device groups, each file's content exactly as the kernel presents it. No test changes a fixture.
 - Everything mutable is created inside the test and ends with it. A `setup()` helper may build it; it holds no data.
 - In the GJS tests, a `console.error` or `console.warn` fails the test, unless the test expects it and takes it with `takeFaults`.
@@ -102,7 +102,7 @@ A setting is on the page of what it changes: General, Top Bar, Menu, or a catego
 - No `libgtop` (decided on 2026-10-08): it gives the same numbers from the same files as about 50 lines of our own parsing, and would add a package that is often not installed and calls that block the main thread. Storage space comes from GLib (`query_filesystem_info_async`).
 - Gettext: `_()` from the Extension/prefs import, domain `vitals`.
 - GObject subclasses: `GObject.registerClass` + unique `GTypeName`.
-- Icons: `St.Icon` / `Gtk.Image`, not emoji.
+- Icons: `St.Icon` / `Gtk.Image`, not emoji. An icon is found by its name in the user's icon theme, so that a theme can replace it; our own are named `vitals-…-symbolic` and are in the folder of each icon style, which is searched last. The country icons in `icons/countries/` are drawn by `make country-icons`.
 - Line length: stay under ~200 characters (EGO review UI).
 - Temperatures come from `/sys/class/hwmon` and `/sys/class/thermal`. A thermal zone is left out when it is not a sensor, when the kernel also publishes it through hwmon, or when an hwmon driver reports the same value; the lists are in `sensors.js`.
 - The sensor catalog is described in `docs/catalog-design.md`; read it before changing `sensors.js` or `extension.js`. It is plain data without functions, saved as a whole in the `catalog` setting.
@@ -149,6 +149,6 @@ A setting is on the page of what it changes: General, Top Bar, Menu, or a catego
 - A header's sensor is chosen when the hardware is looked for and when the user pins one, never between.
 - A panel link whose device is not there keeps its place and has no top-bar item until the device is found.
 - What comes on screen is read at once, not at the next tick (decided on 2026-10-10), unless it was read during the last update interval. A rate gets its second reading a second later.
-- At start the collector reads as soon as discovery ends. Until then a saved reading is shown if it is at most a minute old, otherwise "…".
-- The catalog is written when a sensor is added or forgotten and when the user changes the panel; the readings when the extension stops, not on every tick.
+- At start the collector reads as soon as discovery ends. Until then every value is "…": readings are not saved.
+- The catalog is written when a sensor is added or forgotten and when the user changes the panel.
 - A sensor read that fails is an expected state, not an error: the sensor becomes `unavailable`, its row is hidden, and it is logged with `console.debug`. `console.error` is for faults.

@@ -1,12 +1,12 @@
 # Rewrite the tests on Machine, without fakes
 
 ## Context
-The collection tests and the Shell test make up sensors and sources, replace methods of `Sensors` and of the renderer, and read private members. The tests are to be deleted and rewritten so that `Sensors` and the extension run unchanged and read everything from `Machine`, the test double of the system. Shorter code that covers more. Decided: time is real, and no test expects an exact rate; tests of pure functions stay, minus overlaps; the Shell test replaces nothing.
+The collection tests and the Shell test make up sensors and sources, replace methods of `Sensors` and of the renderer, and read private members. The tests are to be deleted and rewritten so that `Sensors` and the extension run unchanged and read everything from `Machine`, the test double of the system. Shorter code that covers more. Decided: no test expects an exact rate; tests of pure functions stay, minus overlaps; the Shell test replaces nothing.
 
 ## Machine (`tests/machine.js`, `tests/fixtures/machine.js`)
 - Stands behind `Gio.File.new_for_path`, `Gio.File.new_for_uri` (the three public IP providers answer JSON from the fixture) and `Gio.VolumeMonitor.get`. Only paths under `/sys` and `/proc`, the mount points whose space is asked, and the provider URLs; every other path goes to the original. GJS tests only, each in an interpreter of its own.
 - Stands behind `GLib.get_monotonic_time`, which is the real time plus what `machine.skip(seconds)` skipped, as a suspend does. A test of an interval skips it instead of waiting. A saved reading older than a minute, or a sensor not found for a year, comes from a saved catalog with old timestamps.
-- Counters grow with real time at rates the fixture gives: `/proc/net/dev`, `/proc/stat`, `/proc/diskstats`, `/proc/uptime`. A test checks a rate as there or not, or against other values of the same reading; the one exact rate is zero, of a counter that does not move.
+- Counters grow with real time at rates the fixture gives: `/proc/net/dev`, `/proc/stat`, `/proc/diskstats`, `/proc/uptime`. A network and a storage rate are checked between bounds: the test sets the counter, and the time between the two readings is at least the second reading's delay and at most what the test measured.
 - What a test does to the machine: set, remove and restore a file's content, plug and unplug a device (a group of files the fixture names: second battery, mouse, USB drive, share, VPN interface, second NVMe, AMD card), fail a read, hold a read open, skip time. `reads` and `asked` stay. A test's machine is uninstalled when the test ends.
 - Fixture: one machine with every category, adding what is missing today: `/proc/loadavg`, `/proc/uptime`, `file-nr`, `/proc/net/wireless` with a WiFi interface, an AMD card under `/sys/class/drm`.
 - `nvidia-smi` stays a real program first in `PATH`, installed for each test; `PATH` and its environment are restored when the test ends.
