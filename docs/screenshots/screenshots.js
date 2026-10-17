@@ -6,15 +6,16 @@ import Shell from 'gi://Shell';
 import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as Scripting from 'resource:///org/gnome/shell/ui/scripting.js';
+import {writeCategoryEnabled} from '../../helpers/storedCatalog.js';
 
 // Room around what a screenshot shows, in pixels.
 const MARGIN = 12;
-// Colour rules for the pictures of threshold colours: green, then yellow from the second number on, then red.
+// Colour rules for the pictures of threshold colours, as a user would set them: green, then yellow from the second
+// number on, then red.
 const GREEN = '38 162 105', YELLOW = '229 165 10', RED = '224 27 36';
 const COLOR_RULES = {
-    'temperature-colors': ['0 ' + GREEN, '50 ' + YELLOW, '60 ' + RED].map(breakpoint => breakpoint + ' kind:temp'),
-    'memory-colors': ['0 ' + GREEN, '50 ' + YELLOW, '80 ' + RED].map(breakpoint => breakpoint + ' kind:percent'),
-    'processor-colors': ['0 ' + GREEN, '25 ' + YELLOW, '75 ' + RED].map(breakpoint => breakpoint + ' kind:percent')
+    'temperature-colors': ['0 ' + GREEN, '70 ' + YELLOW, '85 ' + RED].map(breakpoint => breakpoint + ' kind:temp'),
+    'memory-colors': ['0 ' + GREEN, '70 ' + YELLOW, '90 ' + RED].map(breakpoint => breakpoint + ' kind:percent')
 };
 // How many pictures are saved so far, and their size together.
 let savedPictures = 0, savedBytes = 0;
@@ -131,13 +132,35 @@ export async function run() {
 
     // The pictures are published, so the machine's public IP address stays out of them.
     settings.set_boolean('include-public-ip', false);
+    // The battery and the graphics card are switched off for a new user; switched on as the preferences do, their
+    // sensors can be pinned.
+    for (let categoryName of ['battery', 'gpu'])
+        writeCategoryEnabled(settings, categoryName, true);
     await button._discoverSensors();
 
     // The top bar: the sensors a new user has, which end with the download speed, and three more.
-    await pin([['network', find('network', 'device-tx')], ['temperature', sensors.catalog.temperature.header],
-        ['fan', sensors.catalog.fan.header]], true);
-    let more = [['processor', find('processor', 'usage')], ['storage', find('storage', '//free')],
-        ['voltage', sensors.catalog.voltage.header], ['system', find('system', 'uptime')]];
+    let download = ['network', find('network', 'device-rx')], upload = ['network', find('network', 'device-tx')];
+    let temperature = ['temperature', sensors.catalog.temperature.header];
+    let usual = [['memory', find('memory', 'usage')], ['system', find('system', 'load-1m')], download, upload, temperature,
+        ['fan', sensors.catalog.fan.header]];
+    await pin(usual, true);
+    // A few pictures show other sensors, to show what else can be pinned.
+    let battery = field => ['battery', sensors.catalog.battery.sensors.find(sensor => sensor.field == field)];
+    let precise = [battery('percentage'), battery('power-rate'), ['processor', find('processor', 'frequency')],
+        ['system', find('system', 'uptime')]];
+    let traffic = [download, upload, ['network', find('network', 'boot-rx')], ['network', find('network', 'boot-tx')],
+        ['temperature', find('temperature', 'coretemp/temp1') ?? sensors.catalog.temperature.header]];
+    let more = [['network', find('network', 'wifi-link-quality')], battery('percentage'), ['gpu', find('gpu', 'refresh-rate')],
+        ['storage', find('storage', '//free')]];
+    let topBarWith = async (pinned, name, options) => {
+        await pin(usual, false);
+        await pin(pinned, true);
+        // Screen redraws are counted over the second after they came on screen.
+        await Scripting.sleep(1100);
+        await topBar(name, options);
+        await pin(pinned, false);
+        await pin(usual, true);
+    };
     // Every picture once in the Shell's dark style and once in its light style, whose pictures end in "-light".
     // The Shell is dark unless the desktop asks for light.
     let desktop = new Gio.Settings({schema_id: 'org.gnome.desktop.interface'});
@@ -152,12 +175,10 @@ export async function run() {
         await topBar('top-bar-plain' + style, {'emphasize-values': false});
         await topBar('top-bar-gnome-icons' + style, {'icon-style': 1});
         await topBar('top-bar-no-icons' + style, {'hide-icons': true});
-        await topBar('top-bar-precision' + style, {'use-higher-precision': true});
-        await topBar('top-bar-fahrenheit-bits' + style, {'unit': 1, 'network-speed-format': 1});
+        await topBarWith(precise, 'top-bar-precision' + style, {'use-higher-precision': true});
+        await topBarWith(traffic, 'top-bar-fahrenheit-bits' + style, {'unit': 1, 'network-speed-format': 1});
         await topBar('top-bar-colors' + style, COLOR_RULES);
-        await pin(more, true);
-        await topBar('top-bar-many' + style);
-        await pin(more, false);
+        await topBarWith(more, 'top-bar-many' + style);
 
         await menu('menu' + style);
         await menu('menu-network' + style, 'network');

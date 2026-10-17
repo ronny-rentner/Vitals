@@ -6,17 +6,15 @@ By default, the top bar shows memory usage, system load and download speed. For 
 
 | Setting | Result |
 |---|---|
-| Default settings | ![](top-bar.png)<br>![](top-bar-light.png) |
-| Top Bar › **Emphasize values** disabled. When enabled, icons and units are drawn lighter and smaller than the numbers. | ![](top-bar-plain.png)<br>![](top-bar-plain-light.png) |
-| General › **Icon style** set to GNOME. | ![](top-bar-gnome-icons.png)<br>![](top-bar-gnome-icons-light.png) |
-| Top Bar › **Hide icons** enabled. The icons in the menu stay. | ![](top-bar-no-icons.png)<br>![](top-bar-no-icons-light.png) |
-| General › **Use higher precision** enabled. Values have one more decimal place, and uptimes include seconds. | ![](top-bar-precision.png)<br>![](top-bar-precision-light.png) |
-| Temperature › **Unit** set to °F and Network › **Measure in** set to Bits. | ![](top-bar-fahrenheit-bits.png)<br>![](top-bar-fahrenheit-bits-light.png) |
-| **Threshold Colors** defined on the Temperature and Memory pages. A color applies from its threshold value up to the next one. | ![](top-bar-colors.png)<br>![](top-bar-colors-light.png) |
+| Default settings | ![](top-bar.png) ![](top-bar-light.png) |
+| Top Bar › **Emphasize values** disabled. When enabled, icons and units are drawn lighter and smaller than the numbers. | ![](top-bar-plain.png) ![](top-bar-plain-light.png) |
+| General › **Icon style** set to GNOME. | ![](top-bar-gnome-icons.png) ![](top-bar-gnome-icons-light.png) |
+| Top Bar › **Hide icons** enabled. The icons in the menu stay. | ![](top-bar-no-icons.png) ![](top-bar-no-icons-light.png) |
+| General › **Use higher precision** enabled. Values have one more decimal place, and uptimes include seconds. Shown: battery charge, battery power rate, processor frequency and uptime. | ![](top-bar-precision.png) ![](top-bar-precision-light.png) |
+| Temperature › **Unit** set to °F and Network › **Measure in** set to Bits. Shown: download and upload speed, downloaded and uploaded since boot, and the processor's temperature. | ![](top-bar-fahrenheit-bits.png) ![](top-bar-fahrenheit-bits-light.png) |
+| **Threshold Colors** defined on the Temperature and Memory pages. A color applies from its threshold value up to the next one. | ![](top-bar-colors.png) ![](top-bar-colors-light.png) |
 
-Each example is shown in the GNOME dark style and in the light style.
-
-Any value in the menu can be pinned to the top bar. The following screenshots show four additional values: processor usage, free storage, voltage and uptime.
+Any value in the menu can be pinned to the top bar. The following screenshots show four others: the WiFi signal with its bars, battery charge, screen redraws and free storage.
 
 ![](top-bar-many.png)
 

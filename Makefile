@@ -54,7 +54,8 @@ test-shell: compile
 		gnome-shell --wayland --headless --virtual-monitor $$((1280 * $(SCALE)))x$$((720 * $(SCALE))) \
 			--automation-script tests/shell.test.js'
 
-# The pictures in docs/screenshots, taken again. It starts from the schema defaults.
+# The pictures in docs/screenshots, taken again. It starts from the schema defaults, with GNOME's own text scale.
+screenshots: TEXT_SCALE = 1
 screenshots: compile
 	@echo ":: Taking the pictures in docs/screenshots again..."
 	export SCREENSHOT_DIR=$(CURDIR)/docs/screenshots
