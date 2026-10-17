@@ -669,7 +669,7 @@ export class Sensors {
                 let previous = last?.status != 'ready' ? null
                     : tooYoung && last.previous ? last.previous : {value: last.value, time: last.time};
                 source.reading = {value, time, status: 'ready', previous};
-            }).catch(error => {
+            }, error => {
                 if (source.pendingRead != pendingRead || this.destroyed) return;
                 let previous = source.reading;
                 // A failed read is an expected state, handled by marking the reading unavailable. It is not an error.
@@ -685,6 +685,9 @@ export class Sensors {
                 let withoutValue = updated.some(sensor => sensor.status == 'pending');
                 if (withoutValue && !source.reading.previous && !source.secondReading)
                     this._scheduleSecondReading(id, source);
+            }).catch(error => {
+                // A fault in our own handling of a reading, not a failed read.
+                console.error(id, error);
             });
             reads.push(pendingRead.promise);
         }
