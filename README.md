@@ -3,7 +3,11 @@ Vitals
 
 Vitals is a GNOME Shell extension for displaying your computer's temperature, voltage, fan speed, memory usage, processor load, system resources, network speed and storage stats in your GNOME Shell's top menu bar. This is a one stop shop to monitor all of your vital sensors. Vitals uses asynchronous polling to provide a smooth user experience.
 
-![How it works](https://raw.githubusercontent.com/corecoding/Vitals/main/howtouse.gif)
+Vitals collects the inputs needed by pinned values, visible category summaries and expanded menu rows. With the menu closed, only pinned values require updates. A pinned aggregate still needs all of its inputs.
+
+Temperature’s “Skip sensors that read zero” option excludes sensors that read zero during discovery from collection and averages. Excluded sensors are retried on rediscovery. Accepted sensors remain valid if they later reach zero. With the option off, readable zero temperatures are included. Zero readings in other categories remain visible.
+
+[Screenshots](docs/screenshots/README.md)
 
 ## Installation
 
@@ -11,19 +15,15 @@ Vitals is a GNOME Shell extension for displaying your computer's temperature, vo
 
 #### Ubuntu/Debian
 
-    sudo apt install gnome-shell-extension-manager gir1.2-gtop-2.0 lm-sensors
+    sudo apt install gnome-shell-extension-manager lm-sensors
 
 #### Fedora
 
-    sudo dnf install libgtop2-devel lm_sensors
+    sudo dnf install lm_sensors
 
 #### Arch/Manjaro
 
-    sudo pacman -Syu libgtop lm_sensors gnome-icon-theme-symbolic gnome-icon-theme git
-
-#### openSUSE
-
-    sudo zypper install libgtop-devel
+    sudo pacman -Syu lm_sensors gnome-icon-theme-symbolic gnome-icon-theme git
 
 ### 2) Install extension
 
@@ -99,27 +99,37 @@ Vitals was originally forked from [gnome-shell-extension-freon](https://github.c
 * (cpu|memory)-symbolic.svg - [DinosoftLabs](https://www.iconfinder.com/dinosoftlabs).
 * network\*.svg - [Yannick Lung](https://www.iconfinder.com/yanlu).
 * Health icon - [Dod Cosmin](https://www.iconfinder.com/icons/458267/cross_doctor_drug_health_healthcare_hospital_icon).
+* wifi-signal-\*-symbolic.svg - from [Adwaita Icon Theme](https://gitlab.gnome.org/GNOME/adwaita-icon-theme).
 
 ### GNOME Theme
-* (battery | storage)-symbolic.svg - from [Adwaita Icon Theme](https://gitlab.gnome.org/GNOME/adwaita-icon-theme).
+* (battery | storage | wifi-signal-\*)-symbolic.svg - from [Adwaita Icon Theme](https://gitlab.gnome.org/GNOME/adwaita-icon-theme).
 * (memory | network* | system | voltage)-symbolic.svg - from [Icon Development Kit](https://gitlab.gnome.org/Teams/Design/icon-development-kit).
 * fan-symbolic.svg - inherited from [Freon](https://github.com/UshakovVasilii/gnome-shell-extension-freon) project, with mild modifications.
 * (temperature | cpu)-symbolic.svg - designed by [daudix](https://github.com/daudix).
 
 ## Disclaimer
-Sensor data is obtained from the system using hwmon and GTop. Core Coding and the Vitals authors are not responsible for improperly represented data. No warranty expressed or implied.
+Sensor data is obtained from sysfs, procfs, Gio filesystem queries and supported GPU tools. Core Coding and the Vitals authors are not responsible for improperly represented data. No warranty expressed or implied.
 
 ## Development Commands
 
+How the code is built, tested and documented is in [docs/development.md](docs/development.md).
+
 | Description | Command |
 | --- | --- |
+| Run unit tests (GJS) | `make test` |
+| Run headless Shell integration tests | `make test-shell` |
+| Open interactive Devkit preview (GNOME 49+, mutter-devkit) | `make preview` |
 | Launch preferences | `gnome-shell-extension-prefs Vitals@CoreCoding.com` |
 | View logs | ``journalctl --since="`date '+%Y-%m-%d %H:%M'`" -f \| grep Vitals`` |
 | Compile schemas | `glib-compile-schemas --strict schemas/` |
+| Update translation template and merge it into the translations | `make pot` |
 | Compile translation file | `msgfmt vitals.po -o vitals.mo` |
 | Launch Wayland virtual window | `dbus-run-session -- gnome-shell --nested --wayland` |
-| Read hot-sensors value | `dconf read /org/gnome/shell/extensions/vitals/hot-sensors` |
-| Write hot-sensors value | `dconf write /org/gnome/shell/extensions/vitals/hot-sensors "['_memory_usage_', '_system_load_1m_']"`<br/>This value configures the list of sensors that show up in the panel. To specify a sensor name, click on the extension to show the drop-down menu, then take the category label and the label of the individual sensor, convert them to `snake_case`, and format them like this: `_category_sensor_`.|
+| Read the saved sensor catalog | `dconf read /org/gnome/shell/extensions/vitals/catalog` |
+
+The catalog holds every known sensor by category, whether each category is switched on, and the sensors in the panel. Drag sensors in the panel to reorder them; toggling them in the drop-down menu preserves their positions. Its structure and the sensor keys are described in `docs/catalog-design.md` and `docs/sensor-key-format.md`.
+
+`make preview` keeps its settings under `build/preview`. `make test-shell` uses separate settings under `build/test-shell` and exits after its checks. Both launch unpacked extension files in a separate D-Bus session. JavaScript changes require restarting the preview.
 
 ## Donations
 [Please consider donating if you find this extension useful.](https://corecoding.com/donate.php)

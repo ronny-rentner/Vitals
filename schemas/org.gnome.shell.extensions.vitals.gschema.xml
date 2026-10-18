@@ -1,99 +1,94 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <schemalist gettext-domain="gnome-shell-extensions">
+  <enum id="org.gnome.shell.extensions.vitals.position-in-panel">
+    <value nick="far-left" value="0"/>
+    <value nick="left" value="1"/>
+    <value nick="center" value="2"/>
+    <value nick="right" value="3"/>
+    <value nick="far-right" value="4"/>
+  </enum>
   <schema id="org.gnome.shell.extensions.vitals" path="/org/gnome/shell/extensions/vitals/">
-    <key name="hot-sensors" type="as">
-      <default>['_memory_usage_', '_system_load_1m_', '__network-rx_max__']</default>
-      <summary>Sensors to show in panel</summary>
-      <description>List of sensors to be shown in the panel</description>
+    <key name="catalog" type="a{sv}">
+      <default>{
+        'temperature': &lt;{'enabled': &lt;true&gt;}&gt;,
+        'voltage': &lt;{'enabled': &lt;true&gt;}&gt;,
+        'fan': &lt;{'enabled': &lt;true&gt;}&gt;,
+        'memory': &lt;{'enabled': &lt;true&gt;}&gt;,
+        'processor': &lt;{'enabled': &lt;true&gt;}&gt;,
+        'system': &lt;{'enabled': &lt;true&gt;}&gt;,
+        'network': &lt;{'enabled': &lt;true&gt;}&gt;,
+        'storage': &lt;{'enabled': &lt;true&gt;}&gt;,
+        'battery': &lt;{'enabled': &lt;false&gt;}&gt;,
+        'gpu': &lt;{'enabled': &lt;false&gt;}&gt;,
+        'panel': &lt;{'sensors': &lt;[
+          &lt;{'category': &lt;'memory'&gt;, 'key': &lt;'usage'&gt;, 'visible': &lt;true&gt;}&gt;,
+          &lt;{'category': &lt;'system'&gt;, 'key': &lt;'load-1m'&gt;, 'visible': &lt;true&gt;}&gt;,
+          &lt;{'category': &lt;'network'&gt;, 'key': &lt;'device-rx'&gt;, 'visible': &lt;true&gt;}&gt;
+        ]&gt;}&gt;
+      }</default>
+      <summary>Sensor catalog</summary>
+      <description>Every known sensor by category, with its order and last reading, whether each category is switched on, and the sensors in the panel. Described in docs/catalog-design.md.</description>
     </key>
     <key type="i" name="update-time">
       <default>5</default>
       <summary>Seconds between updates</summary>
-      <description>Delay between sensor polling</description>
+      <description>How often sensors are read. Only sensors on screen are read: those in the top bar and in the open menu. The preferences offer 1, 2, 3, 5, 10, 15, 30 and 60 seconds.</description>
     </key>
-    <key type="i" name="position-in-panel">
-      <default>2</default>
-      <summary>Position in panel</summary>
-      <description>Position in Panel ('left', 'center', 'right')</description>
+    <key name="position-in-panel" enum="org.gnome.shell.extensions.vitals.position-in-panel">
+      <default>'right'</default>
+      <summary>Position in top bar</summary>
+      <description>Far left and far right are the outer ends of the bar.</description>
+    </key>
+    <key type="b" name="allow-panel-dragging">
+      <default>true</default>
+      <summary>Reorder top bar sensors by drag and drop</summary>
+      <description>A sensor that is dragged in the top bar takes the place where it is dropped.</description>
+    </key>
+    <key type="b" name="allow-category-dragging">
+      <default>true</default>
+      <summary>Reorder menu categories by drag and drop</summary>
+      <description>A category that is dropped onto another one in the menu takes its place. Only with the manual category order.</description>
+    </key>
+    <key type="i" name="category-order">
+      <default>1</default>
+      <summary>Category order</summary>
+      <description>The order of the categories in the menu and in the preferences. 0=alphabetical, 1=manual, which is the order given by dragging them and is kept while alphabetical is chosen.</description>
     </key>
     <key type="b" name="use-higher-precision">
       <default>false</default>
       <summary>Use higher precision</summary>
       <description>Show one extra digit after decimal</description>
     </key>
-    <key type="b" name="alphabetize">
+    <key type="b" name="include-aggregates">
       <default>true</default>
-      <summary>Alphabetize sensors</summary>
-      <description>Display sensors in alphabetical order</description>
+      <summary>Show average, minimum and maximum</summary>
+      <description>Show the average, minimum and maximum over the temperatures and over the fans as rows of their own, below the sensors</description>
     </key>
     <key type="b" name="hide-zeros">
       <default>false</default>
-      <summary>Hide zero values</summary>
-      <description>Hide data from sensors that are invalid</description>
-    </key>
-    <key type="b" name="show-temperature">
-      <default>true</default>
-      <summary>Monitor temperature</summary>
-      <description>Display temperature of various components</description>
+      <summary>Skip temperature sensors that read zero</summary>
+      <description>Exclude temperature sensors that read zero during discovery. Retry excluded sensors on rediscovery; accept later zeros from admitted sensors.</description>
     </key>
     <key type="i" name="unit">
       <default>0</default>
       <summary>Temperature unit</summary>
       <description>The unit ('centigrade' or 'fahrenheit') the extension should display the temperature in</description>
     </key>
-    <key type="b" name="show-voltage">
+    <key type="b" name="network-hardware-only">
       <default>true</default>
-      <summary>Monitor voltage</summary>
-      <description>Display voltage of various components</description>
-    </key>
-    <key type="b" name="show-fan">
-      <default>true</default>
-      <summary>Monitor fan</summary>
-      <description>Display fan rotation per minute</description>
-    </key>
-    <key type="b" name="show-memory">
-      <default>true</default>
-      <summary>Monitor memory</summary>
-      <description>Display memory information</description>
-    </key>
-    <key type="b" name="show-processor">
-      <default>true</default>
-      <summary>Monitor processor</summary>
-      <description>Display processor information</description>
-    </key>
-    <key type="b" name="show-system">
-      <default>true</default>
-      <summary>Monitor system</summary>
-      <description>Display system information</description>
-    </key>
-    <key type="b" name="show-storage">
-      <default>true</default>
-      <summary>Monitor storage</summary>
-      <description>Display storage information</description>
-    </key>
-    <key type="b" name="show-network">
-      <default>true</default>
-      <summary>Monitor network</summary>
-      <description>Display network information</description>
+      <summary>Only show hardware interfaces</summary>
+      <description>Leave the interfaces that are not hardware, such as bridges, container and VPN interfaces and the loopback, out of the network menu. The network totals are over the hardware interfaces either way.</description>
     </key>
     <key type="b" name="include-public-ip">
       <default>true</default>
-      <summary>Include public IP address</summary>
+      <summary>Show public IP address</summary>
       <description>Display public IP address of internet connection</description>
     </key>
     <key type="i" name="network-public-ip-interval">
-      <default>60</default>
-      <range min="15" max="1440"/>
+      <default>5</default>
+      <range min="1" max="1440"/>
       <summary>Public IP refresh interval in minutes</summary>
-    </key>
-    <key name="network-public-ip-show-flag" type="b">
-        <default>true</default>
-        <summary>Show country flag for public IP</summary>
-    </key>
-    <key type="i" name="network-public-ip-provider">
-      <default>0</default>
-      <summary>Public IP provider</summary>
-      <description>Service used to look up public IP address. 0=Core Coding, 1=MyIP.com, 2=ipify</description>
+      <description>Refresh in the menu looks it up at once.</description>
     </key>
     <key type="i" name="network-speed-format">
       <default>0</default>
@@ -103,17 +98,22 @@
     <key type="i" name="network-speed-unit">
       <default>0</default>
       <summary>Fixed network speed unit</summary>
-      <description>Fix the network speed unit instead of auto-scaling. 0=Auto, 1=Kbps/KiB/s, 2=Mbps/MiB/s</description>
+      <description>Fix the network speed unit instead of auto-scaling. 0=Auto, 1=kbit/s or kB/s, 2=Mbit/s or MB/s</description>
     </key>
-    <key type="s" name="storage-path">
-      <default>"/"</default>
-      <summary>Storage path</summary>
-      <description>Storage path for monitoring</description>
+    <key type="as" name="storage-locations">
+      <default>['/']</default>
+      <summary>Monitored storage locations</summary>
+      <description>The mount points whose storage is monitored. A location has its values while something is mounted there.</description>
     </key>
-    <key type="b" name="show-battery">
+    <key type="b" name="storage-monitor-volumes">
       <default>false</default>
-      <summary>Monitor battery</summary>
-      <description>Monitor battery health</description>
+      <summary>Monitor drives mounted by GNOME</summary>
+    </key>
+    <key type="i" name="storage-network-interval">
+      <default>5</default>
+      <range min="1" max="1440"/>
+      <summary>Network storage location update interval in minutes</summary>
+      <description>How often a storage location on another machine is asked for its space. A location on a disk is asked at every update.</description>
     </key>
     <key type="i" name="memory-measurement">
       <default>1</default>
@@ -125,15 +125,20 @@
       <summary>Storage measurement</summary>
       <description>Can use gigabyte or gibibyte for storage</description>
     </key>
-    <key type="i" name="battery-slot">
-      <default>0</default>
-      <summary>Battery slot to monitor</summary>
-      <description>Which numerical battery slot should vitals monitor</description>
-    </key>
     <key type="b" name="fixed-widths">
       <default>true</default>
-      <summary>Use fixed widths in top bar</summary>
-      <description>Keep sensors in top bar from jumping around</description>
+      <summary>Steady widths in top bar</summary>
+      <description>Keep room for a value's widest text, so its neighbours do not jump. The room is given back after a minute.</description>
+    </key>
+    <key type="b" name="emphasize-values">
+      <default>true</default>
+      <summary>Emphasize values in top bar</summary>
+      <description>Draw icons and units in the top bar lighter and smaller than the numbers</description>
+    </key>
+    <key type="b" name="animate-categories">
+      <default>true</default>
+      <summary>Slide menu categories open and shut</summary>
+      <description>Slide a category of the menu open and shut. Off opens and closes it at once.</description>
     </key>
     <key type="b" name="hide-icons">
       <default>false</default>
@@ -142,8 +147,8 @@
     </key>
     <key type="b" name="menu-centered">
       <default>false</default>
-      <summary>Make the menu centered</summary>
-      <description>Center the menu to the icon regardless of the position in the panel</description>
+      <summary>Menu centered under top bar sensors</summary>
+      <description>Open the menu centered under the sensors in the top bar. Otherwise it is centered under the pointer.</description>
     </key>
     <key type="s" name="monitor-cmd">
       <default>"gnome-system-monitor"</default>
@@ -155,11 +160,6 @@
       <summary>Include processor static information</summary>
       <description>Display processor static information that doesn't change</description>
     </key>
-    <key type="b" name="show-gpu">
-      <default>false</default>
-      <summary>Monitor GPU</summary>
-      <description>Display GPU information (requires the nvidia-smi tool)</description>
-    </key>
     <key type="b" name="include-static-gpu-info">
       <default>false</default>
       <summary>Include GPU static information</summary>
@@ -167,43 +167,58 @@
     </key>
     <key type="i" name="icon-style">
       <default>0</default>
-      <summary>Icon styles</summary>
-      <description>Set the style for the displayed sensor icons ('original', 'updated')</description>
+      <summary>Icon style</summary>
+      <description>Set the style for the displayed sensor icons (0=Classic, 1=Adwaita)</description>
     </key>
     <key name="temperature-colors" type="as">
       <default>[]</default>
-      <summary>Temperature color thresholds</summary>
-      <description>Color rules matched against the displayed temperature value. Entries are "threshold r g b" for all sensors, or "threshold r g b sensor:&lt;key&gt;" for one sensor. Multiple sensors may each have their own breakpoints; unknown sensor keys are ignored.</description>
+      <summary>Temperature color scales</summary>
+      <description>The breakpoints of the colour scales of this category. An entry is "threshold r g b target". The target is "sensor:&lt;category&gt;/&lt;key&gt;" for one sensor, or "kind:&lt;format&gt;" for all sensors of the category that show that kind of value. The threshold is in the unit the preferences show next to it.</description>
+    </key>
+    <key name="voltage-colors" type="as">
+      <default>[]</default>
+      <summary>Voltage color scales</summary>
+      <description>The breakpoints of the colour scales of this category. An entry is "threshold r g b target". The target is "sensor:&lt;category&gt;/&lt;key&gt;" for one sensor, or "kind:&lt;format&gt;" for all sensors of the category that show that kind of value. The threshold is in the unit the preferences show next to it.</description>
     </key>
     <key name="fan-colors" type="as">
       <default>[]</default>
-      <summary>Fan color thresholds</summary>
-      <description>Color rules matched against fan RPM. Entries are "threshold r g b" or "threshold r g b sensor:&lt;key&gt;" per sensor. Unknown sensor keys are ignored.</description>
+      <summary>Fan color scales</summary>
+      <description>The breakpoints of the colour scales of this category. An entry is "threshold r g b target". The target is "sensor:&lt;category&gt;/&lt;key&gt;" for one sensor, or "kind:&lt;format&gt;" for all sensors of the category that show that kind of value. The threshold is in the unit the preferences show next to it.</description>
     </key>
     <key name="memory-colors" type="as">
       <default>[]</default>
-      <summary>Memory usage color thresholds</summary>
-      <description>Color rules matched against memory usage percentage. Entries are "threshold r g b" or "threshold r g b sensor:&lt;key&gt;". Unknown sensor keys are ignored.</description>
+      <summary>Memory color scales</summary>
+      <description>The breakpoints of the colour scales of this category. An entry is "threshold r g b target". The target is "sensor:&lt;category&gt;/&lt;key&gt;" for one sensor, or "kind:&lt;format&gt;" for all sensors of the category that show that kind of value. The threshold is in the unit the preferences show next to it.</description>
     </key>
     <key name="processor-colors" type="as">
       <default>[]</default>
-      <summary>Processor usage color thresholds</summary>
-      <description>Color rules matched against processor usage percentage. Entries are "threshold r g b" or "threshold r g b sensor:&lt;key&gt;". Unknown sensor keys are ignored.</description>
+      <summary>Processor color scales</summary>
+      <description>The breakpoints of the colour scales of this category. An entry is "threshold r g b target". The target is "sensor:&lt;category&gt;/&lt;key&gt;" for one sensor, or "kind:&lt;format&gt;" for all sensors of the category that show that kind of value. The threshold is in the unit the preferences show next to it.</description>
     </key>
     <key name="system-colors" type="as">
       <default>[]</default>
-      <summary>System load color thresholds</summary>
-      <description>Color rules matched against system load average. Entries are "threshold r g b" or "threshold r g b sensor:&lt;key&gt;". Unknown sensor keys are ignored.</description>
+      <summary>System color scales</summary>
+      <description>The breakpoints of the colour scales of this category. An entry is "threshold r g b target". The target is "sensor:&lt;category&gt;/&lt;key&gt;" for one sensor, or "kind:&lt;format&gt;" for all sensors of the category that show that kind of value. The threshold is in the unit the preferences show next to it.</description>
+    </key>
+    <key name="network-colors" type="as">
+      <default>[]</default>
+      <summary>Network color scales</summary>
+      <description>The breakpoints of the colour scales of this category. An entry is "threshold r g b target". The target is "sensor:&lt;category&gt;/&lt;key&gt;" for one sensor, or "kind:&lt;format&gt;" for all sensors of the category that show that kind of value. The threshold is in the unit the preferences show next to it.</description>
+    </key>
+    <key name="storage-colors" type="as">
+      <default>[]</default>
+      <summary>Storage color scales</summary>
+      <description>The breakpoints of the colour scales of this category. An entry is "threshold r g b target". The target is "sensor:&lt;category&gt;/&lt;key&gt;" for one sensor, or "kind:&lt;format&gt;" for all sensors of the category that show that kind of value. The threshold is in the unit the preferences show next to it.</description>
     </key>
     <key name="battery-colors" type="as">
       <default>[]</default>
-      <summary>Battery color thresholds</summary>
-      <description>Color rules matched against battery percentage. Entries are "threshold r g b" or "threshold r g b sensor:&lt;key&gt;". Unknown sensor keys are ignored.</description>
+      <summary>Battery color scales</summary>
+      <description>The breakpoints of the colour scales of this category. An entry is "threshold r g b target". The target is "sensor:&lt;category&gt;/&lt;key&gt;" for one sensor, or "kind:&lt;format&gt;" for all sensors of the category that show that kind of value. The threshold is in the unit the preferences show next to it.</description>
     </key>
     <key name="gpu-colors" type="as">
       <default>[]</default>
-      <summary>GPU usage color thresholds</summary>
-      <description>Color rules matched against GPU utilization percentages. Entries are "threshold r g b" or "threshold r g b sensor:&lt;key&gt;". Unknown sensor keys are ignored.</description>
+      <summary>GPU color scales</summary>
+      <description>The breakpoints of the colour scales of this category. An entry is "threshold r g b target". The target is "sensor:&lt;category&gt;/&lt;key&gt;" for one sensor, or "kind:&lt;format&gt;" for all sensors of the category that show that kind of value. The threshold is in the unit the preferences show next to it.</description>
     </key>
   </schema>
 </schemalist>

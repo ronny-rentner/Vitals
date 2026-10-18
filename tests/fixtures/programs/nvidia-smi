@@ -1,0 +1,30 @@
+#!/bin/sh
+# A stand-in for nvidia-smi, so the tests run the collector's real process handling.
+# It answers --query-gpu=<fields> with one line per card from the file $NVIDIA_SMI_CARDS, where a card is one line
+# of field=value pairs separated by ";". A field the card does not have is N/A. With -l it repeats every second.
+# Every start is recorded in $NVIDIA_SMI_LOG as "<pid> <arguments>".
+echo "$$ $*" >> "$NVIDIA_SMI_LOG"
+fields=
+repeat=
+for argument; do
+    case $argument in
+        --query-gpu=*) fields=${argument#--query-gpu=} ;;
+        -l) repeat=yes ;;
+    esac
+done
+
+print_cards() {
+    while IFS= read -r card; do
+        line=
+        for field in $(echo "$fields" | tr ',' ' '); do
+            value=$(echo "$card" | tr ';' '\n' | sed -n "s/^$field=//p")
+            line="$line${line:+, }${value:-N/A}"
+        done
+        echo "$line"
+    done < "$NVIDIA_SMI_CARDS"
+}
+
+print_cards
+if [ -n "$repeat" ]; then
+    while sleep 1; do print_cards; done
+fi

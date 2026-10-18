@@ -26,1167 +26,1558 @@
 
 import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
-import GObject from 'gi://GObject';
-import * as SubProcessModule from './helpers/subprocess.js';
-import * as FileModule from './helpers/file.js';
+import * as SensorMath from './helpers/sensorMath.js';
+import {sensorCategories} from './helpers/categories.js';
+import {readCatalog, writeCatalog, sensorPresent} from './helpers/storedCatalog.js';
 
-let GTop, hasGTop = true;
-try {
-    ({default: GTop} = await import('gi://GTop'));
-} catch (err) {
-    log(err);
-    hasGTop = false;
+// Marks a label for the translation template (make pot); the renderer translates it when it shows it.
+const N_ = text => text;
+
+// A rate needs two readings, and the next tick can be a minute away.
+const SECOND_READING_SECONDS = 1;
+
+// The kernel gives temperatures and voltages in thousandths, and a power limit in millionths.
+const FILE_VALUE = {
+    'temp': number => number / 1000, 'in': number => number / 1000, 'fan': number => number,
+    'watt-limit': number => number / 1000000, 'percent': number => number * 0.01, 'memory': number => number
+};
+// Not voltage: an average over a battery, the system and a USB supply means nothing.
+const AGGREGATED = {temperature: 'temp', fan: 'fan'};
+const AGGREGATES = {
+    'total-power-rate': SensorMath.sum,
+    average: SensorMath.average,
+    // Infinite without sensors, which makes the aggregate unavailable.
+    minimum: sensors => Math.min(...sensors.map(sensor => sensor.value)),
+    maximum: sensors => Math.max(...sensors.map(sensor => sensor.value))
 };
 
-export const Sensors = GObject.registerClass({
-    GTypeName: 'Sensors',
-}, class Sensors extends GObject.Object {
-    _init(settings, sensorIcons, gettext) {
+const LOW_IS_BAD = {lowIsBad: true};
+
+// A source's definition. `id` is the file's path, or a name for a source _registerSystemSources reads; without `id`,
+// discovery makes one source per storage location or battery. Without `parse`, the file is one number.
+const MEMORY = {
+    id: '/proc/meminfo', parse: SensorMath.parseMemory, category: 'memory',
+    sensors: {
+        'physical': {label: N_('Physical'), format: 'memory', value: s => s.value.MemTotal},
+        'available': {label: N_('Available'), format: 'memory', ...LOW_IS_BAD, value: s => s.value.MemAvailable},
+        'cached': {label: N_('Cached'), format: 'memory', value: s => s.value.Cached},
+        'free': {label: N_('Free'), format: 'memory', ...LOW_IS_BAD, value: s => s.value.MemFree},
+        'swap-total': {label: N_('Swap Total'), format: 'memory', value: s => s.value.SwapTotal},
+        'swap-free': {label: N_('Swap Free'), format: 'memory', ...LOW_IS_BAD, value: s => s.value.SwapFree},
+        'allocated': {label: N_('Allocated'), format: 'memory', value: s => s.value.MemTotal - s.value.MemAvailable},
+        'usage': {label: N_('Usage'), format: 'percent', value: s => (s.value.MemTotal - s.value.MemAvailable) / s.value.MemTotal},
+        'swap-used': {label: N_('Swap Used'), format: 'memory', value: s => s.value.SwapTotal - s.value.SwapFree},
+        'swap-usage': {label: N_('Swap Usage'), format: 'percent', value: s =>
+            s.value.SwapTotal ? (s.value.SwapTotal - s.value.SwapFree) / s.value.SwapTotal : 0}
+    }
+};
+
+// Discovery adds a sensor per core.
+const CPU_STAT = {
+    id: '/proc/stat', parse: SensorMath.parseCpuStat, category: 'processor',
+    sensors: {'usage': {label: N_('Usage'), format: 'percent', value: s => SensorMath.cpuUsage(s, 'cpu')}}
+};
+
+// Read from one file per core, or from /proc/cpuinfo where it lists the frequencies (_discoverSystem).
+const CPU_FREQUENCIES = {
+    id: 'cpu-frequencies', category: 'processor',
+    // In hertz, from /proc/cpuinfo's text or the per-core files' list.
+    frequencies: s => Array.isArray(s.value) ? s.value :
+        s.value.split('\n').filter(line => line.split(':')[0].trim() == 'cpu MHz')
+            .map(line => Number(line.slice(line.indexOf(':') + 1)) * 1000000),
+    sensors: {
+        'frequency': {label: N_('Frequency'), format: 'hertz', icon: 'vitals-cpu-frequency-symbolic', value: s => {
+            let frequencies = CPU_FREQUENCIES.frequencies(s);
+            return frequencies.reduce((sum, frequency) => sum + frequency, 0) / frequencies.length;
+        }},
+        'min-frequency': {label: N_('Min frequency'), format: 'hertz', icon: 'vitals-cpu-frequency-symbolic',
+            value: s => Math.min(...CPU_FREQUENCIES.frequencies(s))},
+        'max-frequency': {label: N_('Max frequency'), format: 'hertz', icon: 'vitals-cpu-frequency-symbolic',
+            value: s => Math.max(...CPU_FREQUENCIES.frequencies(s))}
+    }
+};
+
+const UPTIME = {
+    id: '/proc/uptime', parse: text => SensorMath.splitFields(text).map(Number), category: 'system',
+    sensors: {
+        // The time since boot minus one core's share of the idle time of all cores.
+        'process-time': {category: 'processor', label: N_('Process Time'), format: 'uptime',
+            value: (s, sensor, sensors) => s.value[0] - s.value[1] / sensors._cores().length},
+        'uptime': {label: N_('Uptime'), format: 'uptime', value: s => s.value[0]}
+    }
+};
+
+const LOADAVG = {
+    id: '/proc/loadavg', parse: SensorMath.splitFields, category: 'system',
+    sensors: {
+        'load-1m': {label: N_('Load 1m'), format: 'load', value: s => Number(s.value[0])},
+        'load-5m': {label: N_('Load 5m'), format: 'load', value: s => Number(s.value[1])},
+        'load-15m': {label: N_('Load 15m'), format: 'load', value: s => Number(s.value[2])},
+        // The fourth field is runnable/all threads, as "2/1234".
+        'threads-active': {label: N_('Threads Active'), format: 'string', value: s => Number(s.value[3].split('/')[0])},
+        'threads-total': {label: N_('Threads Total'), format: 'string', value: s => Number(s.value[3].split('/')[1])}
+    }
+};
+
+// parseInt takes the first of the file's three numbers, the allocated file handles.
+const OPEN_FILES = {
+    id: '/proc/sys/fs/file-nr', parse: text => Number.parseInt(text), category: 'system',
+    sensors: {'open-files': {label: N_('Open Files'), format: 'string', value: s => s.value}}
+};
+
+const POWERCAP = {
+    id: '/sys/class/powercap/intel-rapl-mmio:0/constraint_0_power_limit_uw', category: 'processor',
+    sensors: {'powercap': {label: N_('Powercap'), format: 'watt-limit', icon: 'vitals-cpu-power-symbolic', value: s => FILE_VALUE['watt-limit'](s.value)}}
+};
+
+// 1 while a ThinkPad senses that it lies on a lap.
+const LAP_MODE = {
+    id: '/sys/devices/platform/thinkpad_acpi/dytc_lapmode', category: 'system',
+    sensors: {'lap-mode': {label: N_('Lap mode'), format: 'string', value: (s, sensor, sensors) => sensors._gettext(s.value == 1 ? 'on' : 'off')}}
+};
+
+// No source: discovery writes their values once, with `include-static-info` on.
+const STATIC_INFO = {
+    category: 'processor',
+    sensors: {
+        'vendor': {label: N_('Vendor'), format: 'string'},
+        'bogomips': {label: N_('Bogomips'), format: 'string'},
+        'sockets': {label: N_('Sockets'), format: 'string'},
+        'cache': {label: N_('Cache'), format: 'memory'},
+        'kernel': {category: 'system', label: N_('Kernel'), format: 'string'}
+    }
+};
+
+// The renderer orders the network rows by these sections.
+const NETWORK_SECTION = {machineSpeed: 1, hardwareInterfaces: 2, volume: 3, other: 4, virtualInterfaces: 5};
+const DIRECTION_ICONS = {rx: 'vitals-network-download-symbolic', tx: 'vitals-network-upload-symbolic'};
+// By DEVTYPE; any other hardware interface is "Ethernet". "WiFi" is spelled as in the WIFI labels.
+const HARDWARE_INTERFACE_KINDS = {wlan: N_('WiFi'), wwan: N_('Mobile')};
+
+// Over the hardware interfaces only: what a virtual interface carries also passes a hardware one, and would count twice.
+const NETWORK = {
+    id: '/proc/net/dev', category: 'network', sensors: {},
+    speed(s, sensors, directions) {
+        let hardwareInterfaces = [...sensors._hardwareInterfaces()];
+        let speeds = directions.flatMap(direction => hardwareInterfaces.map(name =>
+            SensorMath.counterRate(s, value => value.interfaces.get(name)?.[direction])));
+        if (speeds.includes(undefined)) return undefined;
+        if (speeds.includes(SensorMath.PENDING)) return SensorMath.PENDING;
+        return speeds.reduce((total, speed) => total + speed, 0);
+    }
+};
+for (let [direction, speedLabel, bootLabel, sessionLabel] of [
+    ['rx', N_('Download speed'), N_('Downloaded since boot'), N_('Downloaded this session')],
+    ['tx', N_('Upload speed'), N_('Uploaded since boot'), N_('Uploaded this session')]]) {
+    let icon = DIRECTION_ICONS[direction];
+    Object.assign(NETWORK.sensors, {
+        ['device-' + direction]: {label: speedLabel, format: 'speed', direction, icon, section: NETWORK_SECTION.machineSpeed,
+            value: (s, sensor, sensors) => NETWORK.speed(s, sensors, [direction])},
+        // An interface that was just unplugged can be missing from a reading.
+        ['boot-' + direction]: {label: bootLabel, format: 'storage', direction, icon, section: NETWORK_SECTION.volume,
+            value: (s, sensor, sensors) => [...sensors._hardwareInterfaces()].reduce((bytes, name) =>
+                bytes + (s.value.interfaces.get(name)?.[direction] ?? 0), 0)},
+        ['session-' + direction]: {label: sessionLabel, format: 'storage', direction, icon, section: NETWORK_SECTION.volume,
+            value: s => s.value.session[direction]}
+    });
+}
+NETWORK.sensors['combined'] = {label: N_('Total speed'), format: 'speed', section: NETWORK_SECTION.machineSpeed,
+    value: (s, sensor, sensors) => NETWORK.speed(s, sensors, ['rx', 'tx'])};
+
+// The values of the last interface the file lists.
+const WIFI = {
+    id: '/proc/net/wireless', category: 'network',
+    // Two heading lines come first. /proc/net/wireless gives the link quality on a scale from 0 to 70.
+    parse(text) {
+        let lines = text.split('\n').slice(2).filter(line => line.trim());
+        if (!lines.length) return {};
+        let fields = SensorMath.splitFields(lines[lines.length - 1]);
+        return {quality: Number(fields[2]) / 70, signal: Number(fields[3])};
+    },
+    icon(s) {
+        let strength = s.value.quality * 100;
+        let step = strength < 20 ? 'none' : strength < 40 ? 'weak' : strength < 50 ? 'ok' : strength < 80 ? 'good' : 'excellent';
+        return 'vitals-wifi-signal-' + step + '-symbolic';
+    },
+    // Recorded on every machine; without WiFi they are unavailable.
+    sensors: {
+        'wifi-link-quality': {label: N_('WiFi Link Quality'), format: 'percent', section: NETWORK_SECTION.hardwareInterfaces, ...LOW_IS_BAD,
+            value: s => s.value.quality},
+        'wifi-signal-level': {label: N_('WiFi Signal Level'), format: 'string', section: NETWORK_SECTION.hardwareInterfaces,
+            value: s => s.value.signal}
+    }
+};
+
+const PUBLIC_IP = {
+    id: 'public-ip', category: 'network',
+    // Asked in order until one answers within `timeoutSeconds`.
+    services: [
+        ['https://1.1.1.1/cdn-cgi/trace', text => ({ip: text.match(/^ip=(.*)$/m)[1], country: text.match(/^loc=(.*)$/m)[1]})],
+        ['https://get.geojs.io/v1/ip/country.json', text => JSON.parse(text)],
+        ['https://api.country.is/', text => JSON.parse(text)]
+    ],
+    timeoutSeconds: 3,
+    // Without a country, or one without an icon, the category's icon.
+    icon: s => s.value.country ? 'vitals-country-' + s.value.country.toLowerCase() + '-symbolic' : undefined,
+    sensors: {'public-ip': {label: N_('Public IP'), format: 'string', section: NETWORK_SECTION.other, value: s => s.value.ip}}
+};
+
+const MOUNTS = '/proc/self/mountinfo';
+
+// One source per storage location (_storageLocationSource).
+const STORAGE_SPACE = {
+    sensors: {
+        'total': {label: N_('Total'), format: 'storage', value: s => s.value.total},
+        'used': {label: N_('Used'), format: 'storage', value: s => s.value.used},
+        // With the space kept for root, as Free %; GIO's `free` leaves it out.
+        'free': {label: N_('Free'), format: 'storage', ...LOW_IS_BAD, value: s => s.value.total - s.value.used},
+        'reserved': {label: N_('Reserved'), format: 'storage', value: s => s.value.total - s.value.used - s.value.free},
+        'used-percent': {label: N_('Used %'), format: 'percent', value: s => s.value.used / s.value.total},
+        'free-percent': {label: N_('Free %'), format: 'percent', ...LOW_IS_BAD, value: s => (s.value.total - s.value.used) / s.value.total}
+    }
+};
+
+const DISKSTATS = {
+    id: '/proc/diskstats',
+    // By major:minor, as the mount table names a device. Sectors are 512 bytes, whatever the device's.
+    parse: text => new Map(text.split('\n').map(line => {
+        let fields = SensorMath.splitFields(line);
+        return [fields[0] + ':' + fields[1], {read: Number(fields[5]) * 512, write: Number(fields[9]) * 512}];
+    })),
+    sensors: {
+        'read-total': {label: N_('Read total'), format: 'storage', icon: 'vitals-storage-read-symbolic',
+            value: (s, sensor) => s.value.get(sensor.device)?.read},
+        'read-rate': {label: N_('Read rate'), format: 'storage-rate', icon: 'vitals-storage-read-symbolic',
+            value: (s, sensor) => SensorMath.counterRate(s, disks => disks.get(sensor.device)?.read)},
+        'write-total': {label: N_('Write total'), format: 'storage', icon: 'vitals-storage-write-symbolic',
+            value: (s, sensor) => s.value.get(sensor.device)?.write},
+        'write-rate': {label: N_('Write rate'), format: 'storage-rate', icon: 'vitals-storage-write-symbolic',
+            value: (s, sensor) => SensorMath.counterRate(s, disks => disks.get(sensor.device)?.write)}
+    }
+};
+
+// The cache of ZFS.
+const ARC = {
+    id: '/proc/spl/kstat/zfs/arcstats', category: 'storage',
+    // Lines are name, type, value; the heading lines become entries no sensor uses.
+    parse: text => Object.fromEntries(text.split('\n').map(line => {
+        let fields = SensorMath.splitFields(line);
+        return [fields[0], Number(fields[2])];
+    })),
+    sensors: {
+        'arc-target': {label: N_('ARC Target'), format: 'storage', value: s => s.value.c},
+        'arc-maximum': {label: N_('ARC Maximum'), format: 'storage', value: s => s.value.c_max},
+        'arc-current': {label: N_('ARC Current'), format: 'storage', value: s => s.value.size}
+    }
+};
+
+// One source per battery's uevent file (_discoverBattery).
+const BATTERY = {
+    parse: SensorMath.parseBattery,
+    // parseBattery's fields, and the sensor each one becomes.
+    fieldKeys: {
+        state: 'state', cycles: 'cycles', voltage: 'voltage', level: 'level', percentage: 'percentage', power: 'power-rate',
+        full: 'energy-full', design: 'energy-design', now: 'energy-now'
+    },
+    sensors: {
+        'state': {label: N_('State'), format: 'string', value: s => s.value.state},
+        'cycles': {label: N_('Cycles'), format: 'string', value: s => s.value.cycles},
+        'voltage': {label: N_('Voltage'), format: 'in', value: s => s.value.voltage},
+        'level': {label: N_('Level'), format: 'string', value: s => s.value.level},
+        'percentage': {label: N_('Percentage'), format: 'percent', ...LOW_IS_BAD, value: s => s.value.percentage},
+        'power-rate': {label: N_('Power Rate'), format: 'watt', value: s => s.value.power},
+        'energy-full': {label: N_('Energy (full)'), format: 'watt-hour', value: s => s.value.full},
+        'energy-design': {label: N_('Energy (design)'), format: 'watt-hour', value: s => s.value.design},
+        'energy-now': {label: N_('Energy (now)'), format: 'watt-hour', ...LOW_IS_BAD, value: s => s.value.now},
+        'capacity': {label: N_('Capacity'), format: 'percent', ...LOW_IS_BAD, value: s => s.value.full / s.value.design},
+        'time-left': {label: N_('Time left'), format: 'runtime', ...LOW_IS_BAD, value: (s, sensor, sensors) => sensors._batteryTimeLeft(s, sensor.file)}
+    }
+};
+
+// Read through nvidia-smi (_configureNvidia).
+const NVIDIA = {
+    id: 'nvidia',
+    // nvidia-smi gives percentages up to 100, memory in MiB and frequencies in MHz.
+    scale: {'percent': 0.01, 'temp': 1, 'memory': 1048576, 'hertz': 1000000, 'watt-gpu': 1},
+    // Two fields give a share of the first in the second, or a link speed as generation x width.
+    value(reading, sensor) {
+        let gpu = reading.value.gpus.get(sensor.nvidia);
+        let [first, second] = sensor.field.split(',').map(field => Number(gpu?.[field]));
+        if (sensor.format == 'pcie')
+            return Number.isFinite(first) && Number.isFinite(second) ? first + 'x' + second : undefined;
+        return second === undefined ? first * NVIDIA.scale[sensor.format] : first / second;
+    }
+};
+
+// The frames the Shell draws per second (_startFrames).
+const FRAMES = {
+    id: 'frames', category: 'gpu',
+    sensors: {'refresh-rate': {label: N_('Screen Redraws'), format: 'hertz', value: s => SensorMath.counterRate(s, frames => frames)}}
+};
+
+// Seconds that only move forward, for the time between two readings.
+function clock() {
+    return GLib.get_monotonic_time() / 1000000;
+}
+
+// Seconds of calendar time, for the timestamps that are saved with the catalog.
+function now() {
+    return GLib.get_real_time() / 1000000;
+}
+
+// Only for a stream without a pending read: GIO refuses to close one with a pending read.
+function closeNvidiaStream(stream) {
+    stream.close_async(GLib.PRIORITY_DEFAULT, null, (stream, result) => {
+        try { stream.close_finish(result); }
+        catch (error) { console.error(NVIDIA.id, error); }
+    });
+}
+
+// The collector: it finds the sensors, reads the shown ones and writes the catalog (docs/catalog-design.md).
+export class Sensors {
+    constructor(settings, gettext) {
+        // By id: a file's path, a storage location's mount point, or a name.
+        this.sources = new Map();
+        // The sources that are read, each with its sensors as [category name, sensor] (see _updateActiveSources).
+        this.activeSources = new Map();
+        // The categories with an aggregate on screen.
+        this.aggregatedCategories = new Set();
+        // Per category, the reads its aggregates wait for in the latest _readSources call; an older call leaves them to it.
+        this.aggregateReads = new Map();
+        this.destroyed = false;
+        this.onCatalogChanged = () => {};
+        this.onValuesChanged = () => {};
         this._settings = settings;
-        this._sensorIcons = sensorIcons;
-        this._gettext = gettext || (s => s);
+        this._gettext = gettext;
+        // The promise of the discovery under way.
+        this._discovery = null;
+        // Cancelled only by destroy().
+        this._discoveryCancellation = new Gio.Cancellable();
+        // The programs discovery runs, which destroy() stops.
+        this._commands = new Set();
+        // The running nvidia-smi process, its output and its latest complete reading (see _configureNvidia).
+        this._nvidia = null;
+        this._frameSignal = 0;
+        // The frames painted while FRAMES is read. Never reset, since counterRate takes a smaller count for a restart.
+        this._frames = 0;
+        // Per battery file, its charging state and its last time-left values in that state (see _batteryTimeLeft).
+        this._batteryTimes = new Map();
+        // The read of the mount table under way, which every storage location's read waits for.
+        this._mountTableRead = null;
+        this._registerSystemSources();
+        this.catalog = this._load();
+        // The timestamp of the latest run; _startRun gives every run a later one.
+        this._lastRun = Math.max(0, ...this.categories().map(([, category]) => category.discovered ?? 0));
+    }
 
-        this.resetHistory();
-
-        this._last_processor = { 'core': {}, 'speed': [] };
-
-        this._settingChangedSignals = [];
-        this._addSettingChangedSignal('show-gpu', this._reconfigureNvidiaSmiProcess.bind(this));
-        this._addSettingChangedSignal('update-time', this._reconfigureNvidiaSmiProcess.bind(this));
-        this._addSettingChangedSignal('network-public-ip-interval', () => {this._next_public_ip_check = 0;});
-        this._addSettingChangedSignal('network-public-ip-provider', () => {this._next_public_ip_check = 0;});
-        //this._addSettingChangedSignal('include-static-gpu-info', this._reconfigureNvidiaSmiProcess.bind(this));
-
-        this._gpu_drm_vendors = null;
-        this._gpu_drm_indices = null;
-        this._nvidia_smi_process = null;
-        this._nvidia_gpu_count = 1;
-        this._nvidia_labels = [];
-        this._bad_split_count = 0;
-
-        this._frameMonitorSignalId = 0;
-        this._frameMonitorLastTime = 0;
-        this._frameMonitorFrameCount = 0;
-        this._frameMonitorAccTime = 0;
-        this._frameMonitorCurrentHz = 0;
-
-        if (hasGTop) {
-            this.storage = new GTop.glibtop_fsusage();
-            this._storageDevice = '';
-            this._findStorageDevice();
-
-            this._lastRead = 0;
-            this._lastWrite = 0;
+    // Reads the saved catalog. Headers and links are saved as keys and become the sensors here.
+    _load() {
+        let saved = readCatalog(this._settings);
+        let catalog = {};
+        for (let name of Object.keys(sensorCategories)) {
+            let {header, sensors = [], ...category} = saved[name];
+            // A saved value is from an earlier session. `runtime` only means something while the extension runs.
+            for (let sensor of sensors)
+                Object.assign(sensor, {status: 'pending', runtime: {}});
+            catalog[name] = {...category, runtime: {}, sensors, header: sensors.find(sensor => sensor.key == header)};
         }
+        catalog.panel = {sensors: saved.panel.sensors.map(({category, key, visible}) => {
+            let sensors = catalog[category].sensors;
+            let sensor = sensors.find(candidate => candidate.key == key);
+            // A pinned sensor no run has found yet, such as a default pin, keeps its place; discovery fills it in by key.
+            if (!sensor) {
+                sensor = {key, status: 'pending', runtime: {}};
+                sensors.push(sensor);
+            }
+            return {category, sensor, visible};
+        })};
+        return catalog;
     }
 
-    _addSettingChangedSignal(key, callback) {
-        this._settingChangedSignals.push(this._settings.connect('changed::' + key, callback));
+    _save() {
+        // `enabled` belongs to the preferences window; this.catalog's could still miss its latest switch (reloadEnabled).
+        let saved = readCatalog(this._settings);
+        let catalog = {};
+        // Objects are left out: `runtime`, and `header` and `sensors`, which are written below.
+        let plain = record => Object.fromEntries(Object.entries(record).filter(([, fieldValue]) => typeof fieldValue != 'object'));
+        for (let [name, category] of this.categories())
+            catalog[name] = {...plain(category), enabled: saved[name].enabled, header: category.header?.key, sensors: category.sensors.map(plain)};
+        catalog.panel = {sensors: this.catalog.panel.sensors.map(link =>
+            ({category: link.category, key: link.sensor.key, visible: link.visible}))};
+        writeCatalog(this._settings, catalog);
     }
 
-    _refreshIPAddress(callback) {
-        const provider = this._settings.get_int('network-public-ip-provider');
-        let url;
-        if (provider === 1)
-            url = 'https://api.myip.com';
-        else if (provider === 2)
-            url = 'https://api.ipify.org?format=json';
+    // Returns whether any switch changed.
+    reloadEnabled() {
+        let saved = readCatalog(this._settings);
+        let changed = false;
+        for (let [name, category] of this.categories()) {
+            if (category.enabled != saved[name].enabled) {
+                category.enabled = saved[name].enabled;
+                changed = true;
+            }
+        }
+        return changed;
+    }
+
+    // Without the panel, which holds links, not sensors.
+    categories() {
+        return Object.entries(this.catalog).filter(([name]) => name != 'panel');
+    }
+
+    hasPanelItem(link) {
+        let category = this.catalog[link.category];
+        return link.visible && category.enabled && sensorPresent(category, link.sensor);
+    }
+
+    // A first pin goes to the end; an unpinned sensor keeps its link, and with it its place.
+    setPanelSensorVisible(categoryName, sensor, visible) {
+        let links = this.catalog.panel.sensors;
+        let link = links.find(candidate => candidate.sensor == sensor);
+        if (link)
+            link.visible = visible;
         else
-            url = 'https://ipv4.corecoding.com';
-
-        new FileModule.File(url).read().then(contents => {
-            let obj = JSON.parse(contents);
-            let cc = '';
-            let ip = '';
-            if (provider === 1) {
-                cc = (obj && typeof obj['cc'] === 'string') ? obj['cc'].trim().toLowerCase() : '';
-                if (cc === 'xx') cc = ''; // MyIP.com uses XX when country is unknown; not a real flag
-                ip = (obj && typeof obj['ip'] === 'string') ? obj['ip'].trim() : '';
-            } else if (provider === 2) {
-                ip = (obj && typeof obj['ip'] === 'string') ? obj['ip'].trim() : '';
-            } else {
-                cc = (obj && typeof obj['countryCode'] === 'string') ? obj['countryCode'].trim().toLowerCase() : '';
-                ip = (obj && typeof obj['IPv4'] === 'string') ? obj['IPv4'].trim() : '';
-            }
-            const showFlag = this._settings.get_boolean('network-public-ip-show-flag');
-            let typeOut = (showFlag && /^[a-z]{2}$/.test(cc)) ? ('network-' + cc) : 'network';
-            this._returnValue(callback, 'Public IP', ip, typeOut, 'string');
-        }).catch(err => { });
+            links.push({category: categoryName, sensor, visible});
+        this._save();
     }
 
-    _findStorageDevice() {
-        new FileModule.File('/proc/mounts').read("\n").then(lines => {
-            for (let line of lines) {
-                let loadArray = line.trim().split(/\s+/);
-                if (loadArray[1] == this._settings.get_string('storage-path')) {
-                    this._storageDevice = loadArray[0];
-                    break;
+    // An empty label gives the sensor its own label back.
+    renameSensor(sensor, customLabel) {
+        sensor.customLabel = customLabel || undefined;
+        this._save();
+        this.catalogChanged();
+    }
+
+    // A hidden sensor does not count in its category's aggregates either.
+    setSensorHidden(sensor, hidden) {
+        sensor.hidden = hidden || undefined;
+        this._save();
+        this.catalogChanged();
+    }
+
+    // Pin to category; without a sensor, _chooseHeader chooses the header again.
+    setCategoryDefault(categoryName, sensor = null) {
+        let category = this.catalog[categoryName];
+        for (let candidate of category.sensors)
+            candidate.categoryDefault = candidate == sensor || undefined;
+        category.header = this._chooseHeader(categoryName);
+        this._save();
+        this.catalogChanged();
+    }
+
+    setCategoryOrder(categoryNames) {
+        for (let [position, name] of categoryNames.entries())
+            this.catalog[name].position = position;
+        this._save();
+    }
+
+    // Without `beforeLink`, to the end.
+    movePanelLink(link, beforeLink = null) {
+        let links = this.catalog.panel.sensors;
+        links.splice(links.indexOf(link), 1);
+        links.splice(beforeLink === null ? links.length : links.indexOf(beforeLink), 0, link);
+        this._save();
+    }
+
+    addSource(id, definition) {
+        this.sources.set(id, {id, interval: 0, ...definition, pendingRead: null});
+        return this.sources.get(id);
+    }
+
+    // A file becomes a source the first time discovery finds a sensor in it.
+    _source(id, parse = Number) {
+        return this.sources.get(id) ?? this.addSource(id, {read: async cancellation => parse(await this._read(id, cancellation))});
+    }
+
+    reading(id) {
+        return this.sources.get(id)?.reading;
+    }
+
+    catalogChanged() {
+        if (this.destroyed) return;
+        this.onCatalogChanged();
+        this._updateActiveSources();
+        this.onValuesChanged(this._updateActiveSensors());
+        this._readNewlyShown();
+    }
+
+    // The renderer calls this after it changed `runtime.shown`. What came on screen is read at once, and what left it
+    // stops at once: the next tick can be a whole update interval away.
+    shownChanged() {
+        this._updateActiveSources();
+        this._updateActiveSensors();
+        this._readNewlyShown();
+    }
+
+    _aggregatedSensors(category) {
+        return category.sensors.filter(sensor => sensorPresent(category, sensor) && !sensor.aggregate && !sensor.hidden);
+    }
+
+    _hardwareInterfaces() {
+        let network = this.catalog.network;
+        return new Set(network.sensors.filter(sensor => sensor.hardware && sensorPresent(network, sensor))
+            .map(sensor => sensor.interface));
+    }
+
+    // As /proc/stat names them: "cpu0", "cpu1".
+    _cores() {
+        let processor = this.catalog.processor;
+        return processor.sensors.filter(sensor => sensorPresent(processor, sensor) && sensor.core && sensor.core != 'cpu')
+            .map(sensor => sensor.core);
+    }
+
+    // Works out which sources are read: those of what is on screen, and of all sensors an aggregate on screen is
+    // computed over.
+    _updateActiveSources() {
+        let activeSources = new Map();
+        let aggregatedCategories = new Set();
+        if (!this.destroyed) {
+            for (let [name, category] of this.categories()) {
+                let onScreen = sensor => (sensor.runtime.shown || (category.runtime.shown && sensor == category.header)) &&
+                    sensorPresent(category, sensor);
+                if (category.sensors.some(sensor => sensor.aggregate && onScreen(sensor)))
+                    aggregatedCategories.add(name);
+                for (let sensor of category.sensors) {
+                    let aggregatedCategoriesSensor = aggregatedCategories.has(name) && sensorPresent(category, sensor) && !sensor.hidden;
+                    if (!onScreen(sensor) && !aggregatedCategoriesSensor) continue;
+                    // Aggregates, values discovery wrote and sensors no run of this session found have no source.
+                    let id = sensor.runtime.source?.id;
+                    if (id === undefined) continue;
+                    if (!activeSources.has(id))
+                        activeSources.set(id, []);
+                    activeSources.get(id).push([name, sensor]);
                 }
             }
-        }).catch(err => { });
-    }
-
-    query(callback, dwell, wantedKeys) {
-        // menu open (wantedKeys null) or Public IP pinned to the panel
-        if (this._settings.get_boolean('include-public-ip') &&
-            (!wantedKeys || wantedKeys.has('_network_public_ip_')))
-            this._queryPublicIp(callback);
-
-        if (!this._hardware_detected) {
-            // we could set _hardware_detected in discoverHardwareMonitors, but by
-            // doing it here, we guarantee avoidance of race conditions
-            this._hardware_detected = true;
-            this._discoverHardwareMonitors(callback);
-        } else if (this._static_info_refresh) {
-            // menu redraw cleared rows but kept discovery; re-emit static CPU/kernel only
-            this._static_info_refresh = false;
-            this._queryStaticInfo(callback);
         }
 
-        for (let sensor in this._sensorIcons) {
-            // Process Time needs core counts from _queryProcessor even if Processor is hidden
-            if (!this._settings.get_boolean('show-' + sensor)) {
-                if (sensor === 'processor' && wantedKeys &&
-                    wantedKeys.has('_processor_process_time_'))
-                    this._queryProcessor(callback, dwell);
-                continue;
-            }
-
-            if (sensor == 'temperature' || sensor == 'voltage' || sensor == 'fan') {
-                // wantedKeys filters individual hwmon files when the menu is closed
-                this._queryTempVoltFan(callback, sensor, wantedKeys);
-            } else {
-                let method = '_query' + sensor[0].toUpperCase() + sensor.slice(1);
-                this[method](callback, dwell);
-            }
+        for (let id of this.activeSources.keys()) {
+            if (!activeSources.has(id))
+                this._stopReading(id);
         }
-    }
-
-    _queryTempVoltFan(callback, type, wantedKeys) {
-        let readAll = !wantedKeys ||
-            wantedKeys.has('__' + type + '_avg__') ||
-            wantedKeys.has('__' + type + '_min__') ||
-            wantedKeys.has('__' + type + '_max__');
-
-        for (let label in this._tempVoltFanSensors[type]) {
-            if (!readAll &&
-                !wantedKeys.has('_' + type + '_' + label.replaceAll(' ', '_').toLowerCase() + '_'))
-                continue;
-
-            let sensor = this._tempVoltFanSensors[type][label];
-
-            new FileModule.File(sensor['path']).read().then(value => {
-                this._returnValue(callback, label, value, type, sensor['format']);
-            }).catch(err => {
-                this._returnValue(callback, label, 'disabled', type, sensor['format']);
-            });
+        for (let [id, fed] of activeSources) {
+            let source = this.sources.get(id);
+            if (!this.activeSources.has(id)) {
+                // A recent reading with a `previous` is kept for the next tick; any other is read again at once, since
+                // the second reading a rate waits for was called off when the source stopped.
+                let reading = source.reading;
+                let fresh = reading?.status == 'ready' && reading.previous && clock() - reading.time < this._settings.get_int('update-time');
+                if (reading && !fresh && !this._withinInterval(id))
+                    source.reading = {...reading, status: 'pending'};
+                if (source.start) source.start();
+            }
+            if (source.configure)
+                source.configure(fed.map(([, sensor]) => sensor));
         }
+        this.activeSources = activeSources;
+        this.aggregatedCategories = aggregatedCategories;
     }
 
-    _queryMemory(callback) {
-        // check memory info
-        new FileModule.File('/proc/meminfo').read().then(lines => {
-            let m = Object.fromEntries([...lines.matchAll(/^(\w+):\s+(\d+)/gm)].map(x => [x[1], +x[2]]));
-            let total = m.MemTotal || 0, avail = m.MemAvailable || 0, swapTotal = m.SwapTotal || 0;
-            let swapFree = m.SwapFree || 0, cached = m.Cached || 0, memFree = m.MemFree || 0;
-
-            let used = total - avail;
-            let utilized = total ? used / total : 0;
-            let swapUsed = swapTotal - swapFree;
-            let swapUtilized = swapTotal ? swapUsed / swapTotal : 0;
-
-            this._returnValue(callback, 'Usage', utilized, 'memory', 'percent');
-            this._returnValue(callback, 'memory', utilized, 'memory-group', 'percent');
-            this._returnValue(callback, 'Physical', total, 'memory', 'memory');
-            this._returnValue(callback, 'Available', avail, 'memory', 'memory');
-            this._returnValue(callback, 'Allocated', used, 'memory', 'memory');
-            this._returnValue(callback, 'Cached', cached, 'memory', 'memory');
-            this._returnValue(callback, 'Free', memFree, 'memory', 'memory');
-            this._returnValue(callback, 'Swap Total', swapTotal, 'memory', 'memory');
-            this._returnValue(callback, 'Swap Free', swapFree, 'memory', 'memory');
-            this._returnValue(callback, 'Swap Used', swapUsed, 'memory', 'memory');
-            this._returnValue(callback, 'Swap Usage', swapUtilized, 'memory', 'percent');
-        }).catch(err => { });
+    // A pending reading never is, so that it is read again.
+    _withinInterval(id) {
+        let source = this.sources.get(id);
+        let sample = source.reading;
+        let interval = typeof source.interval == 'function' ? source.interval() : source.interval;
+        return sample !== undefined && sample.status != 'pending' && clock() - sample.time < interval;
     }
 
-    _queryProcessor(callback, dwell) {
-        // check processor usage
-        new FileModule.File('/proc/stat').read("\n").then(lines => {
-            let statistics = {};
-
-            for (let line of lines) {
-                let reverse_data = line.match(/^(cpu\d*\s)(.+)/);
-                if (reverse_data) {
-                    let cpu = reverse_data[1].trim();
-
-                    if (!(cpu in this._last_processor['core']))
-                        this._last_processor['core'][cpu] = 0;
-
-                    let s = reverse_data[2].trim().split(' ');
-                    statistics[cpu] = parseInt(s[0]) + parseInt(s[1]) + parseInt(s[2]);
-                }
-            }
-
-            let cores = Object.keys(statistics).length - 1;
-
-            for (let cpu in statistics) {
-                let total = statistics[cpu];
-
-                // make sure we have data to report
-                if (this._last_processor['core'][cpu] > 0) {
-                    let delta = (total - this._last_processor['core'][cpu]) / dwell;
-
-                    // /proc/stat provides overall usage for us under the 'cpu' heading
-                    if (cpu == 'cpu') {
-                        delta = delta / cores;
-                        this._returnValue(callback, 'processor', delta / 100, 'processor-group', 'percent');
-                        this._returnValue(callback, 'Usage', delta / 100, 'processor', 'percent');
-                    } else {
-                        this._returnValue(callback, this._gettext('Core %d').format(cpu.substr(3)), delta / 100, 'processor', 'percent');
-                    }
-                }
-
-                this._last_processor['core'][cpu] = total;
-            }
-
-            // fallback: platforms without cpu MHz in /proc/cpuinfo (some ARM)
-            if (!this._processor_uses_cpu_info) {
-                for (let core = 0; core < cores; core++) {
-                    new FileModule.File('/sys/devices/system/cpu/cpu' + core + '/cpufreq/scaling_cur_freq').read().then(value => {
-                        this._last_processor['speed'][core] = parseInt(value);
-                    }).catch(err => { });
-                }
-            }
-        }).catch(err => { });
-
-        // /proc/cpuinfo lists every core in one file; same values as per-core scaling_cur_freq
-        if (this._processor_uses_cpu_info) {
-            new FileModule.File('/proc/cpuinfo').read("\n").then(lines => {
-                let freqs = [];
-                for (let line of lines) {
-                    // grab megahertz
-                    let value = line.match(/^cpu MHz(\s+): ([+-]?\d+(\.\d+)?)/);
-                    if (value) freqs.push(parseFloat(value[2]));
-                }
-
-                if (!freqs.length) {
-                    this._processor_uses_cpu_info = false;
-                    return;
-                }
-                this._returnFrequencies(callback, freqs, 1000 * 1000);
-            }).catch(err => {
-                this._processor_uses_cpu_info = false;
-            });
-        } else if (Object.values(this._last_processor['speed']).length > 0) {
-            this._returnFrequencies(callback, Object.values(this._last_processor['speed']), 1000);
+    _cancelRead(source) {
+        if (source.pendingRead) {
+            source.pendingRead.cancellation.cancel();
+            source.pendingRead = null;
         }
     }
 
-    _returnFrequencies(callback, freqs, scale) {
-        let sum = 0, min = freqs[0], max = freqs[0];
-        for (let v of freqs) { sum += v; if (v < min) min = v; if (v > max) max = v; }
-        this._returnValue(callback, 'Frequency', (sum / freqs.length) * scale, 'processor', 'hertz');
-        this._returnValue(callback, 'Max frequency', max * scale, 'processor', 'hertz');
-        this._returnValue(callback, 'Min frequency', min * scale, 'processor', 'hertz');
+    _stopReading(id) {
+        let source = this.sources.get(id);
+        this._cancelRead(source);
+        this._callOffSecondReading(source);
+        if (source.stop) source.stop();
     }
 
-    _querySystem(callback) {
-        // check load average
-        new FileModule.File('/proc/sys/fs/file-nr').read("\t").then(loadArray => {
-            this._returnValue(callback, 'Open Files', loadArray[0], 'system', 'string');
-        }).catch(err => { });
-
-        // check load average
-        new FileModule.File('/proc/loadavg').read(' ').then(loadArray => {
-            let proc = loadArray[3].split('/');
-
-            this._returnValue(callback, 'Load 1m', parseFloat(loadArray[0]), 'system', 'load');
-            this._returnValue(callback, 'system', parseFloat(loadArray[0]), 'system-group', 'load');
-            this._returnValue(callback, 'Load 5m', parseFloat(loadArray[1]), 'system', 'load');
-            this._returnValue(callback, 'Load 15m', parseFloat(loadArray[2]), 'system', 'load');
-            this._returnValue(callback, 'Threads Active', proc[0], 'system', 'string');
-            this._returnValue(callback, 'Threads Total', proc[1], 'system', 'string');
-        }).catch(err => { });
-
-        // check uptime
-        new FileModule.File('/proc/uptime').read(' ').then(upArray => {
-            this._returnValue(callback, 'Uptime', upArray[0], 'system', 'uptime');
-
-            let cores = Object.keys(this._last_processor['core']).length - 1;
-            if (cores > 0)
-                this._returnValue(callback, 'Process Time', upArray[0] - upArray[1] / cores, 'processor', 'uptime');
-        }).catch(err => { });
-    }
-
-    _queryPublicIp(callback) {
-        // wall-clock deadline so skipped closed-menu polls still honor the interval
-        let now = GLib.get_real_time() / 1000000;
-        if (this._next_public_ip_check <= now) {
-            // prefs UI minimum is 15; clamp in case an older/dconf value is lower
-            let minutes = Math.max(15, this._settings.get_int('network-public-ip-interval'));
-            this._next_public_ip_check = now + minutes * 60;
-            this._refreshIPAddress(callback);
-        }
-    }
-
-    _queryNetwork(callback, dwell) {
-        for (let sensor of this._networkIfaces) {
-            new FileModule.File(sensor.path).read().then(value => {
-                this._returnValue(callback, sensor.name, value, sensor.type, 'storage');
-            }).catch(err => { });
-        }
-
-        if (this._hasWireless)
-            this._queryWireless(callback);
-    }
-
-    _queryWireless(callback) {
-        new FileModule.File('/proc/net/wireless').read("\n", true).then(lines => {
-            // wireless has two headers - first is stripped in helper function
-            lines.shift();
-
-            // if multiple wireless device, we use the last one
-            let line = lines[lines.length - 1];
-            if (!line)
-                return;
-            let netArray = line.trim().split(/\s+/);
-            let quality_pct = netArray[2].substr(0, netArray[2].length-1) / 70;
-            let signal = netArray[3].substr(0, netArray[3].length-1);
-
-            this._returnValue(callback, 'WiFi Link Quality', quality_pct, 'network', 'percent');
-            this._returnValue(callback, 'WiFi Signal Level', signal, 'network', 'string');
-        }).catch(err => { });
-    }
-
-    _queryStorage(callback, dwell) {
-        // display zfs arc status, if available
-        new FileModule.File('/proc/spl/kstat/zfs/arcstats').read().then(lines => {
-            let values = '', target = 0, maximum = 0, current = 0;
-
-            if (values = lines.match(/c(\s+)(\d+)(\s+)(\d+)/)) target = values[4];
-            if (values = lines.match(/c_max(\s+)(\d+)(\s+)(\d+)/)) maximum = values[4];
-            if (values = lines.match(/size(\s+)(\d+)(\s+)(\d+)/)) current = values[4];
-
-            // ZFS statistics
-            this._returnValue(callback, 'ARC Target', target, 'storage', 'storage');
-            this._returnValue(callback, 'ARC Maximum', maximum, 'storage', 'storage');
-            this._returnValue(callback, 'ARC Current', current, 'storage', 'storage');
-        }).catch(err => { });
-
-        // check disk performance stats
-        new FileModule.File('/proc/diskstats').read("\n").then(lines => {
-            for (let line of lines) {
-                let loadArray = line.trim().split(/\s+/);
-                if ('/dev/' + loadArray[2] == this._storageDevice) {
-                    var read = (loadArray[5] * 512);
-                    var write = (loadArray[9] * 512);
-                    this._returnValue(callback, 'Read total', read, 'storage', 'storage');
-                    this._returnValue(callback, 'Write total', write, 'storage', 'storage');
-                    // skip rates until counters are seeded (same pattern as processor cores)
-                    if (this._lastRead > 0)
-                        this._returnValue(callback, 'Read rate', (read - this._lastRead) / dwell, 'storage', 'storage');
-                    if (this._lastWrite > 0)
-                        this._returnValue(callback, 'Write rate', (write - this._lastWrite) / dwell, 'storage', 'storage');
-                    this._lastRead = read;
-                    this._lastWrite = write;
-                    break;
-                }
-            }
-        }).catch(err => { });
-
-        // skip rest of stats if gtop not available
-        if (!hasGTop) return;
-
-        GTop.glibtop_get_fsusage(this.storage, this._settings.get_string('storage-path'));
-
-        let total = this.storage.blocks * this.storage.block_size;
-        let avail = this.storage.bavail * this.storage.block_size;
-        let free = this.storage.bfree * this.storage.block_size;
-        let used = total - free;
-        let reserved = (total - avail) - used;
-        let freePercent = 0;
-        let usedPercent = 0;
-        if (total > 0) {
-          freePercent = Math.round((free / total) * 100);
-          usedPercent = Math.round((used / total) * 100);
-        }
-
-        this._returnValue(callback, 'Total', total, 'storage', 'storage');
-        this._returnValue(callback, 'Used', used, 'storage', 'storage');
-        this._returnValue(callback, 'Reserved', reserved, 'storage', 'storage');
-        this._returnValue(callback, 'Free', avail, 'storage', 'storage');
-        this._returnValue(callback, 'Used %', usedPercent + '%', 'storage', 'string');
-        this._returnValue(callback, 'Free %', freePercent + '%', 'storage', 'string');
-        this._returnValue(callback, 'storage', avail, 'storage-group', 'storage');
-    }
-
-    _queryBattery(callback) {
-        let battery_slot = this._settings.get_int('battery-slot');
-
-        // create a mapping of indices to battery paths (from prefs.ui)
-        const BATTERY_PATHS = {
-            0: 'BAT0',
-            1: 'BAT1',
-            2: 'BAT2',
-            3: 'BATT',
-            4: 'CMB0',
-            5: 'CMB1',
-            6: 'CMB2',
-            7: 'macsmc-battery'
-        };
-
-        // uevent has all necessary fields, no need to read individual files
-        let battery_path = '/sys/class/power_supply/' + BATTERY_PATHS[battery_slot] + '/uevent';
-        new FileModule.File(battery_path).read("\n").then(lines => {
-            let output = {};
-            for (let line of lines) {
-                let split = line.split('=');
-                output[split[0].replace('POWER_SUPPLY_', '')] = split[1];
-            }
-
-            if ('STATUS' in output) {
-                this._returnValue(callback, 'State', output['STATUS'], 'battery', '');
-            }
-
-            if ('CYCLE_COUNT' in output) {
-                this._returnValue(callback, 'Cycles', output['CYCLE_COUNT'], 'battery', '');
-            }
-
-            if ('VOLTAGE_NOW' in output) {
-                this._returnValue(callback, 'Voltage', output['VOLTAGE_NOW'] / 1000, 'battery', 'in');
-            }
-
-            if ('CAPACITY_LEVEL' in output) {
-                this._returnValue(callback, 'Level', output['CAPACITY_LEVEL'], 'battery', '');
-            }
-
-            if ('CAPACITY' in output) {
-                this._returnValue(callback, 'Percentage', output['CAPACITY'] / 100, 'battery', 'percent');
-            }
-
-            if ('VOLTAGE_NOW' in output && 'CURRENT_NOW' in output && (!('POWER_NOW' in output))) {
-                output['POWER_NOW'] = (output['VOLTAGE_NOW'] * output['CURRENT_NOW']) / 1000000;
-            }
-
-            if ('POWER_NOW' in output) {
-                const powerValue = (
-                    parseFloat(output['POWER_NOW']) * (output['STATUS'] === 'Discharging' ? -1 : 1)
-                );
-                this._returnValue(callback, 'Power Rate', powerValue, 'battery', 'watt');
-                this._returnValue(callback, 'battery', powerValue, 'battery-group', 'watt');
-            }
-
-            if ('CHARGE_FULL' in output && 'VOLTAGE_MIN_DESIGN' in output && (!('ENERGY_FULL' in output))) {
-                output['ENERGY_FULL'] = (output['CHARGE_FULL'] * output['VOLTAGE_MIN_DESIGN']) / 1000000;
-            }
-
-            if ('ENERGY_FULL' in output) {
-                this._returnValue(callback, 'Energy (full)', output['ENERGY_FULL'], 'battery', 'watt-hour');
-            }
-
-            if ('CHARGE_FULL_DESIGN' in output && 'VOLTAGE_MIN_DESIGN' in output && (!('ENERGY_FULL_DESIGN' in output))) {
-                output['ENERGY_FULL_DESIGN'] = (output['CHARGE_FULL_DESIGN'] * output['VOLTAGE_MIN_DESIGN']) / 1000000;
-            }
-
-            if ('ENERGY_FULL_DESIGN' in output) {
-                this._returnValue(callback, 'Energy (design)', output['ENERGY_FULL_DESIGN'], 'battery', 'watt-hour');
-
-                if ('ENERGY_FULL' in output) {
-                    this._returnValue(callback, 'Capacity', (output['ENERGY_FULL'] / output['ENERGY_FULL_DESIGN']), 'battery', 'percent');
-                }
-            }
-
-            if ('VOLTAGE_MIN_DESIGN' in output && 'CHARGE_NOW' in output && (!('ENERGY_NOW' in output))) {
-                output['ENERGY_NOW'] = (output['VOLTAGE_MIN_DESIGN'] * output['CHARGE_NOW']) / 1000000;
-            }
-
-            if ('ENERGY_NOW' in output) {
-                this._returnValue(callback, 'Energy (now)', output['ENERGY_NOW'], 'battery', 'watt-hour');
-            }
-
-            if ('ENERGY_FULL' in output && 'ENERGY_NOW' in output && 'POWER_NOW' in output &&
-                output['POWER_NOW'] !== 0 && 'STATUS' in output &&
-                (output['STATUS'] == 'Charging' || output['STATUS'] == 'Discharging')) {
-
-                let timeLeft = 0;
-
-                // two different formulas depending on if we are charging or discharging
-                if (output['STATUS'] == 'Charging') {
-                    timeLeft = ((output['ENERGY_FULL'] - output['ENERGY_NOW']) / output['POWER_NOW']);
-                } else {
-                    timeLeft = (output['ENERGY_NOW'] / Math.abs(output['POWER_NOW']));
-                }
-
-                // don't process Infinity values
-                if (timeLeft !== Infinity) {
-                    if (this._battery_charge_status != output['STATUS']) {
-                        // clears history due to state change
-                        this._battery_time_left_history = [];
-
-                        // clear time left history when laptop goes in and out of charging
-                        this._battery_charge_status = output['STATUS'];
-                    }
-
-                    // add latest time left estimate to our history
-                    this._battery_time_left_history.push(parseInt(timeLeft * 3600));
-
-                    // keep track of last 15 time left estimates by erasing the first
-                    if (this._battery_time_left_history.length > 10)
-                        this._battery_time_left_history.shift();
-
-                    // sum up and create average of our time left history
-                    let sum = this._battery_time_left_history.reduce((a, b) => a + b);
-                    let avg = sum / this._battery_time_left_history.length;
-
-                    // use time left history to update screen
-                    this._returnValue(callback, 'Time left', parseInt(avg), 'battery', 'runtime');
-                }
-            } else {
-                this._returnValue(callback, 'Time left', output['STATUS'], 'battery', '');
-            }
-        }).catch(err => { });
-    }
-
-    _initFrameMonitor() {
-        // Prefs has no gnome-shell `global`; skip refresh-rate sampling there.
-        if (typeof global === 'undefined' || !global.stage)
-            return;
-
-        if (this._frameMonitorSignalId) return;
-        this._frameMonitorLastTime = 0;
-        this._frameMonitorFrameCount = 0;
-        this._frameMonitorAccTime = 0;
-        this._frameMonitorCurrentHz = 0;
-        this._frameMonitorSignalId = global.stage.connect('after-paint', () => {
-            this._onAfterPaint();
+    // For the sensors a first reading left pending, such as rates.
+    _scheduleSecondReading(id, source) {
+        source.secondReading = GLib.timeout_add(GLib.PRIORITY_DEFAULT, SECOND_READING_SECONDS * 1000, () => {
+            source.secondReading = null;
+            // Nothing is read during discovery, so the read waits for it to end, failed or not.
+            let read = () => this._readSources(candidate => candidate == id);
+            Promise.resolve(this._discovery).then(read, read);
+            return GLib.SOURCE_REMOVE;
         });
     }
 
-    _destroyFrameMonitor() {
-        if (typeof global === 'undefined' || !global.stage) {
-            this._frameMonitorSignalId = 0;
-            this._frameMonitorLastTime = 0;
-            this._frameMonitorCurrentHz = 0;
-            return;
-        }
-        if (this._frameMonitorSignalId) {
-            global.stage.disconnect(this._frameMonitorSignalId);
-            this._frameMonitorSignalId = 0;
-        }
-        this._frameMonitorLastTime = 0;
-        this._frameMonitorCurrentHz = 0;
-    }
-
-    _onAfterPaint() {
-        const now = GLib.get_monotonic_time();
-
-        if (this._frameMonitorLastTime === 0) {
-            this._frameMonitorLastTime = now;
-            return;
-        }
-
-        const delta = now - this._frameMonitorLastTime;
-        this._frameMonitorLastTime = now;
-
-        this._frameMonitorFrameCount++;
-        this._frameMonitorAccTime += delta;
-
-        if (this._frameMonitorAccTime >= 500000) {
-            this._frameMonitorCurrentHz = this._frameMonitorFrameCount / (this._frameMonitorAccTime / 1000000);
-            this._frameMonitorFrameCount = 0;
-            this._frameMonitorAccTime = 0;
+    _callOffSecondReading(source) {
+        if (source.secondReading) {
+            GLib.Source.remove(source.secondReading);
+            source.secondReading = null;
         }
     }
 
-    _returnGpuGroupHeader(callback, typeName, utilization) {
-        if (utilization !== null && utilization !== undefined &&
-            utilization !== 'N/A' && utilization !== '[N/A]' && !isNaN(utilization)) {
-            this._returnGpuValue(callback, 'Graphics', utilization, typeName + '-group', 'percent');
-            return;
-        }
-
-        if (this._frameMonitorCurrentHz > 0)
-            this._returnGpuValue(callback, 'Graphics', this._frameMonitorCurrentHz, typeName + '-group', 'hertz');
+    // A tick. `force`, for Refresh, reads every active source.
+    async poll(force = false) {
+        // A tick during discovery is skipped, not made up for later.
+        if (this.destroyed || this._discovery) return;
+        this._updateActiveSources();
+        // A source waiting for its second reading is left to it, so that its rate spans that second.
+        await this._readSources(id => force || (!this.sources.get(id).secondReading && !this._withinInterval(id)));
     }
 
-    _queryGpu(callback) {
-        if (this._frameMonitorCurrentHz > 0)
-            this._returnValue(callback, 'Refresh Rate', this._frameMonitorCurrentHz, 'gpu#1', 'hertz');
-
-        if (!this._nvidia_smi_process) {
-            // no nvidia-smi, so we use sysfs DRM if any cards was discovered
-            if (!this._gpu_drm_indices?.length) {
-                this._returnGpuGroupHeader(callback, 'gpu#1', null);
-                this._disableGpuLabels(callback);
-                return;
-            }
-
-            this._readGpuDrm(callback);
-            return;
-        }
-
-        this._nvidia_smi_process.read('\n').then(lines => {
-            const expectedSplitLength = 19;
-            let valid = lines.filter(line => line.trim() &&
-                line.split(',').length >= expectedSplitLength);
-
-            if (valid.length > 0) {
-                // stdout can hold multiple snapshots; keep only the latest row per GPU
-                let count = this._nvidia_gpu_count || 1;
-                let batch = valid.slice(-count);
-                for (let i = 0; i < batch.length; i++)
-                    this._parseNvidiaSmiLine(callback, batch[i], i + 1, batch.length > 1);
-            } else {
-                this._returnGpuGroupHeader(callback, 'gpu#1', null);
-            }
-
-            // if we've already updated the static info during the last parse, then stop doing so.
-            // this is so the _parseNvidiaSmiLine function won't return static info anymore
-            // and the nvidia-smi commmand won't be queried for static info either
-            if(!this._nvidia_static_returned) {
-                this._nvidia_static_returned = true;
-                //reconfigure the process to stop querying static info
-                this._reconfigureNvidiaSmiProcess();
-            }
-        }).catch(err => {
-            this._disableGpuLabels(callback);
-            this._terminateNvidiaSmiProcess();
+    // Reads what came on screen without waiting for a tick: the sources without a reading or with a pending one.
+    _readNewlyShown() {
+        // discover() calls this when it ends.
+        if (this._discovery) return;
+        this._readSources(id => {
+            let reading = this.sources.get(id).reading;
+            return !reading || reading.status == 'pending';
         });
     }
 
-    _parseNvidiaSmiLine(callback, csv, gpuNum, multiGpu) {
-        const expectedSplitLength = 19;
-        let csv_split = csv.split(',');
-
-        // occasionally the nvidia-smi command can get cut off before it can be fully read, thus the parse function only gets part of a line
-        // hence we count the number of bad splits and only terminate the process after a few bad splits in a row
-        // this prevents anomalous readings from terminating the process
-        if (csv_split.length < expectedSplitLength) {
-            this._bad_split_count++;
-            //if we've had 2 bad splits/reads in a row, try to restart the process
-            if (this._bad_split_count == 2) this._reconfigureNvidiaSmiProcess();
-            //if we still get a bad read after that, then it's not an anomaly; terminate the process
-            else if (this._bad_split_count >= 3) this._terminateNvidiaSmiProcess();
-            return;
-        }
-        this._bad_split_count = 0;
-
-        let [
-            label,
-            fan_speed_pct,
-            temp_gpu, temp_mem,
-            mem_total, mem_used, mem_reserved, mem_free,
-            util_gpu, util_mem, util_encoder, util_decoder,
-            clock_gpu, clock_mem, clock_encode_decode,
-            power, power_avg,
-            link_gen_current, link_width_current
-        ] = csv_split;
-
-        const staticNames = [
-            'temp_limit', 'power_limit',
-            'link_gen_max', 'link_width_max',
-            'addressing_mode',
-            'driver_version', 'vbios', 'serial',
-            'domain_num', 'bus_num', 'device_num', 'device_id', 'sub_device_id'
-        ];
-        let staticInfo = {};
-
-        // if we have queried static info this time around, populate our static info object
-        if(csv_split.length == (expectedSplitLength + staticNames.length)){
-            for(let i = 0; i < staticNames.length; i++) {
-                //set the static info to a default (0) if it's undefined
-                const value = csv_split[expectedSplitLength + i];
-                staticInfo[staticNames[i]] = (typeof value !== "undefined") ? value : 0;
-            }
-        }
-
-        const typeName = 'gpu#' + gpuNum;
-        const globalLabel = 'GPU' + (multiGpu ? ' ' + gpuNum : '');
-        const memTempValid = !isNaN(parseInt(temp_mem));
-        let util = parseInt(util_gpu) * 0.01;
-
-        this._returnGpuGroupHeader(callback, typeName, isNaN(util) ? null : util);
-        if (this._settings.get_boolean('include-static-gpu-info'))
-            this._returnGpuValue(callback, 'Vendor', label.trim(), typeName, 'string');
-
-        this._returnGpuValue(callback, 'Fan', parseInt(fan_speed_pct) * 0.01, typeName, 'percent');
-
-        this._returnGpuValue(callback, globalLabel, parseInt(temp_gpu) * 1000, 'temperature', 'temp');
-        this._returnGpuValue(callback, 'Temperature', parseInt(temp_gpu) * 1000, typeName, 'temp');
-        this._returnGpuValue(callback, 'Memory Temperature', parseInt(temp_mem) * 1000, typeName, 'temp', memTempValid);
-        this._returnStaticGpuValue(callback, 'Temperature Limit', parseInt(staticInfo['temp_limit']) * 1000, typeName, 'temp');
-
-        this._returnGpuValue(callback, 'Memory Usage', parseInt(mem_used) / parseInt(mem_total), typeName, 'percent');
-        this._returnGpuValue(callback, 'Memory Total', parseInt(mem_total) * 1000, typeName, 'memory');
-        this._returnGpuValue(callback, 'Memory Used', parseInt(mem_used) * 1000, typeName, 'memory');
-        this._returnGpuValue(callback, 'Memory Reserved', parseInt(mem_reserved) * 1000, typeName, 'memory');
-        this._returnGpuValue(callback, 'Memory Free', parseInt(mem_free) * 1000, typeName, 'memory');
-
-        this._returnGpuValue(callback, 'Memory Utilization', parseInt(util_mem) * 0.01, typeName, 'percent');
-        this._returnGpuValue(callback, 'Utilization', parseInt(util_gpu) * 0.01, typeName, 'percent');
-        this._returnGpuValue(callback, 'Encoder Utilization', parseInt(util_encoder) * 0.01, typeName, 'percent');
-        this._returnGpuValue(callback, 'Decoder Utilization', parseInt(util_decoder) * 0.01, typeName, 'percent');
-
-        this._returnGpuValue(callback, 'Frequency', parseInt(clock_gpu) * 1000 * 1000, typeName, 'hertz');
-        this._returnGpuValue(callback, 'Memory Frequency', parseInt(clock_mem) * 1000 * 1000, typeName, 'hertz');
-        this._returnGpuValue(callback, 'Encoder/Decoder Frequency', parseInt(clock_encode_decode) * 1000 * 1000, typeName, 'hertz');
-
-        //this._returnGpuValue(callback, 'Encoder Sessions', parseInt(encoder_sessions), typeName, 'string');
-
-        this._returnGpuValue(callback, 'Power', power, typeName, 'watt-gpu');
-        this._returnGpuValue(callback, 'Average Power', power_avg, typeName, 'watt-gpu');
-        this._returnStaticGpuValue(callback, 'Power Limit', parseInt(staticInfo['power_limit']), typeName, 'watt-gpu');
-
-        this._returnGpuValue(callback, 'Link Speed', link_gen_current + 'x' + link_width_current, typeName, 'pcie');
-        this._returnStaticGpuValue(callback, 'Maximum Link Speed', staticInfo['link_gen_max'] + 'x' + staticInfo['link_width_max'], typeName, 'pcie');
-
-        this._returnStaticGpuValue(callback, 'Addressing Mode', staticInfo['addressing_mode'], typeName, 'string');
-
-        this._returnStaticGpuValue(callback, 'Driver Version', staticInfo['driver_version'], typeName, 'string');
-        this._returnStaticGpuValue(callback, 'vBIOS Version', staticInfo['vbios'], typeName, 'string');
-        this._returnStaticGpuValue(callback, 'Serial Number', staticInfo['serial'], typeName, 'string');
-
-        this._returnStaticGpuValue(callback, 'Domain Number', staticInfo['domain_num'], typeName, 'string');
-        this._returnStaticGpuValue(callback, 'Bus Number', staticInfo['bus_num'], typeName, 'string');
-        this._returnStaticGpuValue(callback, 'Device Number', staticInfo['device_num'], typeName, 'string');
-        this._returnStaticGpuValue(callback, 'Device ID', staticInfo['device_id'], typeName, 'string');
-        this._returnStaticGpuValue(callback, 'Sub Device ID', staticInfo['sub_device_id'], typeName, 'string');
-    }
-
-    _readGpuDrm(callback) {
-        const unit = this._settings.get_int('memory-measurement') ? 1000 : 1024;
-        for (let z = 0; z < this._gpu_drm_indices.length; z++) {
-            let i = this._gpu_drm_indices[z];
-            const typeName = 'gpu#' + (z + 1);
-            const vendor = (this._gpu_drm_vendors[z] || '').toLowerCase();
-            const cardBase = '/sys/class/drm/card' + i + '/device/';
-
-            this._returnGpuGroupHeader(callback, typeName, null);
-
-            if (this._settings.get_boolean('include-static-gpu-info')) {
-                let vendorName = null;
-                switch (vendor) {
-                    case '0x1002': vendorName = 'AMD'; break;
-                    case '0x10de': vendorName = 'NVIDIA'; break;
-                    case '0x13b5': vendorName = 'ARM'; break;
-                    case '0x5143': vendorName = 'Qualcomm'; break;
-                    case '0x8086': vendorName = 'Intel'; break;
-                    case '0x1234': vendorName = 'QEMU'; break;
-                }
-                if (vendorName)
-                    this._returnGpuValue(callback, 'Vendor', vendorName, typeName, 'string');
-            }
-
-            if (vendor === '0x1002') {
-                new FileModule.File(cardBase + 'gpu_busy_percent').read().then(value => {
-                    let usage = parseInt(value) * 0.01;
-                    this._returnGpuGroupHeader(callback, typeName, usage);
-                    this._returnGpuValue(callback, 'Usage', usage, typeName, 'percent');
-                }).catch(err => {
-                    this._returnGpuGroupHeader(callback, typeName, null);
-                });
-                new FileModule.File(cardBase + 'mem_info_vram_used').read().then(value => {
-                    this._returnGpuValue(callback, 'Memory Used', parseInt(value) / unit, typeName, 'memory');
-                }).catch(err => { });
-                new FileModule.File(cardBase + 'mem_info_vram_total').read().then(value => {
-                    this._returnGpuValue(callback, 'Memory Total', parseInt(value) / unit, typeName, 'memory');
-                }).catch(err => { });
-            }
-        }
-    }
-
-    _disableGpuLabels(callback) {
-        for (let labelObj of this._nvidia_labels) {
-            if (labelObj.type.includes('-group'))
+    // Resolves when the reads, also those already under way, and the aggregates computed from them are done.
+    async _readSources(due) {
+        let reads = [];
+        for (let id of this.activeSources.keys()) {
+            let source = this.sources.get(id);
+            if (source.pendingRead) {
+                reads.push(source.pendingRead.promise);
                 continue;
-            this._returnValue(callback, labelObj.label, 'disabled', labelObj.type, labelObj.format);
+            }
+            if (!due(id))
+                continue;
+
+            let pendingRead = {cancellation: new Gio.Cancellable()};
+            source.pendingRead = pendingRead;
+            // Started a microtask later, so that an exception read() throws at once becomes a failed read.
+            pendingRead.promise = Promise.resolve().then(() => {
+                if (source.pendingRead == pendingRead) return source.read(pendingRead.cancellation);
+            }).then(value => {
+                // A cancelled read is discarded.
+                if (source.pendingRead != pendingRead || this.destroyed) return;
+                let time = source.readingTime ? source.readingTime(value) : clock();
+                let last = source.reading;
+                // A rate is never computed across a failure. Against a reading younger than half the update interval, as
+                // when Refresh follows a tick, it would span a moment, so the reading before that one is taken.
+                let tooYoung = last && time - last.time < this._settings.get_int('update-time') / 2;
+                let previous = last?.status != 'ready' ? null
+                    : tooYoung && last.previous ? last.previous : {value: last.value, time: last.time};
+                source.reading = {value, time, status: 'ready', previous};
+            }, error => {
+                if (source.pendingRead != pendingRead || this.destroyed) return;
+                let previous = source.reading;
+                // A failed read is expected, not a fault, so only the first in a row is logged. The value stays: the
+                // network's session totals continue from it.
+                if (!previous || previous.status != 'unavailable')
+                    console.debug(id, error);
+                source.reading = {...previous, time: clock(), status: 'unavailable'};
+            }).finally(() => {
+                if (source.pendingRead != pendingRead || this.destroyed) return;
+                source.pendingRead = null;
+                let updated = this._updateSensors(id);
+                this.onValuesChanged(new Set(updated));
+                let withoutValue = updated.some(sensor => sensor.status == 'pending');
+                if (withoutValue && !source.reading.previous && !source.secondReading)
+                    this._scheduleSecondReading(id, source);
+            }).catch(error => {
+                // A fault in handling the reading, not a failed read.
+                console.error(id, error);
+            });
+            reads.push(pendingRead.promise);
         }
+        // A category's aggregates are computed once, after all its reads.
+        let summaries = [];
+        for (let name of this.aggregatedCategories) {
+            let categoryReads = [...this.activeSources].filter(([, fed]) => fed.some(([categoryName]) => categoryName == name))
+                .map(([id]) => this.sources.get(id).pendingRead?.promise).filter(Boolean);
+            if (!categoryReads.length) continue;
+            this.aggregateReads.set(name, categoryReads);
+            summaries.push(Promise.all(categoryReads).then(() => {
+                // A later call that started newer reads computes them instead.
+                if (this.aggregateReads.get(name) != categoryReads || this.destroyed || this._discovery || !this.aggregatedCategories.has(name)) return;
+                this.onValuesChanged(new Set(this._updateAggregates(name)));
+            }));
+        }
+        await Promise.all([...reads, ...summaries]);
     }
 
-    _returnStaticGpuValue(callback, label, value, type, format) {
-        //if we've already tried to return existing static info before or if the option isn't enabled, then do nothing.
-        if (this._nvidia_static_returned || !this._settings.get_boolean('include-static-gpu-info'))
-            return;
-
-        //we don't need to disable static info labels, so just use ordinary returnValue function
-        this._returnValue(callback, label, value, type, format);
-    }
-
-    _returnGpuValue(callback, label, value, type, format, display = true) {
-        if(!display) return;
-
-        if (format !== 'string' && isNaN(value))
-            return;
-
-        if (!this._nvidia_labels[label + type])
-            this._nvidia_labels.push(this._nvidia_labels[label + type] = {label, type, format});
-
-        this._returnValue(callback, label, value, type, format);
-    }
-
-    _returnValue(callback, label, value, type, format) {
-        if (value != 'disabled' && format !== 'string' && isNaN(value))
-            return;
-        callback(label, value, type, format);
-    }
-
-    _discoverHardwareMonitors(callback) {
-        this._tempVoltFanSensors = { 'temperature': {}, 'voltage': {}, 'fan': {} };
-
-        let hwbase = '/sys/class/hwmon/';
-
-        // process sensor_types now so it is not called multiple times below
-        let sensor_types = {};
-
-        if (this._settings.get_boolean('show-temperature'))
-            sensor_types['temp'] = 'temperature';
-
-        if (this._settings.get_boolean('show-voltage'))
-            sensor_types['in'] = 'voltage';
-
-        if (this._settings.get_boolean('show-fan'))
-            sensor_types['fan'] = 'fan';
-
-        // a little informal, but this code has zero I/O block
-        new FileModule.File(hwbase).list().then(files => {
-            for (let file of files) {
-                // grab name of sensor
-                new FileModule.File(hwbase + file + '/name').read().then(name => {
-                    // are we dealing with a CPU?
-                    if (name == 'coretemp') {
-                        // determine which processor (socket) we are dealing with
-                        new FileModule.File(hwbase + file + '/temp1_label').read().then(prefix => {
-                            this._processTempVoltFan(callback, sensor_types, prefix, hwbase + file, file);
-                        }).catch(err => {
-                            // this shouldn't be necessary, but just in case temp1_label doesn't exist
-                            // attempt to fix #266
-                            this._processTempVoltFan(callback, sensor_types, name, hwbase + file, file);
-                        });
-                    } else {
-                        // not a CPU, process all other sensors
-                        this._processTempVoltFan(callback, sensor_types, name, hwbase + file, file);
-                    }
-                }).catch(err => {
-                    new FileModule.File(hwbase + file + '/device/name').read().then(name => {
-                        this._processTempVoltFan(callback, sensor_types, name, hwbase + file + '/device', file);
-                    }).catch(err => { });
-                });
-            }
-        }).catch(err => { });
-
-        // is static CPU information enabled?
-        this._queryStaticInfo(callback);
-
-        // Launch nvidia-smi subprocess if nvidia querying is enabled
-        this._reconfigureNvidiaSmiProcess();
-        this._discoverGpuDrm();
-        this._discoverNetworkIfaces(callback);
-        this._initFrameMonitor();
-    }
-
-    _queryStaticInfo(callback) {
-        if (!this._settings.get_boolean('include-static-info'))
-            return;
-
-        // grab static CPU information
-        new FileModule.File('/proc/cpuinfo').read("\n").then(lines => {
-            let vendor_id = '';
-            let bogomips = '';
-            let sockets = {};
-            let cache = '';
-
-            for (let line of lines) {
-                let value = '';
-
-                // grab cpu vendor
-                if (value = line.match(/^vendor_id(\s+): (\w+.*)/)) vendor_id = value[2];
-
-                // grab bogomips
-                if (value = line.match(/^bogomips(\s+): (\d*\.?\d*)$/)) bogomips = value[2];
-
-                // grab processor count
-                if (value = line.match(/^physical id(\s+): (\d+)$/)) sockets[value[2]] = 1;
-
-                // grab cache
-                if (value = line.match(/^cache size(\s+): (\d+) KB$/)) cache = value[2];
-            }
-
-            this._returnValue(callback, 'Vendor', vendor_id, 'processor', 'string');
-            this._returnValue(callback, 'Bogomips', bogomips, 'processor', 'string');
-            this._returnValue(callback, 'Sockets', Object.keys(sockets).length, 'processor', 'string');
-            this._returnValue(callback, 'Cache', cache, 'processor', 'memory');
-        }).catch(err => { });
-
-        // grab static CPU information
-        new FileModule.File('/proc/version').read(' ').then(kernelArray => {
-            this._returnValue(callback, 'Kernel', kernelArray[2], 'system', 'string');
-        }).catch(err => { });
-    }
-
-    _discoverNetworkIfaces(callback) {
-        this._networkIfaces = [];
-        this._hasWireless = false;
-        let netbase = '/sys/class/net/';
-        let directions = ['tx', 'rx'];
-
-        new FileModule.File(netbase).list().then(interfaces => {
-            for (let iface of interfaces) {
-                for (let direction of directions) {
-                    // lo tx and rx are the same
-                    if (iface == 'lo' && direction == 'rx')
-                        continue;
-
-                    // issue #217 - don't include 'lo' traffic in Maximum calculations in values.js
-                    // by not using network-rx or network-tx
-                    let name = iface + ((iface == 'lo') ? '' : ' ' + direction);
-                    let type = 'network' + ((iface == 'lo') ? '' : '-' + direction);
-                    let path = netbase + iface + '/statistics/' + direction + '_bytes';
-                    this._networkIfaces.push({name, type, path});
-
-                    // update screen on initial build to prevent delay on update
-                    new FileModule.File(path).read().then(value => {
-                        this._returnValue(callback, name, value, type, 'storage');
-                    }).catch(err => { });
-                }
-            }
-
-            new FileModule.File('/proc/net/wireless').read("\n", true).then(lines => {
-                lines.shift();
-                if (!lines[lines.length - 1])
-                    return;
-                this._hasWireless = true;
-                this._queryWireless(callback);
-            }).catch(err => { });
-        }).catch(err => { });
-    }
-
-    _discoverGpuDrm() {
-        // use DRM only if nvidia-smi is not used
-        if (this._settings.get_boolean('show-gpu') && this._nvidia_smi_process == null) {
-            this._gpu_drm_indices = [];
-            this._gpu_drm_vendors = [];
-            // try to discover up to 10 cards starting from index 0
-            for(let i = 0; i < 10 ; i++){
-                new FileModule.File('/sys/class/drm/card'+i+'/device/vendor').read().then(value => {
-                    this._gpu_drm_indices.push(i);
-                    this._gpu_drm_vendors.push(value);
-                }).catch(err => { });
-            }
+    // SensorMath.PENDING means no value yet, such as a rate after one reading; no number, as from a missing field, makes
+    // the sensor unavailable.
+    _assign(sensor, value) {
+        if (value === SensorMath.PENDING) {
+            sensor.status = 'pending';
+        } else if (value === undefined || value === null || (typeof value == 'number' && !Number.isFinite(value))) {
+            sensor.status = 'unavailable';
         } else {
-            this._gpu_drm_vendors = null;
-            this._gpu_drm_indices = null;
+            sensor.status = 'ready';
+            sensor.value = value;
+            sensor.updated = now();
         }
     }
 
-    // The nvidia-smi subprocess will keep running and print new sensor data to stdout every
-    // `update_time` seconds. _queryNvidiaSmi() will be called at roughly the same interval and
-    // read from the subprocess's stdout to get new sensor data.
-
-    // Regarding "keeping main process & sub process in sync", there are two possible scenarios:
-    // - For some reason, nvidia-smi prints at a somewhat higher frequency than we call
-    //   _queryNvidiaSmi() to read data. This is okay, eventually one call to _queryNvidiaSmi()
-    //   will read two sensor data updates in a single call.
-    // - For some reason, _queryNvidiaSmi() is called at a somewhat higher frequency than
-    //   nvidia-smi prints data. This is the more likely scenario with user actions triggering
-    //   additional reads. This eventually triggers an "IO PENDING" error while attempting to
-    //   read, because the previous async read is still waiting. To solve this, the subprocess
-    //   module simply ignores PENDING errors. After ignoring the error, the earlier read will
-    //   eventually return and sensor data will be updated, so this scenario is handled correctly.
-
-    // Generally speaking, the call to _queryNvidiaSmi() and nvidia-smi's printing to stdout do
-    // not happen at the same time. So the async call in _queryNvidiaSmi() will usually have to
-    // wait up to `update_time` seconds before getting any results and reporting them through the
-    // callback.
-    _reconfigureNvidiaSmiProcess() {
-        if (this._settings.get_boolean('show-gpu')) {
-            this._terminateNvidiaSmiProcess();
-
-            try {
-                let update_time = this._settings.get_int('update-time');
-                let query_interval = Math.max(update_time, 1);
-                let command = [
-                    'nvidia-smi',
-                    '--query-gpu=name,' +
-                    'fan.speed,' +
-                    'temperature.gpu,temperature.memory,' +
-                    'memory.total,memory.used,memory.reserved,memory.free,' +
-                    'utilization.gpu,utilization.memory,utilization.encoder,utilization.decoder,' +
-                    'clocks.gr,clocks.mem,clocks.video,' +
-                    'power.draw.instant,power.draw.average,' +
-                    'pcie.link.gen.gpucurrent,pcie.link.width.current,' +
-                    (!this._nvidia_static_returned && this._settings.get_boolean('include-static-gpu-info') ?
-                        'temperature.gpu.tlimit,' +
-                        'power.limit,' +
-                        'pcie.link.gen.max,pcie.link.width.max,'   +
-                        'addressing_mode,'+
-                        'driver_version,vbios_version,serial,' +
-                        'pci.domain,pci.bus,pci.device,pci.device_id,pci.sub_device_id,'
-                    : ''),
-                    '--format=csv,noheader,nounits',
-                    '-l', query_interval.toString()
-                ];
-
-                this._nvidia_smi_process = new SubProcessModule.SubProcess(command);
-                this._detectNvidiaGpuCount();
-            } catch(e) {
-                // proprietary nvidia driver not installed
-                this._terminateNvidiaSmiProcess();
-            }
-        } else {
-            this._terminateNvidiaSmiProcess();
-        }
+    _updateSensors(id) {
+        let reading = this.sources.get(id).reading;
+        return this.activeSources.get(id).map(([, sensor]) => {
+            if (reading?.status == 'ready') {
+                this._assign(sensor, sensor.runtime.value(reading, sensor, this));
+                if (sensor.runtime.icon)
+                    sensor.icon = sensor.runtime.icon(reading);
+            } else
+                this._assign(sensor, reading?.status == 'unavailable' ? undefined : SensorMath.PENDING);
+            return sensor;
+        });
     }
 
-    _detectNvidiaGpuCount() {
-        this._nvidia_gpu_count = 1;
-        try {
-            let proc = Gio.Subprocess.new(
-                ['nvidia-smi', '--query-gpu=name', '--format=csv,noheader,nounits'],
-                Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_SILENCE);
-            proc.communicate_utf8_async(null, null, (subprocess, res) => {
+    _updateAggregates(name) {
+        let category = this.catalog[name];
+        // The batteries' total is over their power rates. One unavailable sensor does not make the aggregates unavailable.
+        let readable = this._aggregatedSensors(category).filter(sensor =>
+            sensor.status != 'unavailable' && (name != 'battery' || sensor.field == 'power-rate'));
+        let pending = readable.some(sensor => sensor.status == 'pending');
+        let aggregates = category.sensors.filter(sensor => sensor.aggregate && sensorPresent(category, sensor));
+        for (let sensor of aggregates)
+            this._assign(sensor, pending ? SensorMath.PENDING : AGGREGATES[sensor.key](readable));
+        return aggregates;
+    }
+
+    // From the readings there are, without reading. A source whose read is under way is left to that read.
+    _updateActiveSensors() {
+        let updated = new Set();
+        for (let id of this.activeSources.keys()) {
+            if (this.sources.get(id).pendingRead) continue;
+            for (let sensor of this._updateSensors(id))
+                updated.add(sensor);
+        }
+        for (let name of this.aggregatedCategories) {
+            for (let sensor of this._updateAggregates(name))
+                updated.add(sensor);
+        }
+        return updated;
+    }
+
+    // A file, or the answer of an https address.
+    async _read(fileLocation, cancellation) {
+        let file = fileLocation.startsWith('https://') ? Gio.File.new_for_uri(fileLocation) : Gio.File.new_for_path(fileLocation);
+        return new Promise((resolve, reject) => {
+            file.load_contents_async(cancellation, (file, result) => {
                 try {
-                    let [, stdout] = subprocess.communicate_utf8_finish(res);
-                    let count = stdout.trim().split('\n').filter(line => line.trim()).length;
-                    if (count > 0)
-                        this._nvidia_gpu_count = count;
-                } catch (e) { }
+                    resolve(new TextDecoder().decode(file.load_contents_finish(result)[1]).trim());
+                } catch (error) {
+                    reject(error);
+                }
             });
-        } catch (e) { }
+        });
     }
 
-    _terminateNvidiaSmiProcess() {
-        if (this._nvidia_smi_process) {
-            this._nvidia_smi_process.terminate();
-            this._nvidia_smi_process = null;
+    // Sorted, so that discovery finds devices in the same order every time.
+    async _list(directoryPath, cancellation) {
+        let file = Gio.File.new_for_path(directoryPath);
+        let enumerator = await new Promise((resolve, reject) => {
+            file.enumerate_children_async('standard::name', Gio.FileQueryInfoFlags.NONE,
+                GLib.PRIORITY_DEFAULT, cancellation, (file, result) => {
+                    try { resolve(file.enumerate_children_finish(result)); }
+                    catch (error) { reject(error); }
+                });
+        });
+        let names = [];
+        try {
+            while (true) {
+                let files = await new Promise((resolve, reject) => {
+                    enumerator.next_files_async(128, GLib.PRIORITY_DEFAULT, cancellation, (enumerator, result) => {
+                        try { resolve(enumerator.next_files_finish(result)); }
+                        catch (error) { reject(error); }
+                    });
+                });
+                if (!files.length) return names.sort();
+                names.push(...files.map(file => file.get_name()));
+            }
+        } finally {
+            // Not cancellable, so that it is closed also after destroy().
+            enumerator.close_async(GLib.PRIORITY_DEFAULT, null, (enumerator, result) => {
+                try { enumerator.close_finish(result); }
+                catch (error) { console.error(directoryPath, error); }
+            });
         }
     }
 
-    _processTempVoltFan(callback, sensor_types, name, path, file) {
-        let sensor_files = [ 'input', 'label' ];
+    // null for a file that does not exist; any other error is thrown.
+    async _optionalRead(filePath) {
+        try {
+            return await this._read(filePath, this._discoveryCancellation);
+        } catch (error) {
+            if (error.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.NOT_FOUND) ||
+                error.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.NOT_DIRECTORY))
+                return null;
+            throw error;
+        }
+    }
 
-        // grab files from directory
-        new FileModule.File(path).list().then(files2 => {
-            let trisensors = {};
+    // Averaged over the last 10 readings in the current charging state.
+    _batteryTimeLeft(sample, batteryFile) {
+        let value = SensorMath.batteryTime(sample.value);
+        if (typeof value != 'number') return value;
+        if (this._batteryTimes.get(batteryFile)?.state != sample.value.state)
+            this._batteryTimes.set(batteryFile, {state: sample.value.state, times: []});
+        let times = this._batteryTimes.get(batteryFile).times;
+        // _updateActiveSensors computes the value again from the same reading, which counts once.
+        if (!times.length || times[times.length - 1].time != sample.time) {
+            times.push({value, time: sample.time});
+            if (times.length > 10) times.shift();
+        }
+        return SensorMath.average(times);
+    }
 
-            // loop over files from directory
-            for (let file2 of Object.values(files2)) {
-                // simple way of processing input and label (from above)
-                for (let key of Object.values(sensor_files)) {
-                    // process toggled on sensors from extension preferences
-                    for (let sensor_type in sensor_types) {
-                        if (file2.substr(0, sensor_type.length) == sensor_type && file2.substr(-(key.length+1)) == '_' + key) {
-                            let key2 = file + file2.substr(0, file2.indexOf('_'));
+    // One read serves every storage location of a tick. Not cancellable, since it is shared.
+    _mountTable() {
+        this._mountTableRead ??= this._read(MOUNTS, null).then(SensorMath.parseMountTable)
+            .finally(() => { this._mountTableRead = null; });
+        return this._mountTableRead;
+    }
 
-                            if (!(key2 in trisensors)) {
-                                trisensors[key2] = {
-                                    'type': sensor_types[sensor_type],
-                                  'format': sensor_type,
-                                   'label': path + '/name'
-                                };
-                            }
-
-                            trisensors[key2][key] = path + '/' + file2;
-                        }
-                    }
-                }
-            }
-
-            for (let obj of Object.values(trisensors)) {
-                if (!('input' in obj))
-                    continue;
-
-                new FileModule.File(obj['input']).read().then(value => {
-                    let extra = (obj['label'].indexOf('_label')==-1) ? ' ' + obj['input'].substr(obj['input'].lastIndexOf('/')+1).split('_')[0] : '';
-
-                    if (value > 0 || !this._settings.get_boolean('hide-zeros') || obj['type'] == 'fan') {
-                        new FileModule.File(obj['label']).read().then(label => {
-                            this._addTempVoltFan(callback, obj, name, label, extra, value);
-                        }).catch(err => {
-                            let tmpFile = obj['label'].substr(0, obj['label'].lastIndexOf('/')) + '/name';
-                            new FileModule.File(tmpFile).read().then(label => {
-                                this._addTempVoltFan(callback, obj, name, label, extra, value);
-                            }).catch(err => { });
+    // The space is queried per location, so each location is a source of its own.
+    _storageLocationSource(sensor) {
+        let location = sensor.location;
+        let query = null;
+        let mounted = true;
+        return {
+            // A network location not mounted is looked for at every tick: that only reads the mount table.
+            interval: () => sensor.network && mounted ? this._settings.get_int('storage-network-interval') * 60 : 0,
+            read: async () => {
+                // Querying a path where nothing is mounted would mount an automounted location again, or give the space
+                // of the disk under the empty directory.
+                mounted = (await this._mountTable()).has(location);
+                if (!mounted)
+                    throw new Error('Nothing is mounted at ' + location);
+                // A query on a network location whose server is gone can block for minutes and cannot be cancelled, so a
+                // read waits for the one under way.
+                query ??= new Promise((resolve, reject) => {
+                    Gio.File.new_for_path(location).query_filesystem_info_async(
+                        'filesystem::size,filesystem::free,filesystem::used', GLib.PRIORITY_DEFAULT, null,
+                        (file, result) => {
+                            try {
+                                let info = file.query_filesystem_info_finish(result);
+                                resolve({
+                                    total: info.get_attribute_uint64('filesystem::size'),
+                                    free: info.get_attribute_uint64('filesystem::free'),
+                                    used: info.get_attribute_uint64('filesystem::used')
+                                });
+                            } catch (error) { reject(error); }
                         });
-                    }
-                }).catch(err => { });
+                }).finally(() => { query = null; });
+                return query;
             }
-        }).catch(err => { });
-    }
-
-    _addTempVoltFan(callback, obj, name, label, extra, value) {
-        // prepend module that provided sensor data
-        if (name != label) label = name + ' ' + label;
-
-        //if (label == 'nvme Composite') label = 'NVMe';
-        //if (label == 'nouveau') label = 'Nvidia';
-
-        label = label + extra;
-
-        // in the future we will read /etc/sensors3.conf
-        if (label == 'acpitz temp1') label = 'ACPI Thermal Zone';
-        if (label == 'pch_cannonlake temp1') label = 'Platform Controller Hub';
-        if (label == 'iwlwifi_1 temp1') label = 'Wireless Adapter';
-        if (label == 'Package id 0') label = 'Processor 0';
-        if (label == 'Package id 1') label = 'Processor 1';
-        label = label.replace('Package id', 'CPU');
-
-        let types = [ 'temperature', 'voltage', 'fan' ];
-        for (let type of types) {
-            // check if this label already exists
-            if (label in this._tempVoltFanSensors[type]) {
-                for (let i = 2; i <= 9; i++) {
-                    // append an incremented number to end
-                    let new_label = label + ' ' + i;
-
-                    // if new label is available, use it
-                    if (!(new_label in this._tempVoltFanSensors[type])) {
-                        label = new_label;
-                        break;
-                    }
-                }
-            }
-        }
-
-        // update screen on initial build to prevent delay on update
-        this._returnValue(callback, label, value, obj['type'], obj['format']);
-
-        this._tempVoltFanSensors[obj['type']][label] = {
-          'format': obj['format'],
-            'path': obj['input']
         };
     }
 
-    // rediscover=false keeps network/TVF/GPU discovery across cosmetic menu redraws
-    resetHistory(rediscover = true) {
-        this._next_public_ip_check = 0;
-        this._static_info_refresh = false;
-        if (rediscover) {
-            this._hardware_detected = false;
-            this._networkIfaces = [];
-            this._hasWireless = false;
-        } else {
-            this._static_info_refresh = true;
-        }
-        this._nvidia_static_returned = false;
-        this._processor_uses_cpu_info = true;
-        this._battery_time_left_history = [];
-        this._battery_charge_status = '';
-        this._nvidia_labels = [];
-        this._bad_split_count = 0;
-        this._frameMonitorLastTime = 0;
-        this._frameMonitorFrameCount = 0;
-        this._frameMonitorAccTime = 0;
+    // The sources that need code of their own to be read. Discovery registers the others.
+    _registerSystemSources() {
+        this.addSource(NETWORK.id, {read: async cancellation => {
+            let interfaces = SensorMath.parseNetwork(await this._read(NETWORK.id, cancellation));
+            // A counter lower than before started again from zero, as when its interface was created again.
+            let last = this.reading(NETWORK.id)?.value;
+            let session = last ? {...last.session} : {rx: 0, tx: 0};
+            let hardwareInterfaces = this._hardwareInterfaces();
+            for (let [name, counters] of interfaces) {
+                let previous = last?.interfaces.get(name);
+                if (hardwareInterfaces.has(name) && previous) {
+                    for (let direction of ['rx', 'tx'])
+                        session[direction] += counters[direction] >= previous[direction]
+                            ? counters[direction] - previous[direction] : counters[direction];
+                }
+            }
+            let network = this.catalog.network;
+            let knownInterfaces = new Set(network.sensors.filter(sensor => sensor.interface && sensorPresent(network, sensor))
+                .map(sensor => sensor.interface));
+            // An interface that appeared or disappeared is taken into the catalog at once, not at the next discovery.
+            if (!this._discovery && (interfaces.size != knownInterfaces.size ||
+                [...interfaces.keys()].some(name => !knownInterfaces.has(name))))
+                await this._rediscoverNetwork(interfaces);
+            return {interfaces, session};
+        }});
+        // The files give kHz.
+        this.addSource(CPU_FREQUENCIES.id, {read: cancellation => Promise.all(this._cores().map(async core =>
+            Number(await this._read('/sys/devices/system/cpu/' + core + '/cpufreq/scaling_cur_freq', cancellation)) * 1000))});
+        this.addSource(PUBLIC_IP.id, {
+            // After a failure, the next tick tries again.
+            interval: () => this.reading(PUBLIC_IP.id)?.status == 'ready' ? this._settings.get_int('network-public-ip-interval') * 60 : 0,
+            read: async () => {
+                for (let [url, parse] of PUBLIC_IP.services) {
+                    let cancellable = new Gio.Cancellable();
+                    let timeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, PUBLIC_IP.timeoutSeconds * 1000, () => {
+                        timeout = 0;
+                        cancellable.cancel();
+                        return GLib.SOURCE_REMOVE;
+                    });
+                    try {
+                        return parse(await this._read(url, cancellable));
+                    } catch (error) {
+                        // The next service is asked.
+                        console.debug(url, error);
+                    } finally {
+                        if (timeout) GLib.Source.remove(timeout);
+                    }
+                }
+                throw new Error('No public IP service answered');
+            }
+        });
+        this.addSource(FRAMES.id, {
+            start: () => this._startFrames(),
+            stop: () => this._stopFrames(),
+            read: async () => this._frames
+        });
+        this.addSource(NVIDIA.id, {
+            configure: sensors => this._configureNvidia(sensors),
+            stop: () => this._stopNvidia(),
+            read: () => this._readNvidia(),
+            // As old as nvidia-smi's lines, which can be older than the read that takes them.
+            readingTime: sample => sample.time
+        });
+    }
 
-        // soft reset must restart nvidia-smi so static GPU fields are queried again
-        if (!rediscover)
-            this._reconfigureNvidiaSmiProcess();
+    // Always later than the last run, even when two runs start in the same second or the clock was set back.
+    _startRun() {
+        this._lastRun = Math.max(Math.floor(now()), this._lastRun + 1);
+        return this._lastRun;
+    }
+
+    // Two devices can have the same key, such as two NVMe drives; each takes one sensor, in the order they are found.
+    _unmatched(run, categoryName, key) {
+        return this.catalog[categoryName].sensors.find(sensor => sensor.key == key && sensor.discovered != run);
+    }
+
+    // A sensor the run found: the known one with its key, or a new one at the end of the category.
+    _found(run, categoryName, fields, source, value, icon) {
+        let sensor = this._unmatched(run, categoryName, fields.key);
+        if (!sensor) {
+            sensor = {status: 'pending', runtime: {}};
+            this.catalog[categoryName].sensors.push(sensor);
+        }
+        Object.assign(sensor.runtime, {source, value, icon});
+        return Object.assign(sensor, fields, {discovered: run});
+    }
+
+    _foundSource(run, definition, fields = {}) {
+        let source = this._source(definition.id, definition.parse);
+        for (let [key, {category = definition.category, value, ...sensorFields}] of Object.entries(definition.sensors)) {
+            this._found(run, category, {key, file: definition.id.startsWith('/') ? definition.id : undefined, ...sensorFields, ...fields},
+                source, value, definition.icon);
+        }
+    }
+
+    _foundConstant(run, key, value) {
+        let {category = STATIC_INFO.category, ...fields} = STATIC_INFO.sensors[key];
+        this._found(run, category, {key, ...fields, value, status: 'ready', updated: now()});
+    }
+
+    _sensorCount() {
+        return this.categories().reduce((count, [, category]) => count + category.sensors.length, 0);
+    }
+
+    // Looks for the sensors on the machine and matches them with the catalog.
+    async discover() {
+        if (this._discovery) return this._discovery;
+        // Nothing is read during a run: a sensor could still hold a path the kernel has given to another device. The
+        // readings stay, and the next rate is computed against them.
+        for (let id of this.activeSources.keys())
+            this._cancelRead(this.sources.get(id));
+        // What changes what discovery finds; a run during which it changed is repeated.
+        let configuration = () => JSON.stringify([this.catalog.gpu.enabled, ...[
+            'include-static-info', 'include-static-gpu-info', 'include-public-ip',
+            'storage-locations', 'storage-monitor-volumes', 'hide-zeros'
+        ].map(key => this._settings.get_value(key).deep_unpack())]);
+        // A category is complete when every step that feeds it succeeded.
+        let steps = [
+            ['system', ['memory', 'processor', 'system'], run => this._discoverSystem(run)],
+            ['hwmon', ['temperature', 'voltage', 'fan'], run => this._discoverHwmon(run)],
+            ['network', ['network'], async run => {
+                let interfaces = SensorMath.parseNetwork(await this._read(NETWORK.id, this._discoveryCancellation));
+                this._discoverNetwork(run, interfaces, await this._findHardwareInterfaces(interfaces));
+            }],
+            ['storage', ['storage'], run => this._discoverStorage(run)],
+            ['battery', ['battery'], run => this._discoverBattery(run)],
+            ['gpu', ['gpu', 'temperature'], run => this._discoverGpu(run)]
+        ];
+        let sensorCountBefore = this._sensorCount();
+        this._discovery = (async () => {
+            let discoveredConfiguration;
+            do {
+                discoveredConfiguration = configuration();
+                let run = this._startRun();
+                let incomplete = new Set();
+                await Promise.all(steps.map(async ([stepName, fedCategories, discover]) => {
+                    try { await discover(run); }
+                    catch (error) {
+                        for (let name of fedCategories)
+                            incomplete.add(name);
+                        if (!this.destroyed) console.error('discover:' + stepName, error);
+                    }
+                }));
+                if (this.destroyed) return;
+                // From here on, a sensor of a complete category that the run did not find is no longer present.
+                for (let [name, category] of this.categories()) {
+                    if (!incomplete.has(name))
+                        category.discovered = run;
+                }
+                this._discoverAggregates(run);
+            } while (discoveredConfiguration != configuration());
+            this._forget();
+            for (let [name, category] of this.categories())
+                category.header = this._chooseHeader(name);
+            if (this._sensorCount() != sensorCountBefore)
+                this._save();
+            this.catalogChanged();
+        })().finally(() => {
+            this._discovery = null;
+            // What came on screen during discovery is read now.
+            this._readNewlyShown();
+        });
+        return this._discovery;
+    }
+
+    // Drops the sensors no run has found for a year, except pinned ones, such as the interface of a past container.
+    _forget() {
+        let oldest = now() - 365 * 86400;
+        let linked = new Set(this.catalog.panel.sensors.map(link => link.sensor));
+        for (let [, category] of this.categories())
+            category.sensors = category.sensors.filter(sensor => linked.has(sensor) || sensor.discovered >= oldest);
+    }
+
+    _chooseHeader(categoryName) {
+        let category = this.catalog[categoryName];
+        let present = category.sensors.filter(sensor => sensorPresent(category, sensor));
+        let withKey = key => present.find(sensor => sensor.key == key);
+        let chosen = present.find(sensor => sensor.categoryDefault);
+        if (chosen) return chosen;
+        switch (categoryName) {
+            case 'temperature':
+            case 'fan':
+                // Without an average, the category has fewer than two sensors.
+                return withKey('average') ?? this._aggregatedSensors(category)[0];
+            case 'voltage':
+                // A battery's first, a USB supply's last (`priority`, from _discoverHwmon).
+                return this._aggregatedSensors(category).sort((a, b) => a.priority - b.priority || a.key.localeCompare(b.key))[0];
+            case 'battery':
+                // Without a total, a battery's power rate; a mouse's battery has none, only a percentage.
+                return withKey('total-power-rate') ?? present.find(sensor => sensor.field == 'power-rate') ??
+                    present.find(sensor => sensor.field == 'percentage');
+            case 'storage':
+                // The first location sorts first, which is "/" while "/" is monitored.
+                return present.find(sensor => sensor.field == 'free' && sensor.section == 1);
+            case 'gpu':
+                return present.find(sensor => sensor.field == 'utilization.gpu') ??
+                    present.find(sensor => sensor.file?.endsWith('/gpu_busy_percent')) ?? withKey('refresh-rate');
+            default:
+                return withKey({memory: 'usage', processor: 'usage', system: 'load-1m', network: 'device-rx'}[categoryName]);
+        }
+    }
+
+    async _discoverSystem(run) {
+        this._foundSource(run, MEMORY);
+
+        let cores = CPU_STAT.parse(await this._read(CPU_STAT.id, this._discoveryCancellation));
+        // `cpu` is the whole processor.
+        for (let core of cores.keys()) {
+            if (core == 'cpu')
+                this._foundSource(run, CPU_STAT, {core});
+            else
+                this._found(run, 'processor', {key: core, format: 'percent', core, file: CPU_STAT.id,
+                    label: this._gettext('Core %d').replace('%d', core.slice(3))}, this._source(CPU_STAT.id, CPU_STAT.parse),
+                    reading => SensorMath.cpuUsage(reading, core));
+        }
+        let cpuInfo = await this._read('/proc/cpuinfo', this._discoveryCancellation);
+        // Where /proc/cpuinfo lists the frequencies, it is their source, kept as text.
+        this._foundSource(run, /^cpu MHz\s*:/m.test(cpuInfo) ? {...CPU_FREQUENCIES, id: '/proc/cpuinfo', parse: text => text} : CPU_FREQUENCIES);
+        for (let definition of [LOADAVG, OPEN_FILES, UPTIME])
+            this._foundSource(run, definition);
+        for (let definition of [POWERCAP, LAP_MODE]) {
+            if (await this._optionalRead(definition.id) !== null)
+                this._foundSource(run, definition);
+        }
+
+        if (this._settings.get_boolean('include-static-info')) {
+            // From the first processor's entry.
+            let field = name => cpuInfo.match(new RegExp('^' + name + '\\s*:\\s*(.+)$', 'm'))?.[1];
+            // Every processor names its package in `physical id`.
+            let sockets = new Set([...cpuInfo.matchAll(/^physical id\s*:\s*(\d+)/gm)].map(match => match[1]));
+            this._foundConstant(run, 'vendor', field('vendor_id'));
+            this._foundConstant(run, 'bogomips', field('bogomips'));
+            this._foundConstant(run, 'sockets', sockets.size);
+            // In KB.
+            this._foundConstant(run, 'cache', Number.parseFloat(field('cache size')) * 1024);
+            // "Linux version <release> ...".
+            let kernel = (await this._read('/proc/version', this._discoveryCancellation)).split(' ')[2];
+            this._foundConstant(run, 'kernel', kernel);
+        }
+    }
+
+    // With `hide-zeros` on, a temperature is recorded only once discovery reads something other than zero for it. A
+    // present sensor keeps its first reading of the session, so it stays when it reads zero later.
+    async _foundWithHideZeros(run, categoryName, fields, source, value, readInitialTemperature) {
+        let initialTemperature;
+        if (fields.format == 'temp' && this._settings.get_boolean('hide-zeros')) {
+            let known = this._unmatched(run, categoryName, fields.key);
+            if (known && sensorPresent(this.catalog[categoryName], known))
+                initialTemperature = known.runtime.initialTemperature;
+            if (initialTemperature === undefined)
+                initialTemperature = await readInitialTemperature();
+            if (!Number.isFinite(initialTemperature) || initialTemperature === 0) return false;
+        }
+        this._found(run, categoryName, fields, source, value).runtime.initialTemperature = initialTemperature;
+        return true;
+    }
+
+    // Temperatures, voltages and fans from /sys/class/hwmon, and the temperatures of the thermal zones hwmon lacks.
+    async _discoverHwmon(run) {
+        let readFile = sensorFile => async () => {
+            try {
+                return Number(await this._optionalRead(sensorFile));
+            } catch (error) {
+                // An unreadable temperature is left out like one that reads zero, instead of failing the step.
+                if (!this.destroyed) console.debug(sensorFile, error);
+                return NaN;
+            }
+        };
+        let hwmonDeviceNames = new Set();
+        let root = '/sys/class/hwmon/';
+        for (let directory of await this._list(root, this._discoveryCancellation)) {
+            let devicePath = root + directory;
+            let deviceName = await this._optionalRead(devicePath + '/name');
+            // Some drivers keep `name` and the inputs in `device`.
+            if (deviceName === null) {
+                devicePath += '/device';
+                deviceName = await this._optionalRead(devicePath + '/name');
+            }
+            if (deviceName === null) continue;
+            hwmonDeviceNames.add(deviceName);
+            // coretemp's temp1 names the CPU package, such as "Package id 0".
+            let labelPrefix = deviceName;
+            if (deviceName == 'coretemp')
+                labelPrefix = await this._optionalRead(devicePath + '/temp1_label') || deviceName;
+            let files = await this._list(devicePath, this._discoveryCancellation);
+            // For the voltage header (_chooseHeader): 0 for a battery's, 2 for a USB supply's.
+            let priority = 1;
+            if (files.some(file => /^in\d+_input$/.test(file))) {
+                let powerSupplyType = await this._optionalRead(root + directory + '/device/type');
+                if (powerSupplyType == 'Battery')
+                    priority = 0;
+                else if (powerSupplyType !== null && powerSupplyType.startsWith('USB'))
+                    priority = 2;
+            }
+            for (let file of files) {
+                let match = file.match(/^(temp|in|fan)(\d+)_input$/);
+                if (!match) continue;
+                let categoryName = {temp: 'temperature', in: 'voltage', fan: 'fan'}[match[1]];
+                let input = match[1] + match[2];
+                let rawLabel = await this._optionalRead(devicePath + '/' + input + '_label');
+                if (rawLabel === null)
+                    rawLabel = labelPrefix + ' ' + input;
+                else if (labelPrefix != rawLabel)
+                    rawLabel = labelPrefix + ' ' + rawLabel;
+                // For labels that only name the device and the input, or the CPU package.
+                let names = {
+                    'acpitz temp1': N_('ACPI Thermal Zone'), 'pch_cannonlake temp1': N_('Platform Controller Hub'),
+                    'iwlwifi_1 temp1': N_('Wireless Adapter'), 'Package id 0': N_('Processor 0'), 'Package id 1': N_('Processor 1')
+                };
+                // Not keyed by the hwmon directory, whose number can change at the next boot.
+                await this._foundWithHideZeros(run, categoryName, {
+                    key: deviceName + '/' + input, label: (names[rawLabel] || rawLabel).replace('Package id', 'CPU'),
+                    format: match[1], file: devicePath + '/' + file, priority: categoryName == 'voltage' ? priority : undefined
+                }, this._source(devicePath + '/' + file), reading => FILE_VALUE[match[1]](reading.value), readFile(devicePath + '/' + file));
+            }
+        }
+        root = '/sys/class/thermal/';
+        let zones = [];
+        // Zones of one type share one hwmon device, whose directory is inside the first of them only
+        // (drivers/thermal/thermal_hwmon.c); the loop above has recorded it.
+        let zoneTypesInHwmon = new Set();
+        for (let directory of await this._list(root, this._discoveryCancellation)) {
+            if (!directory.startsWith('thermal_zone')) continue;
+            let zoneType = await this._read(root + directory + '/type', this._discoveryCancellation);
+            zones.push({directory, zoneType});
+            let zoneEntries = await this._list(root + directory, this._discoveryCancellation);
+            if (zoneEntries.some(entry => entry.startsWith('hwmon')))
+                zoneTypesInHwmon.add(zoneType);
+        }
+        for (let {directory, zoneType} of zones) {
+            // Intel's thermal framework device; its zone always reports 20 °C.
+            if (zoneType == 'INT3400 Thermal') continue;
+            // coretemp reports the same package temperature.
+            if (zoneType == 'x86_pkg_temp' && hwmonDeviceNames.has('coretemp')) continue;
+            if (zoneTypesInHwmon.has(zoneType)) continue;
+            let file = root + directory + '/temp';
+            await this._foundWithHideZeros(run, 'temperature', {key: 'thermal/' + zoneType, label: zoneType, format: 'temp', file},
+                this._source(file), reading => FILE_VALUE.temp(reading.value), readFile(file));
+        }
+    }
+
+    _discoverNetwork(run, interfaces, hardwareInterfaces) {
+        let wifiHeading;
+        for (let name of interfaces.keys()) {
+            let hardware = hardwareInterfaces.has(name);
+            // As "WiFi (wlp0s20f3)".
+            let heading = hardware ? this._gettext(hardwareInterfaces.get(name)) + ' (' + name + ')' : name;
+            if (hardwareInterfaces.get(name) == HARDWARE_INTERFACE_KINDS.wlan)
+                wifiHeading = heading;
+            let section = hardware ? NETWORK_SECTION.hardwareInterfaces : NETWORK_SECTION.virtualInterfaces;
+            // What the loopback interface receives is what it sends.
+            if (name == 'lo') {
+                this._found(run, 'network', {key: 'lo/tx', label: N_('Transferred'), format: 'storage', file: NETWORK.id, interface: name,
+                    hardware, section, heading}, this._source(NETWORK.id), reading => reading.value.interfaces.get(name)?.tx);
+                continue;
+            }
+            for (let [direction, label] of [['rx', N_('Download speed')], ['tx', N_('Upload speed')]])
+                this._found(run, 'network', {key: name + '/' + direction, label, format: 'speed', file: NETWORK.id, interface: name, direction,
+                    icon: DIRECTION_ICONS[direction], hardware, section, heading},
+                    this._source(NETWORK.id), reading => SensorMath.counterRate(reading, value => value.interfaces.get(name)?.[direction]));
+        }
+        this._foundSource(run, NETWORK);
+        // Under the WiFi interface: the last one, as WIFI.parse takes the last line.
+        this._foundSource(run, WIFI, {heading: wifiHeading});
+        if (this._settings.get_boolean('include-public-ip'))
+            this._foundSource(run, PUBLIC_IP);
+    }
+
+    // A hardware interface has a `device` entry; a bridge, a container's or a VPN's interface and the loopback have none.
+    async _findHardwareInterfaces(interfaces) {
+        let hardwareInterfaces = new Map();
+        for (let name of interfaces.keys()) {
+            if (await this._optionalRead('/sys/class/net/' + name + '/device/uevent') === null) continue;
+            let description = await this._read('/sys/class/net/' + name + '/uevent', this._discoveryCancellation);
+            let deviceType = description.split('\n').find(line => line.startsWith('DEVTYPE='))?.slice('DEVTYPE='.length);
+            hardwareInterfaces.set(name, HARDWARE_INTERFACE_KINDS[deviceType] ?? N_('Ethernet'));
+        }
+        return hardwareInterfaces;
+    }
+
+    // A run for the network category alone, when /proc/net/dev lists other interfaces than the catalog.
+    async _rediscoverNetwork(interfaces) {
+        let hardwareInterfaces = await this._findHardwareInterfaces(interfaces);
+        // A discovery that started meanwhile finds them itself.
+        if (this._discovery || this.destroyed) return;
+        let network = this.catalog.network;
+        let sensorCountBefore = network.sensors.length;
+        let run = this._startRun();
+        this._discoverNetwork(run, interfaces, hardwareInterfaces);
+        network.discovered = run;
+        network.header = this._chooseHeader('network');
+        if (network.sensors.length != sensorCountBefore)
+            this._save();
+        this.catalogChanged();
+    }
+
+    // The monitored locations that are mounted. A network location has no disk counters.
+    async _discoverStorage(run) {
+        let mounts = SensorMath.parseMountTable(await this._read(MOUNTS, this._discoveryCancellation));
+        let monitored = new Set(this._settings.get_strv('storage-locations'));
+        if (this._settings.get_boolean('storage-monitor-volumes')) {
+            // A mount without a path, such as a phone's, is in no mount table and is dropped below.
+            for (let mount of Gio.VolumeMonitor.get().get_mounts())
+                monitored.add(mount.get_root().get_path());
+        }
+        // gvfs's FUSE directory only holds the shares gvfs mounts, and has no space of its own.
+        let monitoredLocations = [...monitored].filter(location => mounts.get(location) && mounts.get(location).type != 'fuse.gvfsd-fuse').sort();
+        for (let [index, location] of monitoredLocations.entries()) {
+            let network = SensorMath.isRemoteMount(mounts.get(location));
+            for (let definition of network ? [STORAGE_SPACE] : [STORAGE_SPACE, DISKSTATS]) {
+                for (let [field, {value, ...fields}] of Object.entries(definition.sensors)) {
+                    let sensor = this._found(run, 'storage', {key: location + '/' + field, ...fields, field, location, network,
+                        file: definition.id, device: mounts.get(location).device, section: index + 1, heading: location},
+                        definition.id && this._source(definition.id, definition.parse), value);
+                    // A space sensor shares its location's source.
+                    sensor.runtime.source ??= this.sources.get(location) ?? this.addSource(location, this._storageLocationSource(sensor));
+                }
+            }
+        }
+        if (await this._optionalRead(ARC.id) !== null)
+            this._foundSource(run, ARC, {section: monitoredLocations.length + 1, heading: N_('ZFS cache')});
+    }
+
+    // Also the batteries of devices such as a mouse. A key is the battery's name and the field.
+    async _discoverBattery(run) {
+        let root = '/sys/class/power_supply/';
+        let supplies;
+        try {
+            supplies = await this._list(root, this._discoveryCancellation);
+        } catch (error) {
+            // Without the directory, the machine has no batteries.
+            if (error.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.NOT_FOUND)) return;
+            throw error;
+        }
+        let batteries = [];
+        for (let name of supplies) {
+            if (await this._optionalRead(root + name + '/type') == 'Battery')
+                batteries.push(name);
+        }
+        let machineBatteries = 0;
+        for (let name of batteries) {
+            let file = root + name + '/uevent';
+            let description = await this._read(file, this._discoveryCancellation);
+            // A device's battery, such as a mouse's, does not count toward the total power rate.
+            let peripheral = await this._optionalRead(root + name + '/scope') == 'Device';
+            if (!peripheral) machineBatteries++;
+            let batteryFields = SensorMath.parseBattery(description);
+            // A field the file lacks gets no sensor; capacity and time left are computed, so every battery has them.
+            let found = Object.entries(BATTERY.fieldKeys).filter(([batteryField]) => batteryFields[batteryField] !== undefined &&
+                !(typeof batteryFields[batteryField] == 'number' && !Number.isFinite(batteryFields[batteryField])))
+                .map(([, field]) => field);
+            // A device's battery is headed by its model.
+            let heading = peripheral && description.match(/^POWER_SUPPLY_MODEL_NAME=(.+)$/m)?.[1] || name;
+            for (let field of [...found, 'capacity', 'time-left']) {
+                let {value, ...fields} = BATTERY.sensors[field];
+                this._found(run, 'battery', {key: name + '/' + field, ...fields, field, file, heading}, this._source(file, BATTERY.parse), value);
+            }
+        }
+        if (machineBatteries > 1) {
+            this._found(run, 'battery', {key: 'total-power-rate', label: N_('Total power rate'), format: 'watt',
+                aggregate: true, section: 1});
+        }
+    }
+
+    _discoverAggregates(run) {
+        for (let [categoryName, format] of Object.entries(AGGREGATED)) {
+            if (this._aggregatedSensors(this.catalog[categoryName]).length < 2) continue;
+            // Section 1 puts them below the sensors, which have none.
+            for (let [key, label] of [['average', N_('Average')], ['minimum', N_('Minimum')], ['maximum', N_('Maximum')]])
+                this._found(run, categoryName, {key, label, format, aggregate: true, section: 1});
+        }
+    }
+
+    // destroy() stops the program.
+    async _runProgram(args) {
+        this._discoveryCancellation.set_error_if_cancelled();
+        let process = Gio.Subprocess.new(args, Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE);
+        this._commands.add(process);
+        try {
+            return await new Promise((resolve, reject) => {
+                process.communicate_utf8_async(null, this._discoveryCancellation, (process, result) => {
+                    try {
+                        let [, output, error] = process.communicate_utf8_finish(result);
+                        if (!process.get_successful()) throw new Error(error.trim() || args[0] + ' failed');
+                        resolve(output.trim());
+                    } catch (error) { reject(error); }
+                });
+            });
+        } finally {
+            this._commands.delete(process);
+        }
+    }
+
+    // NVIDIA cards through nvidia-smi, the others through /sys/class/drm. A key is the card's name and the field.
+    async _discoverGpu(run) {
+        // A switched-off category starts no nvidia-smi.
+        if (!this.catalog.gpu.enabled) return;
+        let staticInfo = this._settings.get_boolean('include-static-gpu-info');
+        let nvidiaCards = [];
+        let nvidiaFields = ['uuid', 'name'];
+        let nvidiaStaticFields = [
+            [N_('Temperature Limit'), 'temperature.gpu.tlimit', 'temp'],
+            [N_('Power Limit'), 'power.limit', 'watt-gpu'], [N_('Addressing Mode'), 'addressing_mode', 'string'],
+            [N_('Driver Version'), 'driver_version', 'string'], [N_('vBIOS Version'), 'vbios_version', 'string'],
+            [N_('Serial Number'), 'serial', 'string'], [N_('Domain Number'), 'pci.domain', 'string'],
+            [N_('Bus Number'), 'pci.bus', 'string'], [N_('Device Number'), 'pci.device', 'string'],
+            [N_('Device ID'), 'pci.device_id', 'string'], [N_('Sub Device ID'), 'pci.sub_device_id', 'string']
+        ];
+        if (GLib.find_program_in_path('nvidia-smi')) {
+            // For the hide-zeros check below.
+            if (this._settings.get_boolean('hide-zeros'))
+                nvidiaFields.push('temperature.gpu', 'temperature.memory');
+            if (staticInfo)
+                nvidiaFields.push(...nvidiaStaticFields.map(([, field]) => field), 'pcie.link.gen.max', 'pcie.link.width.max');
+            try {
+                let output = await this._runProgram(['nvidia-smi', '--query-gpu=' + nvidiaFields.join(','), '--format=csv,noheader,nounits']);
+                nvidiaCards = output.split('\n').filter(line => line.trim()).map(line => line.split(',').map(part => part.trim()));
+            } catch (error) {
+                // Without a working card, as when it is switched off, the query fails every run: no fault.
+                if (!this.destroyed) console.debug('nvidia discovery', error);
+            }
+        }
+        let otherCards = [];
+        for (let card of await this._list('/sys/class/drm', this._discoveryCancellation)) {
+            if (!/^card\d+$/.test(card)) continue;
+            let devicePath = '/sys/class/drm/' + card + '/device/';
+            let vendor = await this._optionalRead(devicePath + 'vendor');
+            // 0x10de is NVIDIA: when nvidia-smi reports cards, they are not read through /sys as well.
+            if (vendor === null || (vendor == '0x10de' && nvidiaCards.length)) continue;
+            otherCards.push({devicePath, vendor, files: await this._list(devicePath, this._discoveryCancellation)});
+        }
+        let cardNumber = 0;
+        let heading = () => this._gettext('GPU %d').replace('%d', cardNumber);
+
+        for (let parts of nvidiaCards) {
+            cardNumber++;
+            let uuid = parts[0];
+            let cardName = parts[1];
+            let part = field => parts[nvidiaFields.indexOf(field)];
+            if (staticInfo) {
+                this._found(run, 'gpu', {key: cardName + '/name', label: N_('Vendor'), format: 'string', heading: heading(),
+                    value: cardName, status: 'ready', updated: now()});
+                for (let [label, field, format] of nvidiaStaticFields) {
+                    if (part(field) == 'N/A' || part(field) == '[N/A]') continue;
+                    this._found(run, 'gpu', {key: cardName + '/' + field, label, format, heading: heading(),
+                        value: format == 'string' ? part(field) : Number(part(field)), status: 'ready', updated: now()});
+                }
+                let generation = part('pcie.link.gen.max');
+                let width = part('pcie.link.width.max');
+                if (Number.isFinite(Number(generation)) && Number.isFinite(Number(width)))
+                    this._found(run, 'gpu', {key: cardName + '/pcie.link.max', label: N_('Maximum Link Speed'), format: 'pcie',
+                        heading: heading(), value: generation + 'x' + width, status: 'ready', updated: now()});
+            }
+            let hasTemperature = false;
+            for (let [label, field, format] of [
+                [N_('Fan'), 'fan.speed', 'percent'], [N_('Temperature'), 'temperature.gpu', 'temp'],
+                [N_('Memory Temperature'), 'temperature.memory', 'temp'],
+                [N_('Memory Total'), 'memory.total', 'memory'], [N_('Memory Used'), 'memory.used', 'memory'],
+                [N_('Memory Reserved'), 'memory.reserved', 'memory'], [N_('Memory Free'), 'memory.free', 'memory'],
+                [N_('Memory Utilization'), 'utilization.memory', 'percent'], [N_('Utilization'), 'utilization.gpu', 'percent'],
+                [N_('Encoder Utilization'), 'utilization.encoder', 'percent'],
+                [N_('Decoder Utilization'), 'utilization.decoder', 'percent'],
+                [N_('Frequency'), 'clocks.gr', 'hertz'], [N_('Memory Frequency'), 'clocks.mem', 'hertz'],
+                [N_('Encoder/Decoder Frequency'), 'clocks.video', 'hertz'],
+                [N_('Power'), 'power.draw.instant', 'watt-gpu'], [N_('Average Power'), 'power.draw.average', 'watt-gpu']
+            ]) {
+                let found = await this._foundWithHideZeros(run, 'gpu', {key: cardName + '/' + field, label, format, heading: heading(),
+                    nvidia: uuid, field, ...(field == 'memory.free' && LOW_IS_BAD)}, this._source(NVIDIA.id), NVIDIA.value,
+                    () => Number(part(field)));
+                if (field == 'temperature.gpu')
+                    hasTemperature = found;
+            }
+            this._found(run, 'gpu', {key: cardName + '/memory-usage', label: N_('Memory Usage'), format: 'percent', heading: heading(),
+                nvidia: uuid, field: 'memory.used,memory.total'}, this._source(NVIDIA.id), NVIDIA.value);
+            this._found(run, 'gpu', {key: cardName + '/link-speed', label: N_('Link Speed'), format: 'pcie', heading: heading(),
+                nvidia: uuid, field: 'pcie.link.gen.gpucurrent,pcie.link.width.current'}, this._source(NVIDIA.id), NVIDIA.value);
+            // Also among the temperatures, where it counts in their average.
+            if (hasTemperature)
+                this._found(run, 'temperature', {key: cardName + '/temperature.gpu', format: 'temp', nvidia: uuid,
+                    label: nvidiaCards.length > 1 ? heading() : N_('GPU'), field: 'temperature.gpu'}, this._source(NVIDIA.id), NVIDIA.value);
+        }
+
+        for (let {devicePath, vendor, files} of otherCards) {
+            cardNumber++;
+            if (staticInfo) {
+                let vendors = {'0x1002': 'AMD', '0x10de': 'NVIDIA', '0x13b5': 'ARM',
+                    '0x5143': 'Qualcomm', '0x8086': 'Intel', '0x1234': 'QEMU'};
+                this._found(run, 'gpu', {key: vendor + '/vendor', label: N_('Vendor'), format: 'string', heading: heading(),
+                    value: vendors[vendor] || vendor, status: 'ready', updated: now()});
+            }
+            for (let [label, file, format] of [
+                [N_('Usage'), 'gpu_busy_percent', 'percent'],
+                [N_('Memory Used'), 'mem_info_vram_used', 'memory'],
+                [N_('Memory Total'), 'mem_info_vram_total', 'memory']
+            ]) {
+                if (files.includes(file))
+                    this._found(run, 'gpu', {key: vendor + '/' + file, label, format, heading: heading(), file: devicePath + file},
+                        this._source(devicePath + file), reading => FILE_VALUE[format](reading.value));
+            }
+        }
+        this._foundSource(run, FRAMES);
+    }
+
+    // A running process that asks for the same fields, cards and interval keeps running.
+    _configureNvidia(activeSensors) {
+        let requested = activeSensors.filter(sensor => sensor.nvidia);
+        // `uuid` first: it tells which card a line is for.
+        let fields = ['uuid', ...[...new Set(requested.flatMap(sensor => sensor.field.split(',')))].sort()];
+        let uuids = [...new Set(requested.map(sensor => sensor.nvidia))].sort();
+        let interval = this._settings.get_int('update-time');
+        let signature = [fields.join(','), uuids.join(','), interval].join(';');
+        if (this._nvidia && this._nvidia.signature == signature && !this._nvidia.error) return;
+        this._stopReading(NVIDIA.id);
+        // The last process's reading can lack the new fields.
+        let source = this.sources.get(NVIDIA.id);
+        if (source.reading)
+            source.reading = {...source.reading, status: 'pending'};
+        let process;
+        try {
+            process = Gio.Subprocess.new([
+                'nvidia-smi', '--query-gpu=' + fields.join(','), '--id=' + uuids.join(','),
+                '--format=csv,noheader,nounits', '-l', String(interval)
+            ], Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_SILENCE);
+        } catch (error) {
+            this._nvidia = {error};
+            return;
+        }
+        let state = {
+            process, signature, fields, uuids, cancellation: new Gio.Cancellable(),
+            stream: new Gio.DataInputStream({base_stream: process.get_stdout_pipe()}),
+            rows: new Map(), latest: null, waiter: null, error: null
+        };
+        this._nvidia = state;
+        let read = () => state.stream.read_line_async(GLib.PRIORITY_DEFAULT, state.cancellation, (stream, result) => {
+            // The process was stopped while this line was read.
+            if (this._nvidia != state) {
+                closeNvidiaStream(stream);
+                return;
+            }
+            try {
+                let [line] = stream.read_line_finish_utf8(result);
+                if (line === null) throw new Error('nvidia-smi stopped producing readings');
+                let parts = line.split(',').map(part => part.trim());
+                if (parts.length != fields.length) throw new Error('Incomplete nvidia-smi reading: ' + line);
+                state.rows.set(parts[0], Object.fromEntries(fields.map((field, index) => [field, parts[index]])));
+                // One line per card makes a reading.
+                if (state.rows.size == uuids.length) {
+                    let sample = {gpus: state.rows, time: clock()};
+                    state.rows = new Map();
+                    if (state.waiter) {
+                        state.waiter.resolve(sample);
+                        state.waiter = null;
+                    } else {
+                        state.latest = sample;
+                    }
+                }
+                read();
+            } catch (error) {
+                state.error = error;
+                if (state.waiter) {
+                    state.waiter.reject(error);
+                    state.waiter = null;
+                }
+            }
+        });
+        read();
+    }
+
+    // The latest reading, or the next one when none has come since the last read.
+    _readNvidia() {
+        let state = this._nvidia;
+        if (state.error) return Promise.reject(state.error);
+        if (state.latest) {
+            let sample = state.latest;
+            state.latest = null;
+            return Promise.resolve(sample);
+        }
+        return new Promise((resolve, reject) => { state.waiter = {resolve, reject}; });
+    }
+
+    _stopNvidia() {
+        let state = this._nvidia;
+        if (!state) return;
+        this._nvidia = null;
+        // A process that could not be started.
+        if (!state.process) return;
+        state.cancellation.cancel();
+        state.process.force_exit();
+        if (state.waiter) state.waiter.reject(new Error('GPU collection stopped'));
+        // A read under way closes the stream itself; after an error, none is.
+        if (state.error)
+            closeNvidiaStream(state.stream);
+    }
+
+    // Shows a window that redraws all the time without visibly changing. With several monitors, a frame counts once per
+    // monitor.
+    _startFrames() {
+        this._frameSignal = global.stage.connect('after-paint', () => this._frames++);
+    }
+
+    _stopFrames() {
+        if (this._frameSignal) {
+            global.stage.disconnect(this._frameSignal);
+            this._frameSignal = 0;
+        }
     }
 
     destroy() {
-        this._destroyFrameMonitor();
-        this._terminateNvidiaSmiProcess();
-
-        for (let signal of Object.values(this._settingChangedSignals))
-            this._settings.disconnect(signal);
+        this.destroyed = true;
+        // Destroyed, nothing is active, so every source stops.
+        this._updateActiveSources();
+        this._discoveryCancellation.cancel();
+        for (let process of this._commands)
+            process.force_exit();
     }
-});
+}
