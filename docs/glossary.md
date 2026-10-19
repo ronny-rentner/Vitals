@@ -10,6 +10,7 @@ The terms used in the code and the documentation of Vitals, each with one meanin
 ## The catalog
 
 - **Catalog**: every known sensor by category, plus the panel. Plain data, saved as a whole in the setting `catalog`. See [catalog-design.md](catalog-design.md).
+- **Catalog settings**: the user's settings for the catalog, by category, in the setting `catalog-settings`: whether each category is switched on (`enabled`). The preferences window writes them.
 - **Category**: a group of sensors of one kind, such as Temperature or Memory, with a page in the preferences and a part in the menu. Its name is `name` in `sensorCategories` (`helpers/categories.js`).
 - **Sensor**: one value Vitals can show, such as a temperature input or the memory usage, with its label, format and reading.
 - **Key**: what tells a sensor apart from the other sensors of its category. See [sensor-key-format.md](sensor-key-format.md).
@@ -19,8 +20,8 @@ The terms used in the code and the documentation of Vitals, each with one meanin
 - **Heading**: the battery, graphics card, network interface or storage location a sensor belongs to. The menu shows it above its rows when a category's rows fall into several groups.
 - **Category pin**: the sensor whose value the category header shows (`categoryPin`): the one the user pinned to the category (`pinnedToCategory`), otherwise the default pin, which the collector chooses by its rules.
 - **Aggregate**: the average, minimum or maximum of a category. It is computed from the category's other sensors, not read.
-- **Pinned sensors**: the sensors the user pinned to the top bar, in the user's order. The catalog holds them as links in `panel.sensors`.
-- **Link**: an entry of the pinned sensors, or a category pin: a pointer to a sensor, saved as the sensor's category and key. A link of the pinned sensors has its own `visible` flag; an unpinned sensor keeps its link with `visible` off, and with it its place.
+- **Panel sensor**: an entry of `panel.sensors`: what the top bar owns for one sensor (`visible`, `reservedWidth`) and a reference to that sensor in its category (`sensor`).
+- **Pinned sensors**: the sensors the user pinned to the top bar, in the user's order: those whose panel sensor is `visible`.
 
 ## On screen
 

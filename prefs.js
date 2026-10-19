@@ -10,7 +10,7 @@ import {Formatter} from './formatter.js';
 import {sensorCategories, categoriesInOrder, MANUAL_CATEGORY_ORDER} from './helpers/categories.js';
 import {compareColorEntries, DEFAULT_THRESHOLD_RGBA, formatColorEntry, sanitizeAndSortColorEntries} from './helpers/colors.js';
 import {parseMountTable, parseTypesWithoutDevice, isRemoteMount} from './helpers/sensorMath.js';
-import {readCatalog, writeCategoryEnabled, sensorPresent} from './helpers/storedCatalog.js';
+import {readCatalog, readCatalogSettings, writeCategoryEnabled, sensorPresent} from './helpers/storedCatalog.js';
 
 function textOf(path) {
     return new TextDecoder().decode(GLib.file_get_contents(path)[1]);
@@ -62,6 +62,8 @@ export default class VitalsPrefs extends ExtensionPreferences {
             this._group(_('Appearance'),
                 this._switchRow('fixed-widths', _('Steady widths'),
                     _('Keep room for a value’s widest text, so its neighbours do not jump. The room is given back after a minute.')),
+                this._switchRow('remember-widths', _('Remember widths'),
+                    _('With steady widths, each value starts with the room it had when Vitals was last switched off.')),
                 this._switchRow('emphasize-values', _('Emphasize values'), _('Draw icons and units lighter and smaller than the numbers.')),
                 this._switchRow('hide-icons', _('Hide icons'), _('The icons in the menu stay.'))));
 
@@ -196,8 +198,7 @@ export default class VitalsPrefs extends ExtensionPreferences {
     // The page of a category: the switch that turns the category on, and what can only be set while it is on,
     // `rows` next to the switch and `groups` below.
     _categoryPage(name, switchTitle, switchSubtitle = '', rows = [], ...groups) {
-        // Whether a category is switched on is part of the saved catalog.
-        let categorySwitch = new Adw.SwitchRow({ title: switchTitle, subtitle: switchSubtitle, active: readCatalog(this._settings)[name].enabled });
+        let categorySwitch = new Adw.SwitchRow({ title: switchTitle, subtitle: switchSubtitle, active: readCatalogSettings(this._settings)[name].enabled });
         categorySwitch.connect('notify::active', () => writeCategoryEnabled(this._settings, name, categorySwitch.active));
         for (let dependent of [...rows, ...groups])
             categorySwitch.bind_property('active', dependent, 'sensitive', GObject.BindingFlags.SYNC_CREATE);

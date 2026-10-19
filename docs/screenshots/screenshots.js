@@ -91,10 +91,10 @@ export async function run() {
     };
     let find = (categoryName, key) => sensors.catalog[categoryName].sensors.find(sensor => sensor.key == key);
     let pin = async (pinned, visible) => {
-        for (let [categoryName, sensor] of pinned) {
+        for (let [, sensor] of pinned) {
             // A machine without sensors of a category has no category pin there.
             if (sensor)
-                sensors.setPanelSensorVisible(categoryName, sensor, visible);
+                sensors.setPanelSensorVisible(sensor, visible);
         }
         button._syncMenuRows();
         // The item has its new size from the next frame on, and the menu opens where the item is.
@@ -105,7 +105,8 @@ export async function run() {
     let topBar = async (name, options = {}) => {
         set(options);
         // Each picture shows its values in the room they need, not in the room the picture before left reserved.
-        button._reservedWidths.clear();
+        for (let panelSensor of sensors.catalog.panel.sensors)
+            panelSensor.reservedWidth = undefined;
         button._redrawPanelItems();
         await read();
         await capture(name, button);

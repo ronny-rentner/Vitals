@@ -35,20 +35,21 @@ test('storage rates use storage units and a per-second suffix', () => {
     equal(formatter.format(1000, 'storage-rate', 'storage', 'read').text, '1.0 kB/s');
 });
 
-test('network speeds are written per second with a slash, in bytes and in bits', () => {
+test('network speeds are written per second with a slash, from kB/s or kbit/s on, with a decimal below 10', () => {
     let options = {'network-speed-format': 0, 'network-speed-unit': 0};
     let formatter = new Formatter({
         get_boolean: () => false,
         get_int: key => options[key],
         get_strv: () => []
     });
-    equal(formatter.format(500, 'speed', 'network', 'rx').text, '500 B/s');
-    equal(formatter.format(2000, 'speed', 'network', 'rx').text, '2 kB/s');
-    equal(formatter.format(3000000, 'speed', 'network', 'rx').text, '3 MB/s');
+    equal(formatter.format(500, 'speed', 'network', 'rx').text, '0.5 kB/s');
+    equal(formatter.format(2000, 'speed', 'network', 'rx').text, '2.0 kB/s');
+    equal(formatter.format(12000, 'speed', 'network', 'rx').text, '12 kB/s');
+    equal(formatter.format(3000000, 'speed', 'network', 'rx').text, '3.0 MB/s');
     options['network-speed-format'] = 1;
-    equal(formatter.format(50, 'speed', 'network', 'rx').text, '400 bit/s');
-    equal(formatter.format(250, 'speed', 'network', 'rx').text, '2 kbit/s');
-    equal(formatter.format(375000, 'speed', 'network', 'rx').text, '3 Mbit/s');
+    equal(formatter.format(50, 'speed', 'network', 'rx').text, '0.4 kbit/s');
+    equal(formatter.format(250, 'speed', 'network', 'rx').text, '2.0 kbit/s');
+    equal(formatter.format(375000, 'speed', 'network', 'rx').text, '3.0 Mbit/s');
 });
 
 await runTests();

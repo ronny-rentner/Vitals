@@ -79,11 +79,10 @@ var VitalsMenuButton = GObject.registerClass({
         // Category name to its submenu in the dropdown.
         this._categoryMenus = {};
         this._clock = () => GLib.get_monotonic_time() / 1000000;
-        // What is on screen, held by the thing it shows: sensor to its menu row, panel link to its top-bar item
-        // and value, and sensor to the width kept free for its top-bar text (for fixed widths, see _widthToReserve).
+        // What is on screen, held by the thing it shows: sensor to its menu row, and panel sensor to its top-bar
+        // item and value.
         this._rows = new Map();
         this._panelItems = new Map();
-        this._reservedWidths = new Map();
         // Category name to the category pin whose value its category header shows.
         this._shownCategoryPins = new Map();
         // The row menu that is open under a sensor's row, with what belongs to it: the sensor, the actions, the
@@ -117,6 +116,9 @@ var VitalsMenuButton = GObject.registerClass({
         this._refreshTimeoutId = null;
 
         this._connectSettingsSignals();
+        // Saves the reserved widths of the top-bar values for the next start. GNOME Shell destroys the button also
+        // when it exits, without switching the extension off.
+        this.connect('destroy', () => this._sensors.save());
 
         this._initializeMenu();
         // Shows the saved catalog at once, before the hardware has been looked for.
@@ -140,10 +142,11 @@ var VitalsMenuButton = GObject.registerClass({
             'changed::category-order', this._rebuildCategories.bind(this),
             'changed::emphasize-values', () => {
                 // The texts get another width with another font.
-                this._reservedWidths.clear();
+                for (let panelSensor of this._sensors.catalog.panel.sensors)
+                    panelSensor.reservedWidth = undefined;
                 this._redrawPanelItems();
             },
-            'changed::catalog', this._enabledCategoriesChanged.bind(this),
+            'changed::catalog-settings', this._enabledCategoriesChanged.bind(this),
             'changed::network-hardware-only', this._syncMenuRows.bind(this),
             'changed::include-aggregates', this._syncMenuRows.bind(this),
             this);
@@ -492,8 +495,8 @@ var VitalsMenuButton = GObject.registerClass({
         }
     }
 
-    _createPanelItem(link) {
-        let sensor = link.sensor;
+    _createPanelItem(panelSensor) {
+        let sensor = panelSensor.sensor;
         let emphasizeValues = this._settings.get_boolean('emphasize-values');
         let item = new St.BoxLayout({
             style_class: 'vitals-panel-item' + (emphasizeValues ? ' vitals-panel-item-emphasized' : ''),
@@ -507,14 +510,14 @@ var VitalsMenuButton = GObject.registerClass({
                 style_class: 'system-status-icon',
                 opacity: PANEL_ICON_OPACITY[emphasizeValues],
                 reactive: true,
-                gicon: this._gicon(link.category, sensor)
+                gicon: this._gicon(sensor.category, sensor)
             });
             item.add_child(icon);
         }
 
         if (this._settings.get_boolean('allow-panel-dragging')) {
             item._delegate = {
-                link,
+                panelSensor,
                 vitalsMenu: this,
                 getDragActor: () => {
                     let clone = new Clutter.Clone({ source: item });
@@ -537,17 +540,18 @@ var VitalsMenuButton = GObject.registerClass({
         }
 
         // The item starts with the value its sensor has, so a pin does not flash "…" or uncoloured text.
-        let formatted = this._formatted(link.category, sensor);
-        let value = new St.Label({ y_expand: true, y_align: Clutter.ActorAlign.CENTER });
+        let formatted = this._formatted(sensor.category, sensor);
+        // The width kept for the value, if it has one, as when the top-bar items are built again; -1 is the text's own width.
+        let value = new St.Label({ y_expand: true, y_align: Clutter.ActorAlign.CENTER, width: panelSensor.reservedWidth ?? -1 });
         // A value is never shortened with "…" (0 is the text engine's "do not shorten"): it gets the width it needs.
         value.clutter_text.ellipsize = 0;
         value.style = formatted.style || null;
-        this._panelItems.set(link, {item, icon, value});
+        this._panelItems.set(panelSensor, {item, icon, value});
         // The value is in the item before it gets its text: a text is measured in the font the item gives it.
         item.add_child(value);
         this._setPanelText(value, formatted);
 
-        this._applyReservedWidth(sensor, value);
+        this._applyReservedWidth(panelSensor, value);
     }
 
     // Writes a top-bar value. With the "emphasize values" option the unit is smaller, thinner and lighter than the
@@ -564,10 +568,10 @@ var VitalsMenuButton = GObject.registerClass({
     }
 
     // support for fixed widths #55: gives a top-bar value the width kept free for it.
-    _applyReservedWidth(sensor, value) {
+    _applyReservedWidth(panelSensor, value) {
         // With the option off no width is remembered, so a width is kept from the moment the option is switched on.
         if (!this._settings.get_boolean('fixed-widths')) {
-            this._reservedWidths.delete(sensor);
+            panelSensor.reservedWidth = undefined;
             return;
         }
         // A value has the font of the theme, and so its real width, only while it is on the stage. Items are
@@ -575,26 +579,28 @@ var VitalsMenuButton = GObject.registerClass({
         if (!value.get_stage()) return;
         // The width the text needs, whatever width is set on the value. It has the theme's font once it is styled.
         value.ensure_style();
-        let reservedWidth = this._widthToReserve(sensor, value.clutter_text.get_preferred_width(-1)[1]);
+        let reservedWidth = this._widthToReserve(panelSensor, value.clutter_text.get_preferred_width(-1)[1]);
         if (value.width != reservedWidth)
             value.set_width(reservedWidth);
     }
 
-    // Notes how wide a sensor's top-bar text is now and returns the width to keep free for it: the width it has
-    // kept so far, unless the text needs more, or has needed less for WIDTH_MEMORY_SECONDS.
-    _widthToReserve(sensor, textWidth) {
+    // Notes how wide a panel sensor's top-bar text is now and returns the width to keep free for it: the width it
+    // has kept so far, unless the text needs more, or has needed less for WIDTH_MEMORY_SECONDS.
+    _widthToReserve(panelSensor, textWidth) {
         let now = this._clock();
-        let reserved = this._reservedWidths.get(sensor);
-        if (!reserved || textWidth >= reserved.width || now - reserved.lastFilled >= WIDTH_MEMORY_SECONDS) {
-            reserved = {width: textWidth, lastFilled: now};
-            this._reservedWidths.set(sensor, reserved);
+        // A width from the last session starts its minute now, so it is not given back at once.
+        panelSensor.runtime.reservedWidthLastFilled ??= now;
+        if (panelSensor.reservedWidth === undefined || textWidth >= panelSensor.reservedWidth ||
+            now - panelSensor.runtime.reservedWidthLastFilled >= WIDTH_MEMORY_SECONDS) {
+            panelSensor.reservedWidth = textWidth;
+            panelSensor.runtime.reservedWidthLastFilled = now;
         }
-        return reserved.width;
+        return panelSensor.reservedWidth;
     }
 
-    _removePanelItem(link) {
-        this._panelItems.get(link).item.destroy();
-        this._panelItems.delete(link);
+    _removePanelItem(panelSensor) {
+        this._panelItems.get(panelSensor).item.destroy();
+        this._panelItems.delete(panelSensor);
     }
 
     handleDragOver(source) {
@@ -609,16 +615,16 @@ var VitalsMenuButton = GObject.registerClass({
             return false;
 
         let rtl = this._menuLayout.get_text_direction() == Clutter.TextDirection.RTL;
-        let target = this._menuLayout.get_children().filter(item => item._delegate?.link).find(item =>
+        let target = this._menuLayout.get_children().filter(item => item._delegate?.panelSensor).find(item =>
             rtl ? x > item.x + item.width / 2 : x < item.x + item.width / 2);
-        if (target && target._delegate.link == source.link)
+        if (target && target._delegate.panelSensor == source.panelSensor)
             return true;
 
-        this._sensors.movePanelLink(source.link, target ? target._delegate.link : null);
+        this._sensors.movePanelSensor(source.panelSensor, target ? target._delegate.panelSensor : null);
 
-        for (let link of this._sensors.catalog.panel.sensors) {
-            if (this._panelItems.has(link))
-                this._menuLayout.set_child_above_sibling(this._panelItems.get(link).item, null);
+        for (let panelSensor of this._sensors.catalog.panel.sensors) {
+            if (this._panelItems.has(panelSensor))
+                this._menuLayout.set_child_above_sibling(this._panelItems.get(panelSensor).item, null);
         }
         return true;
     }
@@ -635,23 +641,23 @@ var VitalsMenuButton = GObject.registerClass({
         this._sensors.discover();
     }
 
-    // Brings the top bar in line with the panel links to show: removes the items whose link is no longer among
-    // them and creates the ones that are missing, in the order of the links. Every other item stays as it is.
+    // Brings the top bar in line with the panel sensors to show: removes the items whose panel sensor is no longer
+    // among them and creates the ones that are missing, in the panel's order. Every other item stays as it is.
     _syncPanelItems() {
-        let shownLinks = this._sensors.catalog.panel.sensors.filter(link => this._sensors.hasPanelItem(link));
-        for (let link of [...this._panelItems.keys()]) {
-            if (!shownLinks.includes(link))
-                this._removePanelItem(link);
+        let shownPanelSensors = this._sensors.catalog.panel.sensors.filter(panelSensor => this._sensors.hasPanelItem(panelSensor));
+        for (let panelSensor of [...this._panelItems.keys()]) {
+            if (!shownPanelSensors.includes(panelSensor))
+                this._removePanelItem(panelSensor);
         }
-        if (shownLinks.length == 0) {
+        if (shownPanelSensors.length == 0) {
             if (!this._placeholderIcon) this._createPlaceholderIcon();
             return;
         }
 
-        for (let link of shownLinks) {
-            if (!this._panelItems.has(link))
-                this._createPanelItem(link);
-            this._menuLayout.set_child_above_sibling(this._panelItems.get(link).item, null);
+        for (let panelSensor of shownPanelSensors) {
+            if (!this._panelItems.has(panelSensor))
+                this._createPanelItem(panelSensor);
+            this._menuLayout.set_child_above_sibling(this._panelItems.get(panelSensor).item, null);
         }
     }
 
@@ -672,8 +678,8 @@ var VitalsMenuButton = GObject.registerClass({
 
     _redrawPanelItems() {
         if (this._dragging) return;
-        for (let link of [...this._panelItems.keys()])
-            this._removePanelItem(link);
+        for (let panelSensor of [...this._panelItems.keys()])
+            this._removePanelItem(panelSensor);
         this._removePlaceholderIcon();
         this._syncPanelItems();
         this._markShown();
@@ -710,7 +716,8 @@ var VitalsMenuButton = GObject.registerClass({
         this._closeRowMenu();
         let hardwareOnly = this._settings.get_boolean('network-hardware-only');
         let aggregates = this._settings.get_boolean('include-aggregates');
-        let pinnedSensors = new Set(this._sensors.catalog.panel.sensors.filter(link => link.visible).map(link => link.sensor));
+        let pinnedSensors = new Set(this._sensors.catalog.panel.sensors.filter(panelSensor => panelSensor.visible)
+            .map(panelSensor => panelSensor.sensor));
         for (let [name, category] of this._sensors.categories()) {
             let rowsChanged = false;
             for (let sensor of category.sensors) {
@@ -801,11 +808,11 @@ var VitalsMenuButton = GObject.registerClass({
         this._closeRowMenu(animate);
         if (openFor == sensor) return;
         let row = this._rows.get(sensor);
-        let pinned = [...this._panelItems.keys()].some(link => link.sensor == sensor);
+        let pinned = [...this._panelItems.keys()].some(panelSensor => panelSensor.sensor == sensor);
         let header = new MenuItem.SensorHeader(row.gicon, this._label(sensor), this.menu.actor);
         let actions = [
             [_('Pin to top bar'), () => {
-                this._sensors.setPanelSensorVisible(categoryName, sensor, !pinned);
+                this._sensors.setPanelSensorVisible(sensor, !pinned);
                 // Brings the top bar in line and puts the row menu back, where this action then has its check mark or not.
                 this._syncMenuRows();
             }, pinned],
@@ -943,8 +950,8 @@ var VitalsMenuButton = GObject.registerClass({
                 marksChanged = true;
             }
         };
-        let sensorsInPanel = new Set(this._sensors.catalog.panel.sensors
-            .filter(link => this._sensors.hasPanelItem(link)).map(link => link.sensor));
+        let sensorsInPanel = new Set(this._sensors.catalog.panel.sensors.filter(panelSensor => this._sensors.hasPanelItem(panelSensor))
+            .map(panelSensor => panelSensor.sensor));
         for (let [name, category] of this._sensors.categories()) {
             mark(category, this.menu.isOpen && category.enabled);
             let rowsOnScreen = category.runtime.shown && this._categoryMenus[name].menu.isOpen;
@@ -995,16 +1002,16 @@ var VitalsMenuButton = GObject.registerClass({
             let gicon = this._gicon(row.categoryName, sensor);
             if (row.gicon != gicon) row.gicon = gicon;
         }
-        for (let [link, {item, icon, value}] of this._panelItems) {
-            let sensor = link.sensor;
+        for (let [panelSensor, {item, icon, value}] of this._panelItems) {
+            let sensor = panelSensor.sensor;
             if (!changed(sensor)) continue;
-            let formatted = this._formatted(link.category, sensor);
-            let gicon = this._gicon(link.category, sensor);
+            let formatted = this._formatted(sensor.category, sensor);
+            let gicon = this._gicon(sensor.category, sensor);
             if (icon && icon.gicon != gicon) icon.gicon = gicon;
             item.visible = sensor.status != 'unavailable';
             if (value.text != formatted.text) this._setPanelText(value, formatted);
             if (value.style != formatted.style) value.style = formatted.style;
-            this._applyReservedWidth(sensor, value);
+            this._applyReservedWidth(panelSensor, value);
         }
         let visible = [...this._panelItems.values()].some(({item}) => item.visible);
         if (!visible && !this._placeholderIcon)
@@ -1084,7 +1091,6 @@ var VitalsMenuButton = GObject.registerClass({
         this._hiddenButton = null;
         this._rowMenu = {sensor: null, items: []};
         this._panelItems.clear();
-        this._reservedWidths.clear();
         this._shownCategoryPins.clear();
         this._separators.clear();
         this._placeholderIcon = null;

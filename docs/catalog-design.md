@@ -7,7 +7,7 @@ This is the design we worked out in discussion on 2026-10-07, and how `sensors.j
 - **The collector** (`sensors.js`) knows every sensor, reads their values, and stores the catalog on disk.
 - **The renderer** (`extension.js`) displays the catalog. Beyond the catalog it only knows the user's display settings, such as the temperature unit or the icon style.
 
-Neither does the other's job. The renderer never decides what exists or what is collected, and the collector never decides how something looks. The collector alone writes the catalog; the one exception is the preferences window, which writes a category's `enabled` switch. The renderer marks what is on screen (`shown`, `shownChanged`) and changes the panel only through `setPanelSensorVisible` and `movePanelLink`.
+Neither does the other's job. The renderer never decides what exists or what is collected, and the collector never decides how something looks. The collector alone writes the catalog. The preferences window writes the catalog settings, which say whether each category is switched on. The renderer marks what is on screen (`shown`, `shownChanged`), notes on each panel sensor the width it keeps free for its top-bar value (`reservedWidth`), and changes the panel otherwise only through `setPanelSensorVisible` and `movePanelSensor`.
 
 ## The catalog
 
@@ -16,7 +16,6 @@ The catalog consists of categories, and each category has its sensors, in order.
 ```js
 catalog = {
     temperature: {
-        enabled: true,
         discovered: 1759820000,
         categoryPin: 'average',
         sensors: [
@@ -33,7 +32,7 @@ catalog = {
             {key: 'average', label: 'Average', format: 'temp', …}
         ]
     },
-    memory: {enabled: true, categoryPin: 'usage', sensors: [{key: 'usage', label: 'Usage', format: 'percent', …}, …]},
+    memory: {categoryPin: 'usage', sensors: [{key: 'usage', label: 'Usage', format: 'percent', …}, …]},
     …
     panel: {
         sensors: [
@@ -47,15 +46,16 @@ catalog = {
 ### A category
 
 - `position`: the category's place in the menu and in the sidebar of the preferences, once the user has dragged the categories. Without it the categories are in the alphabetical order of their names.
-- `enabled`: whether the category is switched on. This replaced the ten `show-*` settings.
+- `enabled`: whether the category is switched on, taken from the setting `catalog-settings` and not saved in the catalog. See "On disk".
 - `discovered`: the timestamp of the last discovery run that completed this category. See "Discovery".
-- `categoryPin`: a link to the sensor of this category whose value the category header shows. It is a link of the same kind as the panel's; on disk it is that sensor's key. It is the sensor the user pinned to the category (`pinnedToCategory`), otherwise the default pin, which the collector chooses after every discovery run by its rules. For voltage the default pin is the battery's, then the system's, then a USB supply's. The category pin changes only then, after a run or when the user pins or unpins a sensor, never between.
+- `categoryPin`: the sensor of this category whose value the category header shows. On disk it is that sensor's key. It is the sensor the user pinned to the category (`pinnedToCategory`), otherwise the default pin, which the collector chooses after every discovery run by its rules. For voltage the default pin is the battery's, then the system's, then a USB supply's. The category pin changes only then, after a run or when the user pins or unpins a sensor, never between.
 - `runtime.shown`: whether the category header is on screen right now. The renderer sets this; see "What is collected".
 - `sensors`: its sensors, in the order in which they were found. The menu shows them by section and label; see "The renderer".
 
 ### A sensor
 
 - `key`: tells it apart from the other sensors in its category. See below.
+- `category`: the name of the category it belongs to, such as `temperature`. It is not saved: loading sets it from the list the sensor is saved in, and discovery sets it on a sensor it finds.
 - `label`: the text shown in the menu, such as "ACPI Thermal Zone" or "Usage".
 - `format`: how its value is formatted.
 - `discovered`: the timestamp of the discovery run that last found it. See "Discovery".
@@ -110,19 +110,23 @@ The colour settings name a sensor by its category and key, as `sensor:temperatur
 
 The panel is a category like the others. The difference is how sensors get into it: the user puts them there, and its order is the user's order.
 
-- Its sensors are links to real sensors. A link names the category and the key of the sensor it points to, and holds its own `visible` flag. A hidden link keeps its place.
-- A link is turned into a pointer to the real sensor in the launch step. From then on the panel shows that sensor's label, format and reading; it has no copies of them.
-- A link whose sensor is not on the machine, such as an unplugged device, stays in the panel category and shows nothing. Its top-bar item is created when the sensor is found.
-- Whether a linked sensor is shown also depends on its own category: a sensor of a category that is switched off is not shown in the panel either.
+- Its sensors are panel sensors. A panel sensor holds only what belongs to the top bar, and a reference to its sensor in that sensor's category (`sensor`), for everything else:
+  - `visible`: whether it is pinned to the top bar. A panel sensor the user unpinned stays with `visible` off, and keeps its place.
+  - `reservedWidth`: the width the renderer keeps free for its top-bar value, with the "fixed widths" option. Saved when the extension's button is destroyed, which happens when the extension is switched off and when GNOME Shell exits, and loaded only with the "Remember widths" option as well.
+  - `runtime.reservedWidthLastFilled`: when the value last needed its whole reserved width. Not saved.
+- On disk the reference is written as its sensor's category and key: `{category, key, visible, reservedWidth}`. At launch the category and key become the reference again.
+- A panel sensor whose sensor is not on the machine, such as an unplugged device, stays in the panel category and shows nothing. Its top-bar item is created when the sensor is found.
+- Whether a panel sensor is shown also depends on its sensor's category: a sensor of a category that is switched off is not shown in the panel either.
 
 ## On disk
 
-The whole catalog is stored on disk as it is, in one setting. It is the single source for which sensors there are, how they are ordered, and what is switched on or visible.
+The whole catalog is stored on disk as it is, in one setting, except whether each category is switched on. It is the single source for which sensors there are, how they are ordered, and what is visible.
 
-- The setting is called `catalog`. It replaced the `panel-sensors` setting and the ten `show-*` settings. Its schema default switches the categories on or off for a new user and puts three sensors in the panel.
+- The setting is called `catalog`. It replaced the `panel-sensors` setting. Its schema default has an empty record for each category and puts three sensors in the panel.
+- Whether each category is switched on is in a setting of its own, `catalog-settings`, laid out like the catalog: `{temperature: {enabled: true}, …}`. It replaced the ten `show-*` settings, and its schema default switches the categories on or off for a new user. Each of the two settings has one writer.
 - It is written when its structure or state changes: discovery finds a new sensor or forgets one, or the user pins, moves or switches something. Discovery writes it only when the number of sensors changed, so a run that finds one sensor and forgets another, or that only changes fields such as a label or a file path, is not written. Until the next write, the colour pages of the preferences window, which read the saved catalog, then miss the new sensor, still list the forgotten one, or show an old label; the extension itself puts its catalog right with the first run after a restart. That is accepted: writing after every run would write the setting each time the menu opens, since the menu starts a run.
 - There are no migrations. Settings saved by earlier versions are not converted.
-- The preferences window is a separate program. Its category switches write `enabled` in the saved catalog (`writeCategoryEnabled` in `helpers/storedCatalog.js`), and it reads the sensors' labels from there for the colour pages. The extension takes a changed switch over when the setting changes, and when it saves it keeps the `enabled` values that are on disk.
+- The preferences window is a separate program. Its category switches write `catalog-settings` (`writeCategoryEnabled` in `helpers/storedCatalog.js`), and it reads the sensors' labels from the saved catalog for the colour pages. The extension takes a changed switch over when `catalog-settings` changes.
 - A sensor and a category are written without their objects. What only means something while the extension runs is in the object `runtime`: `shown`, and `initialTemperature` (what the hide-zeros option remembers). The last reading (`value`, `updated`, `status`) is written; on load every sensor is `pending`, so every value starts as "…".
 
 The setting holds the catalog as a structure, not as text. GNOME's settings format stores nested records and lists directly (type `a{sv}`). `helpers/storedCatalog.js` turns the catalog's plain data into that format; reading it back is built in.
@@ -134,7 +138,7 @@ Other settings stay as they are: the display settings, and the options that belo
 - It draws every category the same way from the catalog: the sensor categories as menu sections, the panel as items in the top bar.
 - It changes only what changed. A sensor that appears or disappears adds or removes its own row. Pinning, unpinning or moving a sensor adds, removes or moves that one top-bar item. A new reading updates that sensor's text.
 - A change of a display setting may redraw everything. That is rare, and avoiding it is only worth doing where it comes out naturally.
-- It holds its rows and items by the sensors and links they show (`_rows`, `_panelItems`), not in tables looked up by key.
+- It holds its rows and items by the sensors they show (`_rows`, `_panelItems`), not in tables looked up by key.
 - Dragging a sensor in the top bar concerns only the renderer; the collector keeps reading.
 - A row's place in its category follows from the sensor's `section` and, inside a section, from its `heading` and the alphabetical order of the labels. A sensor that returns gets its row back in the same place. The order of the sensors in the catalog is the order in which they were found; the menu does not show it.
 
@@ -192,7 +196,7 @@ present  =  sensor.discovered >= category.discovered
 
 `present` is not stored. It follows from the two timestamps.
 
-- A sensor is shown when it is present and its category is `enabled`. For a panel sensor, the link has to be `visible` as well.
+- A sensor is shown when it is present and its category is `enabled`. For the top bar, its panel sensor has to be `visible` as well.
 - The collector reads only sensors that are present.
 
 The comparison is with the last run that completed the category, not with a run that is still in progress. While a run is under way, a sensor it has already found carries a newer timestamp and a sensor it has not reached yet carries the old one; both are still present. The category's timestamp moves only when the category is complete.
@@ -221,7 +225,7 @@ A category can be fed from more than one place: temperatures come from hwmon, fr
 
 Every reading of `/proc/net/dev` is compared with the interfaces the catalog has. When they differ, a small run of its own for the network category follows at once: it gives its timestamp to the interfaces it sees and to the network sensors that do not belong to one interface, such as the totals, and then completes the category.
 
-A sensor that is not present stays in the catalog with its label, its place and its panel link. When a later run finds it again, it gets that run's timestamp and its current `file`, and it is present again.
+A sensor that is not present stays in the catalog with its label and its place, in its category and in the panel. When a later run finds it again, it gets that run's timestamp and its current `file`, and it is present again.
 
 ### Forgetting
 
@@ -240,11 +244,11 @@ No sensor is read while a discovery run is in progress.
 That way no sensor is ever read through a path that the run is about to turn off.
 
 The readings taken before the run are kept. A rate, such as network speed, is then computed between the last reading before the run and the first one after it, over the time that really passed, so it does not start over with "…" after each discovery.
-## Links on disk
+## Sensors saved by key
 
-A link, in the panel or as a category's `categoryPin`, is a pointer to its sensor while the extension runs. On disk it is written as the category and the key of that sensor. At launch each link is turned back into a pointer, to the sensor with that key in that category.
+A panel sensor's reference and a category's `categoryPin` point to a sensor while the extension runs. On disk each is written as the category and the key of that sensor. At launch each points to the sensor with that key in that category again.
 
-When two sensors share a key, a link cannot say which of them it means, and it resolves to the first one. With two NVMe drives, a link to the second drive's temperature points at the first drive after a restart. That is accepted: it is a property of a machine whose devices cannot be told apart by name, and every program that reads those names has it. Like the swap described above, it can be closed later with one more identifying field.
+When two sensors share a key, the key cannot say which of them it means, and it resolves to the first one. With two NVMe drives, the second drive's temperature, pinned to the top bar, is the first drive's after a restart. That is accepted: it is a property of a machine whose devices cannot be told apart by name, and every program that reads those names has it. Like the swap described above, it can be closed later with one more identifying field.
 
 ## Where the code differs from the discussion
 

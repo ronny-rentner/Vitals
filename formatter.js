@@ -103,14 +103,17 @@ export class Formatter {
                 let bits = format == 'speed' && this._settings.get_int('network-speed-format') == 1;
                 if (bits) value *= 8;
                 let fixed = format == 'speed' ? this._settings.get_int('network-speed-unit') : 0;
-                let exponent = fixed || (value > 0 ? Math.max(0, Math.floor(Math.log(value) / Math.log(base))) : 0);
+                // Speeds start at kB/s (kbit/s): below that, the unit of a quiet network would change at every reading.
+                let exponent = fixed || Math.max(format == 'speed' ? 1 : 0, value > 0 ? Math.floor(Math.log(value) / Math.log(base)) : 0);
                 if (!fixed && value >= Math.pow(base, exponent) * (base - 0.05)) exponent++;
-                let digits = format == 'speed' ? (precise ? 1 : 0) : (precise ? 2 : 1);
+                let scaled = value / Math.pow(base, exponent);
+                // A speed has one decimal below 10 and none from there on, so it keeps two or three digits.
+                let digits = format == 'speed' ? (scaled < 9.95 ? 1 : 0) + (precise ? 1 : 0) : (precise ? 2 : 1);
                 let ending = units[exponent];
                 if (format == 'speed') ending = (bits ? ending.replace('B', 'bit') : ending) + '/s';
                 if (format == 'storage-rate') ending += '/s';
                 unit = ' ' + ending;
-                text = (value / Math.pow(base, exponent)).toFixed(digits) + unit;
+                text = scaled.toFixed(digits) + unit;
                 break;
             }
             case 'runtime':

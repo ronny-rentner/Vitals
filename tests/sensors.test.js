@@ -957,7 +957,7 @@ test('a sensor that no run has found for a year is forgotten, unless it is in th
     first.machine.plug('vpn');
     first.machine.plug('secondNvme');
     await first.sensors.discover();
-    first.sensors.setPanelSensorVisible('network', first.find('network', 'tun0/tx'), true);
+    first.sensors.setPanelSensorVisible(first.find('network', 'tun0/tx'), true);
     first.sensors.destroy();
     // The VPN was last connected a year and a minute ago, the second drive a minute less than a year ago.
     let saved = readCatalog(first.configuration);
@@ -1006,40 +1006,39 @@ test('a name, a category pin and the order of the categories are kept across dis
     sensors.destroy();
 });
 
-test('panel links and category switches are changed through Sensors, which saves them and keeps what the preferences wrote', async () => {
+test('the panel\'s sensors and category switches are changed through Sensors, which saves them and keeps what the preferences wrote', async () => {
     let configuration = settings();
     let saved = readCatalog(configuration);
     // A device that is not plugged in is in the panel from an earlier session.
     saved.panel.sensors = [{category: 'voltage', key: 'unplugged/in0', visible: true}];
     writeCatalog(configuration, saved);
     let {sensors, find} = setup(configuration);
-    let links = sensors.catalog.panel.sensors;
-    let shown = () => links.filter(link => sensors.hasPanelItem(link)).map(link => link.category + ' ' + link.sensor.key).join(', ');
-    let link = (categoryName, key) => links.find(candidate => candidate.sensor == find(categoryName, key));
+    let panelSensors = sensors.catalog.panel.sensors;
+    let shown = () => panelSensors.filter(panelSensor => sensors.hasPanelItem(panelSensor))
+        .map(({sensor}) => sensor.category + ' ' + sensor.key).join(', ');
+    let panelSensor = (categoryName, key) => panelSensors.find(candidate => candidate.sensor == find(categoryName, key));
     await sensors.discover();
-    equal(shown(), '', 'a link whose sensor is not on the machine is not shown');
-    equal(links.length, 1, 'and keeps its place in the panel');
+    equal(shown(), '', 'a sensor that is not on the machine is not shown');
+    equal(panelSensors.length, 1, 'and keeps its place in the panel');
     for (let [categoryName, key] of [['memory', 'usage'], ['system', 'load-1m'], ['processor', 'usage']])
-        sensors.setPanelSensorVisible(categoryName, find(categoryName, key), true);
-    sensors.setPanelSensorVisible('system', find('system', 'load-1m'), false);
-    equal(shown(), 'memory usage, processor usage', 'a hidden link is not shown; the same key in two categories is two sensors');
-    sensors.setPanelSensorVisible('system', find('system', 'load-1m'), true);
-    equal(shown(), 'memory usage, system load-1m, processor usage', 'a hidden link kept its place');
-    sensors.movePanelLink(link('processor', 'usage'), link('memory', 'usage'));
-    equal(shown(), 'processor usage, memory usage, system load-1m', 'moved in front of another link');
-    sensors.movePanelLink(link('processor', 'usage'));
+        sensors.setPanelSensorVisible(find(categoryName, key), true);
+    sensors.setPanelSensorVisible(find('system', 'load-1m'), false);
+    equal(shown(), 'memory usage, processor usage', 'an unpinned sensor is not shown; the same key in two categories is two sensors');
+    sensors.setPanelSensorVisible(find('system', 'load-1m'), true);
+    equal(shown(), 'memory usage, system load-1m, processor usage', 'an unpinned sensor kept its place');
+    sensors.movePanelSensor(panelSensor('processor', 'usage'), panelSensor('memory', 'usage'));
+    equal(shown(), 'processor usage, memory usage, system load-1m', 'moved in front of another sensor');
+    sensors.movePanelSensor(panelSensor('processor', 'usage'));
     equal(shown(), 'memory usage, system load-1m, processor usage', 'moved to the end');
-    // The preferences switch a category in the saved catalog; the collector saves before it has taken that over.
+    // The preferences switch a category in the catalog settings.
     equal(sensors.catalog.battery.enabled, false, 'the schema default');
     writeCategoryEnabled(configuration, 'battery', true);
     writeCategoryEnabled(configuration, 'memory', false);
-    sensors.movePanelLink(link('memory', 'usage'));
-    equal(readCatalog(configuration).battery.enabled, true, 'saving does not undo the switch');
     equal(sensors.reloadEnabled(), true, 'a changed switch is reported');
     equal(sensors.reloadEnabled(), false, 'once');
     equal(shown(), 'system load-1m, processor usage', 'a sensor of a category that is switched off is not shown');
     equal(JSON.stringify(readCatalog(configuration).panel.sensors), JSON.stringify(
-        links.map(({category, sensor, visible}) => ({category, key: sensor.key, visible}))), 'saved as category and key');
+        panelSensors.map(({sensor, visible}) => ({category: sensor.category, key: sensor.key, visible}))), 'saved as category and key');
     sensors.destroy();
 });
 

@@ -63,4 +63,4 @@ The rules for its look were decided on 2026-10-11. The values themselves are in 
 
 The `emphasize-values` option (on by default) is the part of the look that is a matter of taste: icons and units lighter and smaller than the numbers.
 
-With the "fixed widths" option, a top-bar value keeps the room of its widest text of the last minute. While the option is off, no width is remembered.
+With the "fixed widths" option, a top-bar value keeps the room of its widest text of the last minute. While the option is off, no width is remembered. With "Remember widths" as well, a value starts with the width it had when the extension was last switched off or GNOME Shell last exited, and that width is kept like any other: a wider text widens it, and a minute of narrower text, counted from the start, shrinks it. So the values do not shift at a start while they are read again.

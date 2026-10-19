@@ -28,7 +28,7 @@ import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
 import * as SensorMath from './helpers/sensorMath.js';
 import {sensorCategories} from './helpers/categories.js';
-import {readCatalog, writeCatalog, sensorPresent} from './helpers/storedCatalog.js';
+import {readCatalog, readCatalogSettings, writeCatalog, sensorPresent} from './helpers/storedCatalog.js';
 
 // Marks a label for the translation template (make pot); the renderer translates it when it shows it.
 const N_ = text => text;
@@ -370,88 +370,95 @@ export class Sensors {
         this._lastRun = Math.max(0, ...this.categories().map(([, category]) => category.discovered ?? 0));
     }
 
-    // Reads the saved catalog. Category pins and links are saved as keys and become the sensors here.
+    // Reads the saved catalog. Category pins and the panel sensors' references are saved as keys and become the
+    // sensors here.
+    // Whether a category is switched on comes from the catalog settings.
     _load() {
         let saved = readCatalog(this._settings);
+        let catalogSettings = readCatalogSettings(this._settings);
         let catalog = {};
         for (let name of Object.keys(sensorCategories)) {
             let {categoryPin, sensors = [], ...category} = saved[name];
             // A saved value is from an earlier session. `runtime` only means something while the extension runs.
             for (let sensor of sensors)
-                Object.assign(sensor, {status: 'pending', runtime: {}});
-            catalog[name] = {...category, runtime: {}, sensors, categoryPin: sensors.find(sensor => sensor.key == categoryPin)};
+                Object.assign(sensor, {category: name, status: 'pending', runtime: {}});
+            catalog[name] = {...category, enabled: catalogSettings[name].enabled, runtime: {}, sensors,
+                categoryPin: sensors.find(sensor => sensor.key == categoryPin)};
         }
-        catalog.panel = {sensors: saved.panel.sensors.map(({category, key, visible}) => {
+        // A remembered width is only used with steady widths.
+        let rememberWidths = this._settings.get_boolean('fixed-widths') && this._settings.get_boolean('remember-widths');
+        catalog.panel = {sensors: saved.panel.sensors.map(({category, key, visible, reservedWidth}) => {
             let sensors = catalog[category].sensors;
             let sensor = sensors.find(candidate => candidate.key == key);
             // A pinned sensor no run has found yet, such as a default pin, keeps its place; discovery fills it in by key.
             if (!sensor) {
-                sensor = {key, status: 'pending', runtime: {}};
+                sensor = {key, category, status: 'pending', runtime: {}};
                 sensors.push(sensor);
             }
-            return {category, sensor, visible};
+            return {sensor, visible, reservedWidth: rememberWidths ? reservedWidth : undefined, runtime: {}};
         })};
         return catalog;
     }
 
-    _save() {
-        // `enabled` belongs to the preferences window; this.catalog's could still miss its latest switch (reloadEnabled).
-        let saved = readCatalog(this._settings);
+    save() {
         let catalog = {};
         // Objects are left out: `runtime`, and `categoryPin` and `sensors`, which are written below.
         let plain = record => Object.fromEntries(Object.entries(record).filter(([, fieldValue]) => typeof fieldValue != 'object'));
+        // `enabled` is saved in the catalog settings, by the preferences window. A sensor's `category` is the list
+        // it is saved in.
         for (let [name, category] of this.categories())
-            catalog[name] = {...plain(category), enabled: saved[name].enabled, categoryPin: category.categoryPin?.key, sensors: category.sensors.map(plain)};
-        catalog.panel = {sensors: this.catalog.panel.sensors.map(link =>
-            ({category: link.category, key: link.sensor.key, visible: link.visible}))};
+            catalog[name] = {...plain(category), enabled: undefined, categoryPin: category.categoryPin?.key,
+                sensors: category.sensors.map(sensor => ({...plain(sensor), category: undefined}))};
+        // A panel sensor's reference to its sensor is saved as that sensor's category and key.
+        catalog.panel = {sensors: this.catalog.panel.sensors.map(({sensor, visible, reservedWidth}) =>
+            ({category: sensor.category, key: sensor.key, visible, reservedWidth}))};
         writeCatalog(this._settings, catalog);
     }
 
     // Returns whether any switch changed.
     reloadEnabled() {
-        let saved = readCatalog(this._settings);
+        let catalogSettings = readCatalogSettings(this._settings);
         let changed = false;
         for (let [name, category] of this.categories()) {
-            if (category.enabled != saved[name].enabled) {
-                category.enabled = saved[name].enabled;
+            if (category.enabled != catalogSettings[name].enabled) {
+                category.enabled = catalogSettings[name].enabled;
                 changed = true;
             }
         }
         return changed;
     }
 
-    // Without the panel, which holds links, not sensors.
+    // Without the panel, whose panel sensors refer to the sensors of the other categories.
     categories() {
         return Object.entries(this.catalog).filter(([name]) => name != 'panel');
     }
 
-    hasPanelItem(link) {
-        let category = this.catalog[link.category];
-        return link.visible && category.enabled && sensorPresent(category, link.sensor);
+    hasPanelItem(panelSensor) {
+        let category = this.catalog[panelSensor.sensor.category];
+        return panelSensor.visible && category.enabled && sensorPresent(category, panelSensor.sensor);
     }
 
-    // A first pin goes to the end; an unpinned sensor keeps its link, and with it its place.
-    setPanelSensorVisible(categoryName, sensor, visible) {
-        let links = this.catalog.panel.sensors;
-        let link = links.find(candidate => candidate.sensor == sensor);
-        if (link)
-            link.visible = visible;
+    // A first pin goes to the end; an unpinned sensor keeps its panel sensor, and with it its place.
+    setPanelSensorVisible(sensor, visible) {
+        let panelSensor = this.catalog.panel.sensors.find(candidate => candidate.sensor == sensor);
+        if (panelSensor)
+            panelSensor.visible = visible;
         else
-            links.push({category: categoryName, sensor, visible});
-        this._save();
+            this.catalog.panel.sensors.push({sensor, visible, runtime: {}});
+        this.save();
     }
 
     // An empty label gives the sensor its own label back.
     renameSensor(sensor, customLabel) {
         sensor.customLabel = customLabel || undefined;
-        this._save();
+        this.save();
         this.catalogChanged();
     }
 
     // A hidden sensor does not count in its category's aggregates either.
     setSensorHidden(sensor, hidden) {
         sensor.hidden = hidden || undefined;
-        this._save();
+        this.save();
         this.catalogChanged();
     }
 
@@ -461,22 +468,22 @@ export class Sensors {
         for (let candidate of category.sensors)
             candidate.pinnedToCategory = candidate == sensor || undefined;
         category.categoryPin = this._chooseCategoryPin(categoryName);
-        this._save();
+        this.save();
         this.catalogChanged();
     }
 
     setCategoryOrder(categoryNames) {
         for (let [position, name] of categoryNames.entries())
             this.catalog[name].position = position;
-        this._save();
+        this.save();
     }
 
-    // Without `beforeLink`, to the end.
-    movePanelLink(link, beforeLink = null) {
-        let links = this.catalog.panel.sensors;
-        links.splice(links.indexOf(link), 1);
-        links.splice(beforeLink === null ? links.length : links.indexOf(beforeLink), 0, link);
-        this._save();
+    // Without `beforePanelSensor`, to the end.
+    movePanelSensor(panelSensor, beforePanelSensor = null) {
+        let panelSensors = this.catalog.panel.sensors;
+        panelSensors.splice(panelSensors.indexOf(panelSensor), 1);
+        panelSensors.splice(beforePanelSensor === null ? panelSensors.length : panelSensors.indexOf(beforePanelSensor), 0, panelSensor);
+        this.save();
     }
 
     addSource(id, definition) {
@@ -949,7 +956,7 @@ export class Sensors {
             this.catalog[categoryName].sensors.push(sensor);
         }
         Object.assign(sensor.runtime, {source, value, icon});
-        return Object.assign(sensor, fields, {discovered: run});
+        return Object.assign(sensor, fields, {category: categoryName, discovered: run});
     }
 
     _foundSource(run, definition, fields = {}) {
@@ -1020,7 +1027,7 @@ export class Sensors {
             for (let [name, category] of this.categories())
                 category.categoryPin = this._chooseCategoryPin(name);
             if (this._sensorCount() != sensorCountBefore)
-                this._save();
+                this.save();
             this.catalogChanged();
         })().finally(() => {
             this._discovery = null;
@@ -1033,9 +1040,9 @@ export class Sensors {
     // Drops the sensors no run has found for a year, except pinned ones, such as the interface of a past container.
     _forget() {
         let oldest = now() - 365 * 86400;
-        let linked = new Set(this.catalog.panel.sensors.map(link => link.sensor));
+        let inPanel = new Set(this.catalog.panel.sensors.map(panelSensor => panelSensor.sensor));
         for (let [, category] of this.categories())
-            category.sensors = category.sensors.filter(sensor => linked.has(sensor) || sensor.discovered >= oldest);
+            category.sensors = category.sensors.filter(sensor => inPanel.has(sensor) || sensor.discovered >= oldest);
     }
 
     _chooseCategoryPin(categoryName) {
@@ -1259,7 +1266,7 @@ export class Sensors {
         network.discovered = run;
         network.categoryPin = this._chooseCategoryPin('network');
         if (network.sensors.length != sensorCountBefore)
-            this._save();
+            this.save();
         this.catalogChanged();
     }
 

@@ -27,11 +27,15 @@ export function writeCatalog(settings, catalog) {
     settings.set_value('catalog', toVariant(catalog));
 }
 
-// Switches one category on or off on disk and leaves everything else in the saved catalog as it is.
+export function readCatalogSettings(settings) {
+    return settings.get_value('catalog-settings').recursiveUnpack();
+}
+
+// Switches one category on or off and leaves the other catalog settings as they are.
 export function writeCategoryEnabled(settings, categoryName, enabled) {
-    let catalog = readCatalog(settings);
-    catalog[categoryName].enabled = enabled;
-    writeCatalog(settings, catalog);
+    let catalogSettings = readCatalogSettings(settings);
+    catalogSettings[categoryName].enabled = enabled;
+    settings.set_value('catalog-settings', toVariant(catalogSettings));
 }
 
 // Whether the sensor was found by the last discovery run that completed its category. Both values are the

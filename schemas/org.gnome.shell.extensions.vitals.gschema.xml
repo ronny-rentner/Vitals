@@ -8,7 +8,7 @@
     <value nick="far-right" value="4"/>
   </enum>
   <schema id="org.gnome.shell.extensions.vitals" path="/org/gnome/shell/extensions/vitals/">
-    <key name="catalog" type="a{sv}">
+    <key name="catalog-settings" type="a{sv}">
       <default>{
         'temperature': &lt;{'enabled': &lt;true&gt;}&gt;,
         'voltage': &lt;{'enabled': &lt;true&gt;}&gt;,
@@ -19,7 +19,23 @@
         'network': &lt;{'enabled': &lt;true&gt;}&gt;,
         'storage': &lt;{'enabled': &lt;true&gt;}&gt;,
         'battery': &lt;{'enabled': &lt;false&gt;}&gt;,
-        'gpu': &lt;{'enabled': &lt;false&gt;}&gt;,
+        'gpu': &lt;{'enabled': &lt;false&gt;}&gt;
+      }</default>
+      <summary>Catalog settings</summary>
+      <description>The user's settings for the sensor catalog, by category: whether each category is switched on. Written by the preferences window. Described in docs/catalog-design.md.</description>
+    </key>
+    <key name="catalog" type="a{sv}">
+      <default>{
+        'temperature': &lt;@a{sv} {}&gt;,
+        'voltage': &lt;@a{sv} {}&gt;,
+        'fan': &lt;@a{sv} {}&gt;,
+        'memory': &lt;@a{sv} {}&gt;,
+        'processor': &lt;@a{sv} {}&gt;,
+        'system': &lt;@a{sv} {}&gt;,
+        'network': &lt;@a{sv} {}&gt;,
+        'storage': &lt;@a{sv} {}&gt;,
+        'battery': &lt;@a{sv} {}&gt;,
+        'gpu': &lt;@a{sv} {}&gt;,
         'panel': &lt;{'sensors': &lt;[
           &lt;{'category': &lt;'memory'&gt;, 'key': &lt;'usage'&gt;, 'visible': &lt;true&gt;}&gt;,
           &lt;{'category': &lt;'system'&gt;, 'key': &lt;'load-1m'&gt;, 'visible': &lt;true&gt;}&gt;,
@@ -27,7 +43,7 @@
         ]&gt;}&gt;
       }</default>
       <summary>Sensor catalog</summary>
-      <description>Every known sensor by category, with its order and last reading, whether each category is switched on, and the sensors in the panel. Described in docs/catalog-design.md.</description>
+      <description>Every known sensor by category, with its order and last reading, and the sensors in the panel. Written by the extension. Described in docs/catalog-design.md.</description>
     </key>
     <key type="i" name="update-time">
       <default>5</default>
@@ -129,6 +145,11 @@
       <default>true</default>
       <summary>Steady widths in top bar</summary>
       <description>Keep room for a value's widest text, so its neighbours do not jump. The room is given back after a minute.</description>
+    </key>
+    <key type="b" name="remember-widths">
+      <default>true</default>
+      <summary>Remember steady widths</summary>
+      <description>With steady widths, each top-bar value starts with the room it had when the extension was last switched off, so its neighbours do not jump while the values are read again.</description>
     </key>
     <key type="b" name="emphasize-values">
       <default>true</default>
