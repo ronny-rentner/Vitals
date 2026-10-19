@@ -17,7 +17,7 @@ By default, the top bar shows memory usage, system load and download speed. For 
 
 ## Menu
 
-Each category shows one value in its header. One category can be open at a time. Selecting a row opens its row menu: pin it to the top bar, rename it, hide it, or make it the value the category shows in its header. The rest of the menu is dimmed while the row menu is open.
+Each category shows one value in its category header. One category can be open at a time. Selecting a row opens its row menu: pin it to the top bar, rename it, hide it, or make it the value the category shows in its category header. The rest of the menu is dimmed while the row menu is open.
 
 The network category is shown with Network › **Only show hardware interfaces** enabled, which is the default. It hides bridges, container, VPN and loopback interfaces.
 

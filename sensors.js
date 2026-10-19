@@ -370,16 +370,16 @@ export class Sensors {
         this._lastRun = Math.max(0, ...this.categories().map(([, category]) => category.discovered ?? 0));
     }
 
-    // Reads the saved catalog. Headers and links are saved as keys and become the sensors here.
+    // Reads the saved catalog. Category pins and links are saved as keys and become the sensors here.
     _load() {
         let saved = readCatalog(this._settings);
         let catalog = {};
         for (let name of Object.keys(sensorCategories)) {
-            let {header, sensors = [], ...category} = saved[name];
+            let {categoryPin, sensors = [], ...category} = saved[name];
             // A saved value is from an earlier session. `runtime` only means something while the extension runs.
             for (let sensor of sensors)
                 Object.assign(sensor, {status: 'pending', runtime: {}});
-            catalog[name] = {...category, runtime: {}, sensors, header: sensors.find(sensor => sensor.key == header)};
+            catalog[name] = {...category, runtime: {}, sensors, categoryPin: sensors.find(sensor => sensor.key == categoryPin)};
         }
         catalog.panel = {sensors: saved.panel.sensors.map(({category, key, visible}) => {
             let sensors = catalog[category].sensors;
@@ -398,10 +398,10 @@ export class Sensors {
         // `enabled` belongs to the preferences window; this.catalog's could still miss its latest switch (reloadEnabled).
         let saved = readCatalog(this._settings);
         let catalog = {};
-        // Objects are left out: `runtime`, and `header` and `sensors`, which are written below.
+        // Objects are left out: `runtime`, and `categoryPin` and `sensors`, which are written below.
         let plain = record => Object.fromEntries(Object.entries(record).filter(([, fieldValue]) => typeof fieldValue != 'object'));
         for (let [name, category] of this.categories())
-            catalog[name] = {...plain(category), enabled: saved[name].enabled, header: category.header?.key, sensors: category.sensors.map(plain)};
+            catalog[name] = {...plain(category), enabled: saved[name].enabled, categoryPin: category.categoryPin?.key, sensors: category.sensors.map(plain)};
         catalog.panel = {sensors: this.catalog.panel.sensors.map(link =>
             ({category: link.category, key: link.sensor.key, visible: link.visible}))};
         writeCatalog(this._settings, catalog);
@@ -455,12 +455,12 @@ export class Sensors {
         this.catalogChanged();
     }
 
-    // Pin to category; without a sensor, _chooseHeader chooses the header again.
-    setCategoryDefault(categoryName, sensor = null) {
+    // Pin to category; without a sensor, the default pin applies again.
+    pinToCategory(categoryName, sensor = null) {
         let category = this.catalog[categoryName];
         for (let candidate of category.sensors)
-            candidate.categoryDefault = candidate == sensor || undefined;
-        category.header = this._chooseHeader(categoryName);
+            candidate.pinnedToCategory = candidate == sensor || undefined;
+        category.categoryPin = this._chooseCategoryPin(categoryName);
         this._save();
         this.catalogChanged();
     }
@@ -533,7 +533,7 @@ export class Sensors {
         let aggregatedCategories = new Set();
         if (!this.destroyed) {
             for (let [name, category] of this.categories()) {
-                let onScreen = sensor => (sensor.runtime.shown || (category.runtime.shown && sensor == category.header)) &&
+                let onScreen = sensor => (sensor.runtime.shown || (category.runtime.shown && sensor == category.categoryPin)) &&
                     sensorPresent(category, sensor);
                 if (category.sensors.some(sensor => sensor.aggregate && onScreen(sensor)))
                     aggregatedCategories.add(name);
@@ -1018,7 +1018,7 @@ export class Sensors {
             } while (discoveredConfiguration != configuration());
             this._forget();
             for (let [name, category] of this.categories())
-                category.header = this._chooseHeader(name);
+                category.categoryPin = this._chooseCategoryPin(name);
             if (this._sensorCount() != sensorCountBefore)
                 this._save();
             this.catalogChanged();
@@ -1038,11 +1038,11 @@ export class Sensors {
             category.sensors = category.sensors.filter(sensor => linked.has(sensor) || sensor.discovered >= oldest);
     }
 
-    _chooseHeader(categoryName) {
+    _chooseCategoryPin(categoryName) {
         let category = this.catalog[categoryName];
         let present = category.sensors.filter(sensor => sensorPresent(category, sensor));
         let withKey = key => present.find(sensor => sensor.key == key);
-        let chosen = present.find(sensor => sensor.categoryDefault);
+        let chosen = present.find(sensor => sensor.pinnedToCategory);
         if (chosen) return chosen;
         switch (categoryName) {
             case 'temperature':
@@ -1149,8 +1149,10 @@ export class Sensors {
             let labelPrefix = deviceName;
             if (deviceName == 'coretemp')
                 labelPrefix = await this._optionalRead(devicePath + '/temp1_label') || deviceName;
+            // drivetemp's only temperature belongs to a drive, which its model names apart from other drives.
+            let driveModel = deviceName == 'drivetemp' ? await this._optionalRead(devicePath + '/device/model') : null;
             let files = await this._list(devicePath, this._discoveryCancellation);
-            // For the voltage header (_chooseHeader): 0 for a battery's, 2 for a USB supply's.
+            // For the voltage's default pin (_chooseCategoryPin): 0 for a battery's, 2 for a USB supply's.
             let priority = 1;
             if (files.some(file => /^in\d+_input$/.test(file))) {
                 let powerSupplyType = await this._optionalRead(root + directory + '/device/type');
@@ -1166,7 +1168,7 @@ export class Sensors {
                 let input = match[1] + match[2];
                 let rawLabel = await this._optionalRead(devicePath + '/' + input + '_label');
                 if (rawLabel === null)
-                    rawLabel = labelPrefix + ' ' + input;
+                    rawLabel = driveModel || labelPrefix + ' ' + input;
                 else if (labelPrefix != rawLabel)
                     rawLabel = labelPrefix + ' ' + rawLabel;
                 // For labels that only name the device and the input, or the CPU package.
@@ -1255,7 +1257,7 @@ export class Sensors {
         let run = this._startRun();
         this._discoverNetwork(run, interfaces, hardwareInterfaces);
         network.discovered = run;
-        network.header = this._chooseHeader('network');
+        network.categoryPin = this._chooseCategoryPin('network');
         if (network.sensors.length != sensorCountBefore)
             this._save();
         this.catalogChanged();

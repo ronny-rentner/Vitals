@@ -57,7 +57,7 @@ function setup(configuration = settings()) {
             let category = sensors.catalog[categoryName];
             return category.sensors.find(sensor => sensor.key == key && sensorPresent(category, sensor));
         },
-        // Marks what is on screen, as the renderer does: the given sensors, and the header of each named category.
+        // Marks what is on screen, as the renderer does: the given sensors, and the category header of each named category.
         show(...shown) {
             for (let [name, category] of sensors.categories()) {
                 category.runtime.shown = shown.includes(name);
@@ -127,7 +127,7 @@ function installNvidiaSmi() {
 
 // Discovery
 
-test('every category has the header its rule names', async () => {
+test('every category has the default pin its rule names', async () => {
     let {sensors, configuration, machine, find} = setup();
     writeCategoryEnabled(configuration, 'gpu', true);
     sensors.reloadEnabled();
@@ -136,7 +136,7 @@ test('every category has the header its rule names', async () => {
     for (let [categoryName, key] of [['temperature', 'average'], ['voltage', 'BAT0/in0'], ['fan', 'thinkpad/fan1'],
         ['memory', 'usage'], ['processor', 'usage'], ['system', 'load-1m'], ['network', 'device-rx'],
         ['storage', '//free'], ['battery', 'BAT0/power-rate'], ['gpu', '0x1002/gpu_busy_percent']])
-        equal(sensors.catalog[categoryName].header, find(categoryName, key), categoryName);
+        equal(sensors.catalog[categoryName].categoryPin, find(categoryName, key), categoryName);
     sensors.destroy();
 });
 
@@ -361,14 +361,14 @@ test('only what is on screen is read, at once, and a file that several sensors o
     sensors.destroy();
 });
 
-test('a sensor that becomes the header of a category on screen is read at once', async () => {
+test('a sensor that becomes the category pin of a category on screen is read at once', async () => {
     let {sensors, find, show} = setup();
     await sensors.discover();
     let systemVoltage = find('voltage', 'thinkpad/in1');
     show('voltage');
     await settle();
-    equal(systemVoltage.status, 'pending', 'a sensor that is neither on screen nor a header is not read');
-    sensors.setCategoryDefault('voltage', systemVoltage);
+    equal(systemVoltage.status, 'pending', 'a sensor that is neither on screen nor a category pin is not read');
+    sensors.pinToCategory('voltage', systemVoltage);
     await settle();
     equal(systemVoltage.status, 'ready');
     sensors.destroy();
@@ -560,7 +560,7 @@ test('the average, minimum and maximum count every readable sensor of the catego
     sensors.destroy();
 });
 
-test('with one temperature there is no average and the header shows that temperature', async () => {
+test('with one temperature there is no average and that temperature is the default pin', async () => {
     let {sensors, machine, find} = setup();
     // Left are the ThinkPad's first temperature and the thermal policy zone, which is no sensor.
     let kept = [THINKPAD + 'name', THINKPAD + 'temp1_input', ZONES + 'thermal_zone1/type', ZONES + 'thermal_zone1/temp'];
@@ -570,33 +570,33 @@ test('with one temperature there is no average and the header shows that tempera
     }
     await sensors.discover();
     equal(find('temperature', 'average'), undefined);
-    equal(sensors.catalog.temperature.header, find('temperature', 'thinkpad/temp1'));
+    equal(sensors.catalog.temperature.categoryPin, find('temperature', 'thinkpad/temp1'));
     sensors.destroy();
 });
 
-test('the voltage header shows the battery, then the system, then a USB supply, as discovery finds them', async () => {
+test('the voltage\'s default pin is the battery, then the system, then a USB supply, as discovery finds them', async () => {
     let {sensors, machine, fileValue, show} = setup();
-    let header = () => sensors.catalog.voltage.header;
+    let categoryPin = () => sensors.catalog.voltage.categoryPin;
     await sensors.discover();
     machine.reads.length = 0;
     show('voltage');
     await settle();
-    equal(header().value, fileValue(BATTERY + 'in0_input'), 'the battery, whatever its name or value');
-    equal(machine.reads.join(','), BATTERY + 'in0_input', 'only the header\'s voltage is read for it');
+    equal(categoryPin().value, fileValue(BATTERY + 'in0_input'), 'the battery, whatever its name or value');
+    equal(machine.reads.join(','), BATTERY + 'in0_input', 'only the category pin\'s voltage is read for it');
     machine.remove(BATTERY + 'in0_input');
     await sensors.poll();
-    equal(header().status, 'unavailable', 'a header that cannot be read keeps its sensor until the next discovery');
+    equal(categoryPin().status, 'unavailable', 'a category pin that cannot be read keeps its sensor until the next discovery');
     await sensors.discover();
     await settle();
-    equal(header().value, fileValue(THINKPAD + 'in1_input'), 'the system before a USB supply');
+    equal(categoryPin().value, fileValue(THINKPAD + 'in1_input'), 'the system before a USB supply');
     machine.remove(THINKPAD + 'in1_input');
     machine.remove(THINKPAD + 'in2_input');
     await sensors.discover();
     await settle();
-    equal(header().value, fileValue(USB + 'in0_input'), 'a USB supply when it is the only voltage');
+    equal(categoryPin().value, fileValue(USB + 'in0_input'), 'a USB supply when it is the only voltage');
     machine.remove(USB + 'in0_input');
     await sensors.discover();
-    equal(header(), undefined, 'no voltage, no header');
+    equal(categoryPin(), undefined, 'no voltage, no category pin');
     sensors.destroy();
 });
 
@@ -687,10 +687,10 @@ test('a storage location is monitored when the user added it, or GNOME mounted i
     equal(find('storage', SHARE + '/read-rate'), undefined, 'which has no disk whose reads are counted');
     configuration.set_strv('storage-locations', [SHARE]);
     await sensors.discover();
-    equal(sensors.catalog.storage.header, find('storage', SHARE + '/free'), 'the header shows the first monitored one');
+    equal(sensors.catalog.storage.categoryPin, find('storage', SHARE + '/free'), 'the default pin is the first monitored one');
     configuration.set_strv('storage-locations', [SHARE, '/']);
     await sensors.discover();
-    equal(sensors.catalog.storage.header, find('storage', '//free'), 'also when the first one was added later');
+    equal(sensors.catalog.storage.categoryPin, find('storage', '//free'), 'also when the first one was added later');
     configuration.set_boolean('storage-monitor-volumes', true);
     await sensors.discover();
     equal(locations(), '/,' + USB_DRIVE + ',' + SHARE, 'the drive GNOME mounted, while the user wants that');
@@ -923,13 +923,13 @@ test('a battery\'s values come from its own uevent file, and the total power rat
     sensors.destroy();
 });
 
-test('where a mouse has the only battery, the header shows its percentage', async () => {
+test('where a mouse has the only battery, its percentage is the default pin', async () => {
     let {sensors, machine, find} = setup();
     for (let file of ['type', 'uevent'])
         machine.remove('/sys/class/power_supply/BAT0/' + file);
     machine.plug('mouse');
     await sensors.discover();
-    equal(sensors.catalog.battery.header, find('battery', 'hidpp_battery_0/percentage'));
+    equal(sensors.catalog.battery.categoryPin, find('battery', 'hidpp_battery_0/percentage'));
     sensors.destroy();
 });
 
@@ -976,31 +976,31 @@ test('a sensor that no run has found for a year is forgotten, unless it is in th
     sensors.destroy();
 });
 
-test('a name, a category default and the order of the categories are kept across discovery and a restart', async () => {
+test('a name, a category pin and the order of the categories are kept across discovery and a restart', async () => {
     let first = setup();
     await first.sensors.discover();
     let temperature = first.find('temperature', 'thinkpad/temp1');
     let ownLabel = temperature.label;
-    let automaticHeader = first.sensors.catalog.temperature.header;
+    let defaultPin = first.sensors.catalog.temperature.categoryPin;
     let order = ['voltage', ...first.sensors.categories().map(([name]) => name).filter(name => name != 'voltage')];
     first.sensors.renameSensor(temperature, 'Processor');
-    first.sensors.setCategoryDefault('temperature', temperature);
+    first.sensors.pinToCategory('temperature', temperature);
     first.sensors.setCategoryOrder(order);
     await first.sensors.discover();
     equal(temperature.customLabel + ' / ' + temperature.label, 'Processor / ' + ownLabel,
         'discovery keeps the name and still writes the sensor\'s own label');
-    equal(first.sensors.catalog.temperature.header, temperature, 'and keeps the header the user chose');
+    equal(first.sensors.catalog.temperature.categoryPin, temperature, 'and keeps the category pin the user chose');
     first.sensors.destroy();
 
     let {sensors, find} = setup(first.configuration);
     let restored = find('temperature', 'thinkpad/temp1');
     equal(restored.customLabel, 'Processor');
-    equal(sensors.catalog.temperature.header, restored);
+    equal(sensors.catalog.temperature.categoryPin, restored);
     equal(sensors.categories().sort(([, a], [, b]) => a.position - b.position).map(([name]) => name).join(', '), order.join(', '));
-    sensors.setCategoryDefault('temperature', find('temperature', 'thinkpad/temp2'));
-    equal(restored.categoryDefault, undefined, 'a category has one default');
-    sensors.setCategoryDefault('temperature');
-    equal(sensors.catalog.temperature.header.key, automaticHeader.key, 'without a choice the header is the collector\'s again');
+    sensors.pinToCategory('temperature', find('temperature', 'thinkpad/temp2'));
+    equal(restored.pinnedToCategory, undefined, 'a category has one category pin');
+    sensors.pinToCategory('temperature');
+    equal(sensors.catalog.temperature.categoryPin.key, defaultPin.key, 'without a choice the default pin applies again');
     sensors.renameSensor(restored, '');
     equal(restored.customLabel, undefined, 'an empty name gives the own label back');
     sensors.destroy();

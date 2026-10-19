@@ -84,8 +84,8 @@ var VitalsMenuButton = GObject.registerClass({
         this._rows = new Map();
         this._panelItems = new Map();
         this._reservedWidths = new Map();
-        // Category name to the sensor whose value its header shows.
-        this._headerSensors = new Map();
+        // Category name to the category pin whose value its category header shows.
+        this._shownCategoryPins = new Map();
         // The row menu that is open under a sensor's row, with what belongs to it: the sensor, the actions, the
         // menu's head, and what is dimmed while it is open.
         this._rowMenu = {sensor: null, items: []};
@@ -417,7 +417,7 @@ var VitalsMenuButton = GObject.registerClass({
             group.destroy();
         }
         this._categoryMenus = {};
-        this._headerSensors.clear();
+        this._shownCategoryPins.clear();
         for (let [position, name] of this._categoriesInMenuOrder().entries())
             this._initializeMenuGroup(name, this._sensors.catalog[name], position);
         this._syncMenuRows();
@@ -446,7 +446,7 @@ var VitalsMenuButton = GObject.registerClass({
     // `name` is what a screen reader says for the button, which shows an icon only.
     _createRoundButton(iconName, name) {
         let button = new St.Button({
-            style_class: 'message-list-clear-button button vitals-button-action',
+            style_class: 'button vitals-button-action',
             accessible_name: name
         });
 
@@ -742,8 +742,8 @@ var VitalsMenuButton = GObject.registerClass({
                 if (!row.gicon.equal(gicon))
                     row.gicon = gicon;
                 row.pinned = pinnedSensors.has(sensor);
-                // The star marks the sensor whose value the category's header shows, whoever chose it.
-                row.categoryDefault = sensor == category.header;
+                // The star marks the category pin, whoever chose it.
+                row.categoryPin = sensor == category.categoryPin;
                 row.hidden = Boolean(sensor.hidden);
                 return row;
             });
@@ -779,15 +779,14 @@ var VitalsMenuButton = GObject.registerClass({
         if (!rowMenu) return;
         for (let actor of dimmed)
             actor.ease({opacity: 255, duration: animate ? POPUP_ANIMATION_TIME / 2 : 0});
-        // While the row menu slides shut, the category keeps the scrollbar it has. Left to GNOME Shell, the scrollbar
-        // shows and hides from frame to frame as the rows come to fit, because it takes width from the rows.
-        let keepScrollbar = animate && menu.actor.vscrollbar_visible;
-        if (keepScrollbar)
-            menu.actor.vscrollbar_policy = St.PolicyType.ALWAYS;
+        // While the row menu slides shut, the category keeps the scrollbar it has, or keeps having none. Left to GNOME
+        // Shell, the scrollbar shows and hides from frame to frame, also when the rows fit.
+        if (animate)
+            menu.actor.vscrollbar_policy = menu.actor.vscrollbar_visible ? St.PolicyType.ALWAYS : St.PolicyType.NEVER;
         // A row menu that slides shut is still there for a moment, and no longer takes part in anything.
         rowMenu.actor.reactive = false;
         rowMenu.actor.ease({height: 0, duration: animate ? POPUP_ANIMATION_TIME / 2 : 0, onStopped: () => {
-            if (keepScrollbar)
+            if (animate)
                 menu.actor.vscrollbar_policy = St.PolicyType.AUTOMATIC;
             rowMenu.destroy();
         }});
@@ -810,10 +809,10 @@ var VitalsMenuButton = GObject.registerClass({
                 // Brings the top bar in line and puts the row menu back, where this action then has its check mark or not.
                 this._syncMenuRows();
             }, pinned],
-            // The action has its mark only for a sensor the user pinned there. A sensor the extension chose for the
-            // header has the star in the list too, but here the action is still to be taken, and a click shows it.
-            [_('Pin to category'), () => this._sensors.setCategoryDefault(categoryName, sensor.categoryDefault ? null : sensor),
-                Boolean(sensor.categoryDefault), MenuItem.CATEGORY_PIN_ICON],
+            // The action has its mark only for a sensor the user pinned there. The default pin has the star in the
+            // list too, but here the action is still to be taken, and a click shows it.
+            [_('Pin to category'), () => this._sensors.pinToCategory(categoryName, sensor.pinnedToCategory ? null : sensor),
+                Boolean(sensor.pinnedToCategory), MenuItem.CATEGORY_PIN_ICON],
             [_('Rename'), () => header.editLabel(customLabel =>
                 // The sensor's own label, typed in again, is no name of the user's.
                 this._sensors.renameSensor(sensor, customLabel == _(sensor.label) ? '' : customLabel))],
@@ -847,9 +846,19 @@ var VitalsMenuButton = GObject.registerClass({
 
         // The height an actor asks for includes its margins, and the height that is set on it does not.
         let openHeight = rowMenu.actor.get_preferred_height(-1)[1] - rowMenu.actor.margin_top - rowMenu.actor.margin_bottom;
+        // While the row menu slides open, the category has the scrollbar it needs with the row menu open, as measured
+        // here before the slide. Left to GNOME Shell, the scrollbar shows and hides from frame to frame, also when the
+        // rows fit. What the menu's rows and frame need beyond the menu's height limit is scrolled in the category.
+        let overflow = this.menu.box.get_preferred_height(-1)[1] + this._menuFrame - this.menu.actor.get_preferred_height(-1)[1];
+        if (animate)
+            menu.actor.vscrollbar_policy = overflow > 0 ? St.PolicyType.ALWAYS : St.PolicyType.NEVER;
         rowMenu.actor.height = 0;
         rowMenu.actor.ease({height: openHeight, duration: animate ? POPUP_ANIMATION_TIME / 2 : 0,
-            onStopped: () => rowMenu.actor.set_height(-1)});
+            onStopped: () => {
+                rowMenu.actor.set_height(-1);
+                if (animate)
+                    menu.actor.vscrollbar_policy = St.PolicyType.AUTOMATIC;
+            }});
 
         // While the row menu is open, a click anywhere else closes it and does nothing else. The Shell sends every event
         // to the open menu only, so that is where it is seen. While the sensor's name is typed, the click belongs to
@@ -924,7 +933,7 @@ var VitalsMenuButton = GObject.registerClass({
         this._separators.set(categoryName, separators);
     }
 
-    // Marks in the catalog what is on screen: the header of every category in the open menu, the rows of every
+    // Marks in the catalog what is on screen: the category header of every category in the open menu, the rows of every
     // open category, and the sensors in the top bar. The collector reads what is marked.
     _markShown() {
         let marksChanged = false;
@@ -960,16 +969,16 @@ var VitalsMenuButton = GObject.registerClass({
         let changed = sensor => !changedSensors || changedSensors.has(sensor);
         for (let [name, category] of this._sensors.categories()) {
             let headerLabel = this._categoryMenus[name]._statusLabel;
-            let header = category.header;
+            let categoryPin = category.categoryPin;
 
-            if (!header || !sensorPresent(category, header)) {
+            if (!categoryPin || !sensorPresent(category, categoryPin)) {
                 headerLabel.hide();
-                this._headerSensors.delete(name);
-            // A header is written when its sensor has a new reading, and when it shows another sensor than before.
-            } else if (category.runtime.shown && (changed(header) || this._headerSensors.get(name) != header)) {
-                this._headerSensors.set(name, header);
-                let formatted = this._formatted(name, header);
-                headerLabel.visible = header.status != 'unavailable';
+                this._shownCategoryPins.delete(name);
+            // A category header is written when its category pin has a new reading, and when the pin is another sensor than before.
+            } else if (category.runtime.shown && (changed(categoryPin) || this._shownCategoryPins.get(name) != categoryPin)) {
+                this._shownCategoryPins.set(name, categoryPin);
+                let formatted = this._formatted(name, categoryPin);
+                headerLabel.visible = categoryPin.status != 'unavailable';
                 if (headerLabel.text != formatted.text) headerLabel.text = formatted.text;
                 if (headerLabel.style != formatted.style) headerLabel.style = formatted.style;
             }
@@ -1076,7 +1085,7 @@ var VitalsMenuButton = GObject.registerClass({
         this._rowMenu = {sensor: null, items: []};
         this._panelItems.clear();
         this._reservedWidths.clear();
-        this._headerSensors.clear();
+        this._shownCategoryPins.clear();
         this._separators.clear();
         this._placeholderIcon = null;
 

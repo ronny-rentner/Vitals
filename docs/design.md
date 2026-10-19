@@ -29,7 +29,7 @@ Temperatures come from `/sys/class/hwmon` and `/sys/class/thermal`. A thermal zo
 
 ## Batteries
 
-Every battery is found by itself (`type` is `Battery`), also that of a mouse or a keyboard; there is no setting for which battery to show and no list of battery names. With several batteries a label names its battery, a device's battery (`scope` is `Device`) by the device's model. With several batteries that power the machine there is one more sensor, the total power rate, which the header shows; otherwise the header shows the power rate of the one battery, or the percentage of a device's battery, which has no power rate.
+Every battery is found by itself (`type` is `Battery`), also that of a mouse or a keyboard; there is no setting for which battery to show and no list of battery names. With several batteries a label names its battery, a device's battery (`scope` is `Device`) by the device's model. With several batteries that power the machine there is one more sensor, the total power rate, which is the default pin; otherwise the default pin is the power rate of the one battery, or the percentage of a device's battery, which has no power rate.
 
 ## Categories
 

@@ -14,7 +14,7 @@ The collection tests and the Shell test make up sensors and sources, replace met
 ## GJS tests
 - Delete `tests/sensors.collection.test.js`; rewrite `tests/sensors.test.js` as the one file for `Sensors`. A test builds `Machine`, settings and `Sensors`, and nothing else is replaced. Assertions on what is on screen use the catalog's sensors; on what is read, `machine.reads`.
 - Keep every behaviour of the inventory once, with real sensors; merge the duplicates (shared source read once, no reads during discovery, intervals, failures, rate baselines, the five hide-zeros tests into two).
-- Add what is untested: public IP (interval, provider change, the three answers), Refresh, the header of every category in one table-driven test, static processor and GPU info, a non-NVIDIA GPU, WiFi values.
+- Add what is untested: public IP (interval, provider change, the three answers), Refresh, the category pin of every category in one table-driven test, static processor and GPU info, a non-NVIDIA GPU, WiFi values.
 - Dropped: the test that replaces `RegExp.prototype.exec`.
 - `tests/sensorMath.test.js`: drop what the `Sensors` tests now cover (reading a valid `/proc/net/dev`, the kilobytes of `/proc/meminfo`); the rest stays, since no other test covers it. `formatter`, `colors`, `categories` stay.
 

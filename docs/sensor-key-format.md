@@ -4,7 +4,7 @@ A key tells a sensor apart from the other sensors in its category. It is part of
 
 ## Where a key is used
 
-- **At launch.** The saved catalog is loaded and discovery finds the sensors on the machine. Inside each category, a sensor that is found is matched to the saved sensor with the same key (`_unmatched` and `_found` in `sensors.js`). The saved links, in the panel and as a category's header, are turned into the sensors themselves (`_load`). After that the code holds the sensors and never looks one up by key.
+- **At launch.** The saved catalog is loaded and discovery finds the sensors on the machine. Inside each category, a sensor that is found is matched to the saved sensor with the same key (`_unmatched` and `_found` in `sensors.js`). The saved links, in the panel and as a category's category pin, are turned into the sensors themselves (`_load`). After that the code holds the sensors and never looks one up by key.
 - **In the colour settings.** A threshold colour for one sensor names it as `<category>/<key>`, for example `temperature/thinkpad/temp1`. That text is only compared with the sensor being drawn.
 
 Because a key is saved, it has to come out the same on every start and in every language for the same sensor. So a key is built from what the kernel provides, never from the label shown in the menu.

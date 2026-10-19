@@ -18,7 +18,7 @@ catalog = {
     temperature: {
         enabled: true,
         discovered: 1759820000,
-        header: 'average',
+        categoryPin: 'average',
         sensors: [
             {
                 key: 'acpitz/temp1',
@@ -33,7 +33,7 @@ catalog = {
             {key: 'average', label: 'Average', format: 'temp', …}
         ]
     },
-    memory: {enabled: true, header: 'usage', sensors: [{key: 'usage', label: 'Usage', format: 'percent', …}, …]},
+    memory: {enabled: true, categoryPin: 'usage', sensors: [{key: 'usage', label: 'Usage', format: 'percent', …}, …]},
     …
     panel: {
         sensors: [
@@ -49,8 +49,8 @@ catalog = {
 - `position`: the category's place in the menu and in the sidebar of the preferences, once the user has dragged the categories. Without it the categories are in the alphabetical order of their names.
 - `enabled`: whether the category is switched on. This replaced the ten `show-*` settings.
 - `discovered`: the timestamp of the last discovery run that completed this category. See "Discovery".
-- `header`: a link to the sensor of this category whose value is shown in the category's menu header. It is a link of the same kind as the panel's; on disk it is that sensor's key. The collector chooses it after every discovery run. For voltage it is the battery's, then the system's, then a USB supply's. A sensor the user pinned to the category (`categoryDefault`) comes before any of these rules. The header changes only then, after a run or when the user pins a sensor, never between.
-- `runtime.shown`: whether the header is on screen right now. The renderer sets this; see "What is collected".
+- `categoryPin`: a link to the sensor of this category whose value the category header shows. It is a link of the same kind as the panel's; on disk it is that sensor's key. It is the sensor the user pinned to the category (`pinnedToCategory`), otherwise the default pin, which the collector chooses after every discovery run by its rules. For voltage the default pin is the battery's, then the system's, then a USB supply's. The category pin changes only then, after a run or when the user pins or unpins a sensor, never between.
+- `runtime.shown`: whether the category header is on screen right now. The renderer sets this; see "What is collected".
 - `sensors`: its sensors, in the order in which they were found. The menu shows them by section and label; see "The renderer".
 
 ### A sensor
@@ -69,7 +69,7 @@ catalog = {
 - Fields that say which part of the file is the sensor's: the interface name for a network rate (with `hardware`, whether that interface is a hardware device), the core for a CPU core.
 
 - `lowIsBad`: set by discovery on a sensor whose low values are the ones to watch, such as free memory, a battery's charge or the WiFi link quality (`LOW_IS_BAD` in `sensors.js`). A colour scale on such a sensor colours downwards from its breakpoints; on every other sensor, upwards.
-- `customLabel`, `hidden` and `categoryDefault`: what the user set for the sensor in the menu: another name, that it has no row, and that it is the sensor its category shows in its header. Discovery does not touch them. A hidden sensor does not count in its category's average, minimum and maximum, and keeps its top-bar item when it is pinned.
+- `customLabel`, `hidden` and `pinnedToCategory`: what the user set for the sensor in the menu: another name, that it has no row, and that it is its category's category pin. Discovery does not touch them. A hidden sensor does not count in its category's average, minimum and maximum, and keeps its top-bar item when it is pinned.
 
 Any further field can be added to a sensor later without changing the structure.
 
@@ -140,7 +140,7 @@ Other settings stay as they are: the display settings, and the options that belo
 
 ## What is collected
 
-The renderer sets in the catalog what it shows: it marks a sensor as `shown` when it puts it on screen and clears the mark when it takes it away, and it marks a category as `shown` while its header is on screen. The collector fills in the values of the sensors that are marked and of the headers of the categories that are marked, and reads only the files behind those. With the menu closed that is two or three files per tick.
+The renderer sets in the catalog what it shows: it marks a sensor as `shown` when it puts it on screen and clears the mark when it takes it away, and it marks a category as `shown` while its category header is on screen. The collector fills in the values of the sensors that are marked and of the category pins of the categories that are marked, and reads only the files behind those. With the menu closed that is two or three files per tick.
 
 A tick is one pass over the catalog. It collects the files of the marked sensors, and for each file the sensors that are written from it. Each file is then read once, its content is taken apart once, and that read writes all its sensors; the renderer is told about them at once, so a slow source does not hold the others back. Nothing is kept between ticks about which sensors are collected: the catalog and its marks say it.
 
@@ -150,7 +150,7 @@ A read that fails is an expected state, not an error: its sensors become `unavai
 
 An average, minimum or maximum is not read from anything. When one of them is marked, every sensor of its category is read, also those that are not on screen, and the three are computed together once, when the last of those reads is in.
 
-After it changed the marks, the renderer tells the collector so (`shownChanged`); see the last section. What came on screen is then read at once and does not wait for the next tick, which can be a minute away (`_readNewlyShown`, decided on 2026-10-10). Only that is read: a source that is on screen and has no reading. A source whose reading is younger than the update interval keeps it and is read at the next tick, unless that reading is a first one alone, and one that is still inside its own interval, such as the public IP, keeps the reading it has. The same happens when the catalog changed, for instance when another sensor became a category's header.
+After it changed the marks, the renderer tells the collector so (`shownChanged`); see the last section. What came on screen is then read at once and does not wait for the next tick, which can be a minute away (`_readNewlyShown`, decided on 2026-10-10). Only that is read: a source that is on screen and has no reading. A source whose reading is younger than the update interval keeps it and is read at the next tick, unless that reading is a first one alone, and one that is still inside its own interval, such as the public IP, keeps the reading it has. The same happens when the catalog changed, for instance when another sensor became a category's category pin.
 
 A rate needs two readings, and all sensors of one file share them: with download speed in the top bar, `/proc/net/dev` always has two, and every network speed has its value the moment its row appears. A rate whose file was not on screen during the last update interval starts from nothing, and it is not computed across a longer time off screen. So a first reading that leaves a sensor without a value is followed by a second reading one second later (`SECOND_READING_SECONDS`), and the rate shows what happened in that second until the next tick. A tick before the second reading does not read the source, so the rate spans that second. A rate is not computed against a reading younger than half the update interval but against the one that reading was computed against: a tick right after the second reading spans from the first reading, and Refresh right after a tick from the tick before. Only the second reading is computed against the first, however young. The second reading is called off when the source leaves the screen before it, and when it falls into a discovery run it waits for the end of that run.
 
@@ -242,7 +242,7 @@ That way no sensor is ever read through a path that the run is about to turn off
 The readings taken before the run are kept. A rate, such as network speed, is then computed between the last reading before the run and the first one after it, over the time that really passed, so it does not start over with "…" after each discovery.
 ## Links on disk
 
-A link, in the panel or as a category's `header`, is a pointer to its sensor while the extension runs. On disk it is written as the category and the key of that sensor. At launch each link is turned back into a pointer, to the sensor with that key in that category.
+A link, in the panel or as a category's `categoryPin`, is a pointer to its sensor while the extension runs. On disk it is written as the category and the key of that sensor. At launch each link is turned back into a pointer, to the sensor with that key in that category.
 
 When two sensors share a key, a link cannot say which of them it means, and it resolves to the first one. With two NVMe drives, a link to the second drive's temperature points at the first drive after a restart. That is accepted: it is a property of a machine whose devices cannot be told apart by name, and every program that reads those names has it. Like the swap described above, it can be closed later with one more identifying field.
 
@@ -250,5 +250,5 @@ When two sensors share a key, a link cannot say which of them it means, and it r
 
 - **The renderer tells the collector that the marks changed.** The discussion had the collector pick up the `shown` marks by itself at the next tick. With that, a sensor that comes on screen would show the value from the last time it was read until the next tick, and a source nobody shows any more, such as the `nvidia-smi` process, would run on until then. So the renderer calls `shownChanged` after it changed the marks.
 - **The network run happens when the list of interfaces changed,** not on every tick. The result is the same; the timestamps of the network sensors just do not move every few seconds.
-- **All graphics cards are in one category and one menu section.** Before, every card had a section of its own ("Graphics 1", "Graphics 2"). With several cards, a heading names each card above its rows ("GPU 2"), and the header shows the utilization of the first card. With one card nothing changes.
+- **All graphics cards are in one category and one menu section.** Before, every card had a section of its own ("Graphics 1", "Graphics 2"). With several cards, a heading names each card above its rows ("GPU 2"), and the default pin is the utilization of the first card. With one card nothing changes.
 - **The panel category has no `enabled` field.** Nothing would read it.

@@ -92,7 +92,7 @@ export async function run() {
     let find = (categoryName, key) => sensors.catalog[categoryName].sensors.find(sensor => sensor.key == key);
     let pin = async (pinned, visible) => {
         for (let [categoryName, sensor] of pinned) {
-            // A machine without sensors of a category has no header there.
+            // A machine without sensors of a category has no category pin there.
             if (sensor)
                 sensors.setPanelSensorVisible(categoryName, sensor, visible);
         }
@@ -140,16 +140,16 @@ export async function run() {
 
     // The top bar: the sensors a new user has, which end with the download speed, and three more.
     let download = ['network', find('network', 'device-rx')], upload = ['network', find('network', 'device-tx')];
-    let temperature = ['temperature', sensors.catalog.temperature.header];
+    let temperature = ['temperature', sensors.catalog.temperature.categoryPin];
     let usual = [['memory', find('memory', 'usage')], ['system', find('system', 'load-1m')], download, upload, temperature,
-        ['fan', sensors.catalog.fan.header]];
+        ['fan', sensors.catalog.fan.categoryPin]];
     await pin(usual, true);
     // A few pictures show other sensors, to show what else can be pinned.
     let battery = field => ['battery', sensors.catalog.battery.sensors.find(sensor => sensor.field == field)];
     let precise = [battery('percentage'), battery('power-rate'), ['processor', find('processor', 'frequency')],
         ['system', find('system', 'uptime')]];
     let traffic = [download, upload, ['network', find('network', 'boot-rx')], ['network', find('network', 'boot-tx')],
-        ['temperature', find('temperature', 'coretemp/temp1') ?? sensors.catalog.temperature.header]];
+        ['temperature', find('temperature', 'coretemp/temp1') ?? sensors.catalog.temperature.categoryPin]];
     let more = [['network', find('network', 'wifi-link-quality')], battery('percentage'), ['gpu', find('gpu', 'refresh-rate')],
         ['storage', find('storage', '//free')]];
     let topBarWith = async (pinned, name, options) => {

@@ -11,7 +11,7 @@ function indent() {
     return new St.Icon({ style_class: 'popup-menu-icon', icon_name: 'ornament-check-symbolic', opacity: 0 });
 }
 
-// The mark of the sensor whose value its category's header shows: after its name in the list, and in front of the
+// The mark of the category pin: after its name in the list, and in front of the
 // action that pins a sensor there, so that the action shows what the mark in the list means.
 // It is the outline of a star: one row of every category has it, so it is kept lighter than a filled one.
 export const CATEGORY_PIN_ICON = 'non-starred-symbolic';
@@ -47,10 +47,10 @@ export const MenuItem = GObject.registerClass({
         this._labelActor = new St.Label({ text: label });
         this.add_child(this._labelActor);
 
-        // After the name: a star while the header of the sensor's category shows this sensor's value, and a
-        // struck-out eye while the sensor is hidden.
-        this._defaultActor = new St.Icon({ style_class: 'vitals-row-mark', icon_name: CATEGORY_PIN_ICON, visible: false });
-        this.add_child(this._defaultActor);
+        // After the name: a star while the sensor is its category's category pin, and a struck-out eye while the
+        // sensor is hidden.
+        this._categoryPinActor = new St.Icon({ style_class: 'vitals-row-mark', icon_name: CATEGORY_PIN_ICON, visible: false });
+        this.add_child(this._categoryPinActor);
         this._hiddenActor = new St.Icon({ style_class: 'vitals-row-mark', icon_name: 'view-conceal-symbolic', visible: false });
         this.add_child(this._hiddenActor);
 
@@ -75,13 +75,13 @@ export const MenuItem = GObject.registerClass({
         this._pinActor.opacity = pinned ? 255 : 0;
     }
 
-    // Whether the row shows that the header of its category shows this sensor's value.
-    get categoryDefault() {
-        return this._defaultActor.visible;
+    // Whether the row shows that its sensor is its category's category pin.
+    get categoryPin() {
+        return this._categoryPinActor.visible;
     }
 
-    set categoryDefault(categoryDefault) {
-        this._defaultActor.visible = categoryDefault;
+    set categoryPin(categoryPin) {
+        this._categoryPinActor.visible = categoryPin;
     }
 
     // Whether the row shows that its sensor is hidden: such a row is only in the menu while the user looks at the

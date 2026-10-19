@@ -151,7 +151,7 @@ function categoryNames() {
 }
 
 // A category of the menu by the name it shows: the item that a click opens and closes it with, the label of the
-// value in its header, and the box of its rows.
+// value in its category header, and the box of its rows.
 function category(name) {
     let item = labelled(button.menu.box, name).get_parent();
     let actors = button.menu.box.get_children();
@@ -183,7 +183,7 @@ step('the top bar shows the sensors a new user starts with, and their values onc
     equal(topBarTexts()[0].endsWith('%'), true, 'the memory usage first: ' + topBarTexts());
 });
 
-step('a click on the top bar opens the menu, with the categories in alphabetical order and a value in each header', async () => {
+step('a click on the top bar opens the menu, with the categories in alphabetical order and a value in each category header', async () => {
     await openMenu();
     equal(categoryNames().join(', '), 'Fan, Memory, Network, Processor, Storage, System, Temperature, Voltage',
         'the categories that are switched on');

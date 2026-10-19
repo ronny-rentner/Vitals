@@ -17,20 +17,21 @@ The terms used in the code and the documentation of Vitals, each with one meanin
 - **Format**: how a sensor's value is written, such as `temp` or `percent`. A colour scale for all sensors of one format calls it a kind (`kind:temp`).
 - **Section**: a part of a category's menu whose rows stay together, such as the network interfaces or the average, minimum and maximum.
 - **Heading**: the battery, graphics card, network interface or storage location a sensor belongs to. The menu shows it above its rows when a category's rows fall into several groups.
-- **Header**: the sensor whose value a category shows in its title row of the menu.
+- **Category pin**: the sensor whose value the category header shows (`categoryPin`): the one the user pinned to the category (`pinnedToCategory`), otherwise the default pin, which the collector chooses by its rules.
 - **Aggregate**: the average, minimum or maximum of a category. It is computed from the category's other sensors, not read.
 - **Pinned sensors**: the sensors the user pinned to the top bar, in the user's order. The catalog holds them as links in `panel.sensors`.
-- **Link**: an entry of the pinned sensors, or a category's header: a pointer to a sensor, saved as the sensor's category and key. A link of the pinned sensors has its own `visible` flag; an unpinned sensor keeps its link with `visible` off, and with it its place.
+- **Link**: an entry of the pinned sensors, or a category pin: a pointer to a sensor, saved as the sensor's category and key. A link of the pinned sensors has its own `visible` flag; an unpinned sensor keeps its link with `visible` off, and with it its place.
 
 ## On screen
 
 - **Top bar**: GNOME Shell's bar at the top of the screen. GNOME's code calls it the panel (`Main.panel`).
 - **Top-bar item**: what Vitals shows in the top bar for one pinned sensor: an icon and a value.
 - **Menu**: what opens from Vitals' top-bar items, with one part per category.
+- **Category header**: a category's title row in the menu, with the category's name and the value of its category pin.
 - **Row**: one sensor in the menu.
 - **Row menu**: what opens under a row when it is clicked, with the sensor's actions.
 - **Action**: an entry of a row menu: Pin to top bar, Pin to category, Rename, Hide.
-- **Shown**: a sensor or header is shown while it is on screen; the renderer sets `shown` in the catalog.
+- **Shown**: a sensor or category header is shown while it is on screen; the renderer sets `shown` in the catalog.
 - **Hidden**: a sensor the user hid has no row (`hidden`). Not the same as unavailable.
 
 ## Reading
