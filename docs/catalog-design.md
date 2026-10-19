@@ -65,7 +65,7 @@ catalog = {
 - `runtime.shown`: whether it is on screen right now. The renderer sets this; see "What is collected".
 - `value` and `updated`: its reading and when it was taken. A few readings are text, such as a battery's state.
 - `status`: `ready` when `value` is current, `pending` while there is none yet (shown as "…"), and `unavailable` when it cannot be read (the row is hidden).
-- `file`: the file the sensor is read from: its own for a temperature, `/proc/meminfo` for every memory sensor. A sensor read from something else has none: an NVIDIA card's values (`nvidia`), the space of a storage location (`location`), the public IP, the screen redraws and, on some machines, the CPU frequencies. Nor does a value discovery writes, such as the kernel version, or an average, minimum or maximum.
+- `file`: the file the sensor is read from: its own for a temperature, `/proc/meminfo` for every memory sensor. A sensor read from something else has none: an NVIDIA card's values (`nvidia`), the space of a storage location (`location`), the public IP, the screen redraws and, on some machines, the CPU frequencies. Nor does a value discovery writes, such as a graphics card's driver version, or an average, minimum or maximum.
 - Fields that say which part of the file is the sensor's: the interface name for a network rate (with `hardware`, whether that interface is a hardware device), the core for a CPU core.
 
 - `lowIsBad`: set by discovery on a sensor whose low values are the ones to watch, such as free memory, a battery's charge or the WiFi link quality (`LOW_IS_BAD` in `sensors.js`). A colour scale on such a sensor colours downwards from its breakpoints; on every other sensor, upwards.
@@ -73,7 +73,7 @@ catalog = {
 
 Any further field can be added to a sensor later without changing the structure.
 
-There is no field that says how to compute the value. Each source is one piece in `sensors.js`: its file, how the file is taken apart, and its sensors with their labels, formats and values. Discovery gives every sensor it finds its source and its value computation in `runtime`, and a read uses only those.
+There is no field that says how to compute the value. Each source is one piece in `sensors.js`: its file, how the file is taken apart, and its sensors with their labels, formats and `compute`, which computes a sensor's value from a reading. Discovery gives every sensor it registers its source and its `compute` in `runtime`, and a read uses only those.
 
 ## Keys
 

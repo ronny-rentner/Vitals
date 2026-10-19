@@ -122,7 +122,6 @@ How the code is built, tested and documented is in [docs/development.md](docs/de
 | Launch preferences | `gnome-shell-extension-prefs Vitals@CoreCoding.com` |
 | View logs | ``journalctl --since="`date '+%Y-%m-%d %H:%M'`" -f \| grep Vitals`` |
 | Compile schemas | `glib-compile-schemas --strict schemas/` |
-| Update translation template and merge it into the translations | `make pot` |
 | Compile translation file | `msgfmt vitals.po -o vitals.mo` |
 | Launch Wayland virtual window | `dbus-run-session -- gnome-shell --nested --wayland` |
 | Read the saved sensor catalog | `dconf read /org/gnome/shell/extensions/vitals/catalog` |

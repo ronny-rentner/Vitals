@@ -33,7 +33,7 @@ export UUID EXTENSION_FILES SCALE TEXT_SCALE
 .ONESHELL:
 .SHELLFLAGS := -ec
 
-.PHONY: preview test-shell screenshots compile zip test clean clean-env country-icons pot
+.PHONY: preview test-shell screenshots compile zip test clean clean-env country-icons
 # What `make` alone runs.
 .DEFAULT_GOAL := preview
 
@@ -72,13 +72,6 @@ zip: compile
 
 clean:
 	rm -f $(ZIP)
-
-# The translation template, from every text in _(), _gettext() and N_(), the marker of a label the renderer translates,
-# merged into every translation.
-pot:
-	xgettext --from-code=UTF-8 --language=JavaScript --keyword=_ --keyword=_gettext --keyword=N_ --package-name=Vitals \
-		--output=locale/vitals.pot extension.js prefs.js sensors.js formatter.js menuItem.js helpers/*.js
-	for po in locale/*/LC_MESSAGES/vitals.po; do msgmerge --quiet --update --backup=none "$$po" locale/vitals.pot; done
 
 country-icons:
 	@echo ":: Drawing the country icons..."
