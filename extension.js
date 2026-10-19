@@ -37,8 +37,7 @@ const ICON_STYLE_DIRECTORIES = ['original', 'gnome'];
 
 // How long a category takes to slide open, as a submenu of GNOME Shell does.
 const CATEGORY_OPEN_MILLISECONDS = 250;
-// How long a category takes to slide shut. Shorter than opening, so that a category below the one that opens has
-// stopped first and the eye ends on the one that opened.
+// How long a category takes to slide shut when no other one opens.
 const CATEGORY_CLOSE_MILLISECONDS = 200;
 
 // The order of labels in the menu: natural order for numbers, so that "Core 2" comes before "Core 10".
@@ -325,10 +324,20 @@ var VitalsMenuButton = GObject.registerClass({
             this._slideShutOnOpen?.(this._categoryMenus[groupName].actor);
             this._slideShutOnOpen = null;
             // A long category has its scrollbar from the start of the slide: the rows are narrower next to it, and
-            // would jump sideways if it came at the end.
+            // would jump sideways if it came at the end. One that fits has none while it slides, though its rows do
+            // not fit the growing height yet; afterwards a row menu can still make it long enough for one.
+            if (overflow <= 0)
+                submenu.actor.vscrollbar_policy = St.PolicyType.NEVER;
+            // The theme's margin under the submenu grows with it, or it would take its room at once.
+            let marginBottom = submenu.actor.margin_bottom;
+            submenu.actor.margin_bottom = 0;
             submenu.actor.height = 0;
-            submenu.actor.ease({height: heightOfAllRows - margins - overflow, duration: CATEGORY_OPEN_MILLISECONDS, mode: Clutter.AnimationMode.EASE_OUT_EXPO,
-                onStopped: () => submenu.actor.set_height(-1)});
+            submenu.actor.ease({height: heightOfAllRows - margins - overflow, margin_bottom: marginBottom, duration: CATEGORY_OPEN_MILLISECONDS,
+                mode: Clutter.AnimationMode.EASE_OUT_EXPO, onStopped: () => {
+                    submenu.actor.set_height(-1);
+                    submenu.actor.margin_bottom = marginBottom;
+                    submenu.actor.vscrollbar_policy = St.PolicyType.AUTOMATIC;
+                }});
         };
         submenu.close = animation => {
             // The open category is still open when the menu is opened again. GNOME Shell closes the submenus after
@@ -343,13 +352,15 @@ var VitalsMenuButton = GObject.registerClass({
                 submenu.actor.show();
                 // As above: the height an actor reports includes its margins, and the height that is set on it does not.
                 submenu.actor.height = openHeight - submenu.actor.margin_top - submenu.actor.margin_bottom;
-                // A category above the one that opens pulls that one up as it shuts. At the opening speed, the top and
-                // the bottom of the opening category move in step.
-                let above = openingHeader && this._categoryMenus[groupName].actor.get_transformed_position()[1] < openingHeader.get_transformed_position()[1];
-                let duration = above ? CATEGORY_OPEN_MILLISECONDS : CATEGORY_CLOSE_MILLISECONDS;
-                submenu.actor.ease({height: 0, duration, mode: Clutter.AnimationMode.EASE_OUT_EXPO, onStopped: () => {
+                // While another category opens, both slide at the same speed, so that the rows between and below them
+                // move in step.
+                let duration = openingHeader ? CATEGORY_OPEN_MILLISECONDS : CATEGORY_CLOSE_MILLISECONDS;
+                // The theme's margin under the submenu shrinks with it, or it would give its room back only at the end.
+                let marginBottom = submenu.actor.margin_bottom;
+                submenu.actor.ease({height: 0, margin_bottom: 0, duration, mode: Clutter.AnimationMode.EASE_OUT_EXPO, onStopped: () => {
                     submenu.actor.hide();
                     submenu.actor.set_height(-1);
+                    submenu.actor.margin_bottom = marginBottom;
                 }});
             };
             // The user's own close asks for the full animation: a click on the category or the Left key. A category

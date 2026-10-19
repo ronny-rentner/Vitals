@@ -79,6 +79,7 @@ GJS caches the modules it has loaded, so a change of code needs a new gnome-shel
 - On X11: Alt+F2, `restart`, then enable. A Wayland session cannot restart in place; log out.
 - Logs: `journalctl -f -o cat /usr/bin/gnome-shell`. `SHELL_DEBUG=backtrace-warnings` adds JavaScript stacks. Looking Glass: Alt+F2, `lg`.
 - After a change of the schema in a local clone: `glib-compile-schemas --strict schemas/`.
+- An animation that jumps is found frame by frame in a Shell without a screen: an automation script, run as `make test-shell` runs `tests/shell.test.js`, clicks through the menu and prints, in a handler of `global.stage`'s `after-paint` signal, the position and allocated height of each actor that moves. A jump is a value that changes in one frame or snaps back at the end.
 
 ## Tests
 
