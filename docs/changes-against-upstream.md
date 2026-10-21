@@ -38,7 +38,6 @@ Ranked by what upstream's users ask for: the open issues of `corecoding/Vitals` 
 
 ### What upstream's users ask for most and this does not do
 
-- #269 "CPU Frequency Reported Incorrectly" (23). The frequency is read the same way as upstream.
 - #314 "Make indicator configuration more discoverable" (17).
 - #426 and #366, icons per temperature sensor (17 together).
 

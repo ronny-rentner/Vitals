@@ -10,7 +10,7 @@ import {Formatter} from './formatter.js';
 import {sensorCategories, categoriesInOrder, MANUAL_CATEGORY_ORDER} from './helpers/categories.js';
 import {compareColorEntries, DEFAULT_THRESHOLD_RGBA, formatColorEntry, sanitizeAndSortColorEntries} from './helpers/colors.js';
 import {parseMountTable, parseTypesWithoutDevice, isRemoteMount} from './helpers/sensorMath.js';
-import {readCatalog, readCatalogSettings, writeCategoryEnabled, sensorPresent} from './helpers/storedCatalog.js';
+import {toVariant, sensorPresent} from './helpers/storedCatalog.js';
 
 function textOf(path) {
     return new TextDecoder().decode(GLib.file_get_contents(path)[1]);
@@ -24,6 +24,8 @@ const ICON_STYLE_DIRECTORIES = ['original', 'gnome'];
 export default class VitalsPrefs extends ExtensionPreferences {
     fillPreferencesWindow(window) {
         this._settings = this.getSettings();
+        // The category switches; only this window writes them.
+        this._catalogSettings = this._settings.get_value('catalog-settings').recursiveUnpack();
         this._applyIconStyle();
         this._settings.connect('changed::icon-style', () => this._applyIconStyle());
 
@@ -91,6 +93,10 @@ export default class VitalsPrefs extends ExtensionPreferences {
 
         this._categoryPage('fan', _('Monitor fan'));
 
+        this._categoryPage('power', _('Monitor power'), '', [
+            this._switchRow('use-powercap', _('Read powercap'),
+                _('The power draw of the processor, such as Intel RAPL. Most systems let only root read it.'))]);
+
         this._categoryPage('memory', _('Monitor memory'), '', [],
             this._group(_('Units'), ...this._radioRows('memory-measurement', [
                 // The previews show the same amount both ways.
@@ -98,7 +104,10 @@ export default class VitalsPrefs extends ExtensionPreferences {
                 [_('Decimal'), _('kB, MB, GB'), new Gtk.Label({ label: _('16.6 GB') })]])));
 
         this._categoryPage('processor', _('Monitor processor'), '', [
-            this._switchRow('include-static-info', _('Include static information'), _('Values that never change, such as vendor and cache size.'))]);
+            this._switchRow('include-static-info', _('Include static information'), _('Values that never change, such as vendor and cache size.')),
+            this._switchRow('include-processor-cores', _('Show individual cores'), _('The usage of each core.')),
+            this._switchRow('use-processor-cpufreq', _('Read live frequency from cpufreq'),
+                _('Reads each core instead of /proc/cpuinfo, which some machines report late. Without cpufreq, /proc/cpuinfo is used.'))]);
 
         this._categoryPage('system', _('Monitor system'));
 
@@ -198,8 +207,13 @@ export default class VitalsPrefs extends ExtensionPreferences {
     // The page of a category: the switch that turns the category on, and what can only be set while it is on,
     // `rows` next to the switch and `groups` below.
     _categoryPage(name, switchTitle, switchSubtitle = '', rows = [], ...groups) {
-        let categorySwitch = new Adw.SwitchRow({ title: switchTitle, subtitle: switchSubtitle, active: readCatalogSettings(this._settings)[name].enabled });
-        categorySwitch.connect('notify::active', () => writeCategoryEnabled(this._settings, name, categorySwitch.active));
+        // A category the user never switched has no catalog settings.
+        let active = this._catalogSettings[name]?.enabled ?? sensorCategories[name].enabled;
+        let categorySwitch = new Adw.SwitchRow({ title: switchTitle, subtitle: switchSubtitle, active });
+        categorySwitch.connect('notify::active', () => {
+            this._catalogSettings[name] = { ...this._catalogSettings[name], enabled: categorySwitch.active };
+            this._settings.set_value('catalog-settings', toVariant(this._catalogSettings));
+        });
         for (let dependent of [...rows, ...groups])
             categorySwitch.bind_property('active', dependent, 'sensitive', GObject.BindingFlags.SYNC_CREATE);
         // A category has one name and one icon, those of the menu.
@@ -302,7 +316,7 @@ export default class VitalsPrefs extends ExtensionPreferences {
     // the labels the menu shows, with numbers in them counted ("Core 2" before "Core 10"). Each has the label of
     // its scale, the unit and the decimals of its breakpoints, and whether its low values are the bad ones.
     _colorTargets(name) {
-        let category = readCatalog(this._settings)[name];
+        let category = this._settings.get_value('catalog').recursiveUnpack()[name] ?? {};
         let formatter = new Formatter(this._settings);
         let byLabel = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
         // A category has no sensors before the extension has looked for hardware once. A sensor whose value is
@@ -410,7 +424,7 @@ export default class VitalsPrefs extends ExtensionPreferences {
     // is open. A stack cannot move a page, so the pages are taken out and added again.
     _orderCategoryPages() {
         let shown = this._pages.visible_child_name;
-        let names = categoriesInOrder(readCatalog(this._settings), name => _(sensorCategories[name].name),
+        let names = categoriesInOrder(this._settings.get_value('catalog').recursiveUnpack(), name => _(sensorCategories[name].name),
             this._settings.get_int('category-order') == MANUAL_CATEGORY_ORDER);
         for (let name of names) {
             let page = this._pages.get_child_by_name(name);

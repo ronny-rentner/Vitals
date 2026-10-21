@@ -1,7 +1,7 @@
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import {Sensors} from '../sensors.js';
-import {readCatalog, writeCatalog, writeCategoryEnabled, sensorPresent} from '../helpers/storedCatalog.js';
+import {toVariant, sensorPresent} from '../helpers/storedCatalog.js';
 import {test, atEnd, equal, near, between, mean, settings, takeFaults, settle, wait, runTests} from './harness.js';
 import {Machine} from './machine.js';
 import {devices, filesystems} from './fixtures/machine.js';
@@ -129,14 +129,14 @@ function installNvidiaSmi() {
 
 test('every category has the default pin its rule names', async () => {
     let {sensors, configuration, machine, find} = setup();
-    writeCategoryEnabled(configuration, 'gpu', true);
+    configuration.set_value('catalog-settings', toVariant({gpu: {enabled: true}}));
     sensors.reloadEnabled();
     machine.plug('amdGpu');
     await sensors.discover();
     for (let [categoryName, key] of [['temperature', 'average'], ['voltage', 'BAT0/in0'], ['fan', 'thinkpad/fan1'],
         ['memory', 'usage'], ['processor', 'usage'], ['system', 'load-1m'], ['network', 'device-rx'],
         ['storage', '//free'], ['battery', 'BAT0/power-rate'], ['gpu', '0x1002/gpu_busy_percent']])
-        equal(sensors.catalog[categoryName].categoryPin, find(categoryName, key), categoryName);
+        equal(sensors.categoryPin(categoryName), find(categoryName, key), categoryName);
     sensors.destroy();
 });
 
@@ -158,12 +158,13 @@ test('a thermal zone is listed once, through hwmon where the kernel publishes it
     sensors.destroy();
 });
 
-test('two devices with the same name each get a sensor with the same key, read from its own file', async () => {
+test('two devices with the same name each get a sensor with a key of its own, read from its own file', async () => {
     let {sensors, machine, fileValue, show} = setup();
     // Every NVMe drive registers its hwmon device under the name "nvme".
     machine.plug('secondNvme');
     await sensors.discover();
-    let twins = () => sensors.catalog.temperature.sensors.filter(sensor => sensor.key == 'nvme/temp1');
+    let twins = () => sensors.catalog.temperature.sensors.filter(sensor => [NVME, SECOND_NVME].map(drive => drive + 'temp1_input').includes(sensor.file));
+    equal(new Set(twins().map(sensor => sensor.key)).size, 2, 'two keys');
     equal(twins().map(sensor => sensor.file).join(', '), NVME + 'temp1_input, ' + SECOND_NVME + 'temp1_input');
     await sensors.discover();
     equal(twins().length, 2, 'a later run matches both again and adds none');
@@ -570,13 +571,13 @@ test('with one temperature there is no average and that temperature is the defau
     }
     await sensors.discover();
     equal(find('temperature', 'average'), undefined);
-    equal(sensors.catalog.temperature.categoryPin, find('temperature', 'thinkpad/temp1'));
+    equal(sensors.categoryPin('temperature'), find('temperature', 'thinkpad/temp1'));
     sensors.destroy();
 });
 
 test('the voltage\'s default pin is the battery, then the system, then a USB supply, as discovery finds them', async () => {
     let {sensors, machine, fileValue, show} = setup();
-    let categoryPin = () => sensors.catalog.voltage.categoryPin;
+    let categoryPin = () => sensors.categoryPin('voltage');
     await sensors.discover();
     machine.reads.length = 0;
     show('voltage');
@@ -605,7 +606,7 @@ test('the voltage\'s default pin is the battery, then the system, then a USB sup
 test('a graphics card in /sys/class/drm gives its usage and memory from its own files', async () => {
     let {sensors, configuration, machine, find, show} = setup();
     let card = '/sys/class/drm/card1/device/';
-    writeCategoryEnabled(configuration, 'gpu', true);
+    configuration.set_value('catalog-settings', toVariant({gpu: {enabled: true}}));
     sensors.reloadEnabled();
     machine.plug('amdGpu');
     await sensors.discover();
@@ -687,10 +688,10 @@ test('a storage location is monitored when the user added it, or GNOME mounted i
     equal(find('storage', SHARE + '/read-rate'), undefined, 'which has no disk whose reads are counted');
     configuration.set_strv('storage-locations', [SHARE]);
     await sensors.discover();
-    equal(sensors.catalog.storage.categoryPin, find('storage', SHARE + '/free'), 'the default pin is the first monitored one');
+    equal(sensors.categoryPin('storage'), find('storage', SHARE + '/free'), 'the default pin is the first monitored one');
     configuration.set_strv('storage-locations', [SHARE, '/']);
     await sensors.discover();
-    equal(sensors.catalog.storage.categoryPin, find('storage', '//free'), 'also when the first one was added later');
+    equal(sensors.categoryPin('storage'), find('storage', '//free'), 'also when the first one was added later');
     configuration.set_boolean('storage-monitor-volumes', true);
     await sensors.discover();
     equal(locations(), '/,' + USB_DRIVE + ',' + SHARE, 'the drive GNOME mounted, while the user wants that');
@@ -929,7 +930,127 @@ test('where a mouse has the only battery, its percentage is the default pin', as
         machine.remove('/sys/class/power_supply/BAT0/' + file);
     machine.plug('mouse');
     await sensors.discover();
-    equal(sensors.catalog.battery.categoryPin, find('battery', 'hidpp_battery_0/percentage'));
+    equal(sensors.categoryPin('battery'), find('battery', 'hidpp_battery_0/percentage'));
+    sensors.destroy();
+});
+
+test('a UPS that UPower knows is a battery with its percentage and time left, and each UPS has keys of its own', async () => {
+    let {sensors, machine, find, show} = setup();
+    let ups = {Type: 3, Model: 'Back-UPS ES 700', Serial: '4B1234', State: 2, Percentage: 80, TimeToEmpty: 1500, TimeToFull: 0};
+    machine.upower['/org/freedesktop/UPower/devices/ups_hiddev0'] = ups;
+    // Two more of the same model that report no serial number, and the mains, which is no UPS.
+    machine.upower['/org/freedesktop/UPower/devices/ups_hiddev1'] = {...ups, Serial: ''};
+    machine.upower['/org/freedesktop/UPower/devices/ups_hiddev2'] = {...ups, Serial: ''};
+    machine.upower['/org/freedesktop/UPower/devices/line_power_AC'] = {Type: 1, Model: '', Serial: ''};
+    await sensors.discover();
+    let upsPercentages = sensors.catalog.battery.sensors.filter(sensor => sensor.key.startsWith('ups/') && sensor.field == 'percentage');
+    equal(new Set(upsPercentages.map(sensor => sensor.key)).size, 3, 'three UPSs, and no mains');
+    let percentage = find('battery', 'ups/' + ups.Serial + '/percentage');
+    let timeLeft = find('battery', 'ups/' + ups.Serial + '/time-left');
+    show(percentage, timeLeft);
+    await sensors.poll();
+    near(percentage.value, ups.Percentage / 100);
+    equal(timeLeft.value, ups.TimeToEmpty, 'while discharging, until empty');
+    sensors.destroy();
+});
+
+// Processor, system information and power
+
+test('the usage of each core is a sensor only with include-processor-cores', async () => {
+    let {sensors, configuration, machine, find, show} = setup();
+    await sensors.discover();
+    equal(find('processor', 'cpu0'), undefined, 'not by default');
+    configuration.set_boolean('include-processor-cores', true);
+    await sensors.discover();
+    let usage = find('processor', 'usage');
+    let cores = ['cpu0', 'cpu1'].map(core => find('processor', core));
+    show(usage, ...cores);
+    await secondReading(machine);
+    // Every core of the machine is as busy as the whole processor, up to the rounding of its ticks.
+    for (let core of cores)
+        between(core.value, usage.value - 0.02, usage.value + 0.02, core.key);
+    sensors.destroy();
+});
+
+test('the frequency is the mean of /proc/cpuinfo, and of the cores\' cpufreq files with use-processor-cpufreq or where /proc/cpuinfo lists none', async () => {
+    let {sensors, configuration, machine, find, show} = setup();
+    let cpufreq = core => '/sys/devices/system/cpu/' + core + '/cpufreq/scaling_cur_freq';
+    // The cores' files give other frequencies than /proc/cpuinfo, in kHz.
+    machine.setContent(cpufreq('cpu0'), '3000000\n');
+    machine.setContent(cpufreq('cpu1'), '1000000\n');
+    let cpuinfoMean = mean([...machine.content('/proc/cpuinfo').matchAll(/^cpu MHz\s*:\s*(\S+)/gm)].map(match => Number(match[1]) * 1000000));
+    let cpufreqMean = mean(['cpu0', 'cpu1'].map(core => Number(machine.content(cpufreq(core))) * 1000));
+    let frequency = async () => {
+        await sensors.discover();
+        let sensor = find('processor', 'frequency');
+        show(sensor);
+        await sensors.poll();
+        return sensor.value;
+    };
+    near(await frequency(), cpuinfoMean, 'from /proc/cpuinfo');
+    configuration.set_boolean('use-processor-cpufreq', true);
+    near(await frequency(), cpufreqMean, 'from cpufreq with the option');
+    configuration.set_boolean('use-processor-cpufreq', false);
+    machine.setContent('/proc/cpuinfo', machine.content('/proc/cpuinfo').replace(/^cpu MHz.*\n/gm, ''));
+    near(await frequency(), cpufreqMean, 'from cpufreq where /proc/cpuinfo lists none');
+    sensors.destroy();
+});
+
+test('with include-static-info, the processor and the kernel describe themselves', async () => {
+    let {sensors, configuration, machine, find, show} = setup();
+    await sensors.discover();
+    equal(find('system', 'kernel'), undefined, 'not by default');
+    configuration.set_boolean('include-static-info', true);
+    await sensors.discover();
+    let [vendor, sockets, cache, kernel] = [['processor', 'vendor'], ['processor', 'sockets'], ['processor', 'cache'],
+        ['system', 'kernel']].map(([categoryName, key]) => find(categoryName, key));
+    show(vendor, sockets, cache, kernel);
+    await sensors.poll();
+    let cpuInfo = machine.content('/proc/cpuinfo');
+    equal(vendor.value, cpuInfo.match(/^vendor_id\s*:\s*(\S+)/m)[1]);
+    equal(sockets.value, new Set(cpuInfo.match(/^physical id.*$/gm)).size, 'the sockets the cores are in');
+    equal(cache.value, Number.parseFloat(cpuInfo.match(/^cache size\s*:\s*(\S+)/m)[1]) * 1024, 'in bytes');
+    equal(kernel.value, machine.content('/proc/version').split(' ')[2]);
+    sensors.destroy();
+});
+
+test('a power input of hwmon is in watts', async () => {
+    let {sensors, machine, find, show} = setup();
+    machine.setContent(BATTERY + 'power1_input', '12500000\n');
+    await sensors.discover();
+    let power = find('power', 'BAT0/power1');
+    show(power);
+    await sensors.poll();
+    near(power.value, Number(machine.content(BATTERY + 'power1_input')) / 1000000, 'from microwatts');
+    sensors.destroy();
+});
+
+test('a readable powercap zone gives its power draw from its energy counter, once per zone name, and only with use-powercap', async () => {
+    let {sensors, configuration, machine, find, show} = setup();
+    let powercap = '/sys/class/powercap/';
+    machine.setContent(powercap + 'intel-rapl:0/name', 'package-0\n');
+    machine.setContent(powercap + 'intel-rapl:0/energy_uj', '1000000\n');
+    // The same zone through the processor's memory-mapped registers.
+    machine.setContent(powercap + 'intel-rapl-mmio:0/name', 'package-0\n');
+    machine.setContent(powercap + 'intel-rapl-mmio:0/energy_uj', '1000000\n');
+    // A zone whose counter only root may read.
+    machine.setContent(powercap + 'intel-rapl:0:0/name', 'core\n');
+    machine.setContent(powercap + 'intel-rapl:0:0/energy_uj', '1000000\n');
+    machine.failReads(powercap + 'intel-rapl:0:0/energy_uj',
+        new Gio.IOErrorEnum({code: Gio.IOErrorEnum.PERMISSION_DENIED, message: 'energy_uj'}));
+    await sensors.discover();
+    equal(keys(sensors.catalog.power), 'powercap/package-0', 'the package once, and not the zone only root may read');
+    let packagePower = find('power', 'powercap/package-0');
+    let joules = 5;
+    let start = clock();
+    show(packagePower);
+    await settle();
+    machine.setContent(packagePower.file, (1000000 + joules * 1000000) + '\n');
+    await secondReading(machine);
+    between(packagePower.value, joules / (clock() - start), joules, 'the joules per second');
+    configuration.set_boolean('use-powercap', false);
+    await sensors.discover();
+    equal(find('power', 'powercap/package-0'), undefined, 'without use-powercap');
     sensors.destroy();
 });
 
@@ -957,14 +1078,14 @@ test('a sensor that no run has found for a year is forgotten, unless it is in th
     first.machine.plug('vpn');
     first.machine.plug('secondNvme');
     await first.sensors.discover();
-    first.sensors.setPanelSensorVisible(first.find('network', 'tun0/tx'), true);
+    first.sensors.pinToPanel(first.find('network', 'tun0/tx'), true);
     first.sensors.destroy();
     // The VPN was last connected a year and a minute ago, the second drive a minute less than a year ago.
-    let saved = readCatalog(first.configuration);
+    let saved = first.configuration.get_value('catalog').recursiveUnpack();
     for (let sensor of saved.network.sensors.filter(sensor => sensor.interface == 'tun0'))
         sensor.discovered -= YEAR_SECONDS + 60;
     saved.temperature.sensors.find(sensor => sensor.file == SECOND_NVME + 'temp1_input').discovered -= YEAR_SECONDS - 60;
-    writeCatalog(first.configuration, saved);
+    first.configuration.set_value('catalog', toVariant(saved));
 
     let {sensors} = setup(first.configuration);
     await sensors.discover();
@@ -981,7 +1102,7 @@ test('a name, a category pin and the order of the categories are kept across dis
     await first.sensors.discover();
     let temperature = first.find('temperature', 'thinkpad/temp1');
     let ownLabel = temperature.label;
-    let defaultPin = first.sensors.catalog.temperature.categoryPin;
+    let defaultPin = first.sensors.categoryPin('temperature');
     let order = ['voltage', ...first.sensors.categories().map(([name]) => name).filter(name => name != 'voltage')];
     first.sensors.renameSensor(temperature, 'Processor');
     first.sensors.pinToCategory('temperature', temperature);
@@ -989,18 +1110,18 @@ test('a name, a category pin and the order of the categories are kept across dis
     await first.sensors.discover();
     equal(temperature.customLabel + ' / ' + temperature.label, 'Processor / ' + ownLabel,
         'discovery keeps the name and still writes the sensor\'s own label');
-    equal(first.sensors.catalog.temperature.categoryPin, temperature, 'and keeps the category pin the user chose');
+    equal(first.sensors.categoryPin('temperature'), temperature, 'and keeps the category pin the user chose');
     first.sensors.destroy();
 
     let {sensors, find} = setup(first.configuration);
     let restored = find('temperature', 'thinkpad/temp1');
     equal(restored.customLabel, 'Processor');
-    equal(sensors.catalog.temperature.categoryPin, restored);
+    equal(sensors.categoryPin('temperature'), restored);
     equal(sensors.categories().sort(([, a], [, b]) => a.position - b.position).map(([name]) => name).join(', '), order.join(', '));
     sensors.pinToCategory('temperature', find('temperature', 'thinkpad/temp2'));
     equal(restored.pinnedToCategory, undefined, 'a category has one category pin');
     sensors.pinToCategory('temperature');
-    equal(sensors.catalog.temperature.categoryPin.key, defaultPin.key, 'without a choice the default pin applies again');
+    equal(sensors.categoryPin('temperature').key, defaultPin.key, 'without a choice the default pin applies again');
     sensors.renameSensor(restored, '');
     equal(restored.customLabel, undefined, 'an empty name gives the own label back');
     sensors.destroy();
@@ -1008,38 +1129,34 @@ test('a name, a category pin and the order of the categories are kept across dis
 
 test('the panel\'s sensors and category switches are changed through Sensors, which saves them and keeps what the preferences wrote', async () => {
     let configuration = settings();
-    let saved = readCatalog(configuration);
     // A device that is not plugged in is in the panel from an earlier session.
-    saved.panel.sensors = [{category: 'voltage', key: 'unplugged/in0', visible: true}];
-    writeCatalog(configuration, saved);
+    configuration.set_value('catalog', toVariant({voltage: {sensors: [{key: 'unplugged/in0', panelPosition: 0}]}}));
     let {sensors, find} = setup(configuration);
-    let panelSensors = sensors.catalog.panel.sensors;
-    let shown = () => panelSensors.filter(panelSensor => sensors.hasPanelItem(panelSensor))
-        .map(({sensor}) => sensor.category + ' ' + sensor.key).join(', ');
-    let panelSensor = (categoryName, key) => panelSensors.find(candidate => candidate.sensor == find(categoryName, key));
+    let names = panelSensors => panelSensors.map(sensor => sensor.category + ' ' + sensor.key).join(', ');
+    let shown = () => names(sensors.panelSensors().filter(sensor => sensors.hasPanelItem(sensor)));
     await sensors.discover();
     equal(shown(), '', 'a sensor that is not on the machine is not shown');
-    equal(panelSensors.length, 1, 'and keeps its place in the panel');
+    equal(sensors.panelSensors().length, 1, 'and stays in the panel');
     for (let [categoryName, key] of [['memory', 'usage'], ['system', 'load-1m'], ['processor', 'usage']])
-        sensors.setPanelSensorVisible(find(categoryName, key), true);
-    sensors.setPanelSensorVisible(find('system', 'load-1m'), false);
+        sensors.pinToPanel(find(categoryName, key), true);
+    sensors.pinToPanel(find('system', 'load-1m'), false);
     equal(shown(), 'memory usage, processor usage', 'an unpinned sensor is not shown; the same key in two categories is two sensors');
-    sensors.setPanelSensorVisible(find('system', 'load-1m'), true);
-    equal(shown(), 'memory usage, system load-1m, processor usage', 'an unpinned sensor kept its place');
-    sensors.movePanelSensor(panelSensor('processor', 'usage'), panelSensor('memory', 'usage'));
-    equal(shown(), 'processor usage, memory usage, system load-1m', 'moved in front of another sensor');
-    sensors.movePanelSensor(panelSensor('processor', 'usage'));
-    equal(shown(), 'memory usage, system load-1m, processor usage', 'moved to the end');
+    sensors.pinToPanel(find('system', 'load-1m'), true);
+    equal(shown(), 'memory usage, processor usage, system load-1m', 'a pinned sensor goes to the end');
+    sensors.movePanelSensor(find('system', 'load-1m'), find('processor', 'usage'));
+    equal(shown(), 'memory usage, system load-1m, processor usage', 'moved in front of another sensor');
+    sensors.movePanelSensor(find('memory', 'usage'));
+    equal(shown(), 'system load-1m, processor usage, memory usage', 'moved to the end');
     // The preferences switch a category in the catalog settings.
-    equal(sensors.catalog.battery.enabled, false, 'the schema default');
-    writeCategoryEnabled(configuration, 'battery', true);
-    writeCategoryEnabled(configuration, 'memory', false);
+    equal(sensors.catalog.battery.runtime.enabled, false, 'the default');
+    configuration.set_value('catalog-settings', toVariant({battery: {enabled: true}, memory: {enabled: false}}));
     equal(sensors.reloadEnabled(), true, 'a changed switch is reported');
     equal(sensors.reloadEnabled(), false, 'once');
     equal(shown(), 'system load-1m, processor usage', 'a sensor of a category that is switched off is not shown');
-    equal(JSON.stringify(readCatalog(configuration).panel.sensors), JSON.stringify(
-        panelSensors.map(({sensor, visible}) => ({category: sensor.category, key: sensor.key, visible}))), 'saved as category and key');
     sensors.destroy();
+    let restarted = setup(configuration).sensors;
+    equal(names(restarted.panelSensors()), 'voltage unplugged/in0, system load-1m, processor usage, memory usage', 'saved');
+    restarted.destroy();
 });
 
 // NVIDIA
@@ -1048,7 +1165,7 @@ test('the panel\'s sensors and category switches are changed through Sensors, wh
 async function setupNvidia(cards, adjust = () => {}) {
     let machineSetup = setup();
     machineSetup.nvidiaSmi.setCards(cards);
-    writeCategoryEnabled(machineSetup.configuration, 'gpu', true);
+    machineSetup.configuration.set_value('catalog-settings', toVariant({gpu: {enabled: true}}));
     machineSetup.sensors.reloadEnabled();
     adjust(machineSetup.configuration);
     await machineSetup.sensors.discover();

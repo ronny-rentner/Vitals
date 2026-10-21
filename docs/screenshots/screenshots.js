@@ -6,7 +6,7 @@ import Shell from 'gi://Shell';
 import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as Scripting from 'resource:///org/gnome/shell/ui/scripting.js';
-import {writeCategoryEnabled} from '../../helpers/storedCatalog.js';
+import {toVariant} from '../../helpers/storedCatalog.js';
 
 // Room around what a screenshot shows, in pixels.
 const MARGIN = 12;
@@ -94,7 +94,7 @@ export async function run() {
         for (let [, sensor] of pinned) {
             // A machine without sensors of a category has no category pin there.
             if (sensor)
-                sensors.setPanelSensorVisible(sensor, visible);
+                sensors.pinToPanel(sensor, visible);
         }
         button._syncMenuRows();
         // The item has its new size from the next frame on, and the menu opens where the item is.
@@ -105,8 +105,8 @@ export async function run() {
     let topBar = async (name, options = {}) => {
         set(options);
         // Each picture shows its values in the room they need, not in the room the picture before left reserved.
-        for (let panelSensor of sensors.catalog.panel.sensors)
-            panelSensor.reservedWidth = undefined;
+        for (let sensor of sensors.panelSensors())
+            sensor.reservedWidth = -1;
         button._redrawPanelItems();
         await read();
         await capture(name, button);
@@ -135,22 +135,21 @@ export async function run() {
     settings.set_boolean('include-public-ip', false);
     // The battery and the graphics card are switched off for a new user; switched on as the preferences do, their
     // sensors can be pinned.
-    for (let categoryName of ['battery', 'gpu'])
-        writeCategoryEnabled(settings, categoryName, true);
+    settings.set_value('catalog-settings', toVariant({battery: {enabled: true}, gpu: {enabled: true}}));
     await button._discoverSensors();
 
     // The top bar: the sensors a new user has, which end with the download speed, and three more.
     let download = ['network', find('network', 'device-rx')], upload = ['network', find('network', 'device-tx')];
-    let temperature = ['temperature', sensors.catalog.temperature.categoryPin];
+    let temperature = ['temperature', sensors.categoryPin('temperature')];
     let usual = [['memory', find('memory', 'usage')], ['system', find('system', 'load-1m')], download, upload, temperature,
-        ['fan', sensors.catalog.fan.categoryPin]];
+        ['fan', sensors.categoryPin('fan')]];
     await pin(usual, true);
     // A few pictures show other sensors, to show what else can be pinned.
     let battery = field => ['battery', sensors.catalog.battery.sensors.find(sensor => sensor.field == field)];
     let precise = [battery('percentage'), battery('power-rate'), ['processor', find('processor', 'frequency')],
         ['system', find('system', 'uptime')]];
     let traffic = [download, upload, ['network', find('network', 'boot-rx')], ['network', find('network', 'boot-tx')],
-        ['temperature', find('temperature', 'coretemp/temp1') ?? sensors.catalog.temperature.categoryPin]];
+        ['temperature', find('temperature', 'coretemp/temp1') ?? sensors.categoryPin('temperature')]];
     let more = [['network', find('network', 'wifi-link-quality')], battery('percentage'), ['gpu', find('gpu', 'refresh-rate')],
         ['storage', find('storage', '//free')]];
     let topBarWith = async (pinned, name, options) => {

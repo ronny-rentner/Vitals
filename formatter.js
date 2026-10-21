@@ -51,7 +51,8 @@ export class Formatter {
             case 'fan': return [value, 'RPM', 0];
             case 'watt':
             case 'watt-gpu':
-            case 'watt-limit': return [value, 'W', 1];
+            case 'watt-limit':
+            case 'power': return [value, 'W', 1];
             case 'watt-hour': return [value, 'Wh', 1];
             case 'load': return [value, '', 1];
             case 'hertz': return [value / 1e9, 'GHz', 1];
@@ -139,6 +140,7 @@ export class Formatter {
                 text = (value > 0 ? '+' : '') + value.toFixed(precise ? 2 : 1) + unit;
                 break;
             case 'watt-gpu':
+            case 'power':
                 unit = ' W';
                 text = value.toFixed(precise ? 2 : 1) + unit;
                 break;

@@ -8,6 +8,7 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import * as Scripting from 'resource:///org/gnome/shell/ui/scripting.js';
 import {equal} from './harness.js';
+import {sensorCategories} from '../helpers/categories.js';
 
 const UUID = 'Vitals@CoreCoding.com';
 
@@ -185,8 +186,10 @@ step('the top bar shows the sensors a new user starts with, and their values onc
 
 step('a click on the top bar opens the menu, with the categories in alphabetical order and a value in each category header', async () => {
     await openMenu();
-    equal(categoryNames().join(', '), 'Fan, Memory, Network, Processor, Storage, System, Temperature, Voltage',
-        'the categories that are switched on');
+    let catalogSettings = settings.get_value('catalog-settings').recursiveUnpack();
+    let switchedOn = Object.keys(sensorCategories).filter(name => catalogSettings[name]?.enabled ?? sensorCategories[name].enabled)
+        .map(name => sensorCategories[name].name).sort();
+    equal(categoryNames().join(', '), switchedOn.join(', '), 'the categories that are switched on');
     for (let name of ['Memory', 'Processor', 'System'])
         await waitFor(() => category(name).header.visible && category(name).header.text != '…', name + ' header');
 });

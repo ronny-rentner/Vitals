@@ -1,6 +1,6 @@
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
-import {readCatalog, writeCatalog} from '../helpers/storedCatalog.js';
+import {toVariant} from '../helpers/storedCatalog.js';
 
 let tests = [];
 // The faults that were logged (console.error and console.warn) and that no test took with `takeFaults`.
@@ -15,10 +15,8 @@ export function settings() {
     configuration.set_boolean('include-static-info', false);
     configuration.set_boolean('include-public-ip', false);
     configuration.set_int('update-time', 1);
-    // The saved catalog every test starts from: the schema's categories, no sensors yet, and an empty panel.
-    let catalog = readCatalog(configuration);
-    catalog.panel.sensors = [];
-    writeCatalog(configuration, catalog);
+    // The saved catalog every test starts from: no sensors yet, so none in the panel.
+    configuration.set_value('catalog', toVariant({}));
     return configuration;
 }
 

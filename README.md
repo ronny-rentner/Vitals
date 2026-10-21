@@ -1,7 +1,7 @@
 Vitals
 ====================================
 
-Vitals is a GNOME Shell extension for displaying your computer's temperature, voltage, fan speed, memory usage, processor load, system resources, network speed and storage stats in your GNOME Shell's top menu bar. This is a one stop shop to monitor all of your vital sensors. Vitals uses asynchronous polling to provide a smooth user experience.
+Vitals is a GNOME Shell extension for displaying your computer's temperature, voltage, fan speed, power draw, memory usage, processor load, system resources, network speed and storage stats in your GNOME Shell's top menu bar. This is a one stop shop to monitor all of your vital sensors. Vitals uses asynchronous polling to provide a smooth user experience.
 
 Vitals collects the inputs needed by pinned values, visible category summaries and expanded menu rows. With the menu closed, only pinned values require updates. A pinned aggregate still needs all of its inputs.
 
@@ -100,10 +100,12 @@ Vitals was originally forked from [gnome-shell-extension-freon](https://github.c
 * network\*.svg - [Yannick Lung](https://www.iconfinder.com/yanlu).
 * Health icon - [Dod Cosmin](https://www.iconfinder.com/icons/458267/cross_doctor_drug_health_healthcare_hospital_icon).
 * wifi-signal-\*-symbolic.svg - from [Adwaita Icon Theme](https://gitlab.gnome.org/GNOME/adwaita-icon-theme).
+* power-symbolic.svg - drawn for Vitals.
 
 ### GNOME Theme
 * (battery | storage | wifi-signal-\*)-symbolic.svg - from [Adwaita Icon Theme](https://gitlab.gnome.org/GNOME/adwaita-icon-theme).
-* (memory | network* | system | voltage)-symbolic.svg - from [Icon Development Kit](https://gitlab.gnome.org/Teams/Design/icon-development-kit).
+* (memory | network* | swap | system | voltage)-symbolic.svg - from [Icon Development Kit](https://gitlab.gnome.org/Teams/Design/icon-development-kit).
+* power-symbolic.svg - drawn for Vitals.
 * fan-symbolic.svg - inherited from [Freon](https://github.com/UshakovVasilii/gnome-shell-extension-freon) project, with mild modifications.
 * (temperature | cpu)-symbolic.svg - designed by [daudix](https://github.com/daudix).
 

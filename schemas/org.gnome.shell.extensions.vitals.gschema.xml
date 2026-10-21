@@ -9,38 +9,15 @@
   </enum>
   <schema id="org.gnome.shell.extensions.vitals" path="/org/gnome/shell/extensions/vitals/">
     <key name="catalog-settings" type="a{sv}">
-      <default>{
-        'temperature': &lt;{'enabled': &lt;true&gt;}&gt;,
-        'voltage': &lt;{'enabled': &lt;true&gt;}&gt;,
-        'fan': &lt;{'enabled': &lt;true&gt;}&gt;,
-        'memory': &lt;{'enabled': &lt;true&gt;}&gt;,
-        'processor': &lt;{'enabled': &lt;true&gt;}&gt;,
-        'system': &lt;{'enabled': &lt;true&gt;}&gt;,
-        'network': &lt;{'enabled': &lt;true&gt;}&gt;,
-        'storage': &lt;{'enabled': &lt;true&gt;}&gt;,
-        'battery': &lt;{'enabled': &lt;false&gt;}&gt;,
-        'gpu': &lt;{'enabled': &lt;false&gt;}&gt;
-      }</default>
+      <default>{}</default>
       <summary>Catalog settings</summary>
       <description>The user's settings for the sensor catalog, by category: whether each category is switched on. Written by the preferences window. Described in docs/catalog-design.md.</description>
     </key>
     <key name="catalog" type="a{sv}">
       <default>{
-        'temperature': &lt;@a{sv} {}&gt;,
-        'voltage': &lt;@a{sv} {}&gt;,
-        'fan': &lt;@a{sv} {}&gt;,
-        'memory': &lt;@a{sv} {}&gt;,
-        'processor': &lt;@a{sv} {}&gt;,
-        'system': &lt;@a{sv} {}&gt;,
-        'network': &lt;@a{sv} {}&gt;,
-        'storage': &lt;@a{sv} {}&gt;,
-        'battery': &lt;@a{sv} {}&gt;,
-        'gpu': &lt;@a{sv} {}&gt;,
-        'panel': &lt;{'sensors': &lt;[
-          &lt;{'category': &lt;'memory'&gt;, 'key': &lt;'usage'&gt;, 'visible': &lt;true&gt;}&gt;,
-          &lt;{'category': &lt;'system'&gt;, 'key': &lt;'load-1m'&gt;, 'visible': &lt;true&gt;}&gt;,
-          &lt;{'category': &lt;'network'&gt;, 'key': &lt;'device-rx'&gt;, 'visible': &lt;true&gt;}&gt;
-        ]&gt;}&gt;
+        'memory': &lt;{'sensors': &lt;[&lt;{'key': &lt;'usage'&gt;, 'panelPosition': &lt;0.0&gt;, 'reservedWidth': &lt;-1.0&gt;}&gt;]&gt;}&gt;,
+        'system': &lt;{'sensors': &lt;[&lt;{'key': &lt;'load-1m'&gt;, 'panelPosition': &lt;1.0&gt;, 'reservedWidth': &lt;-1.0&gt;}&gt;]&gt;}&gt;,
+        'network': &lt;{'sensors': &lt;[&lt;{'key': &lt;'device-rx'&gt;, 'panelPosition': &lt;2.0&gt;, 'reservedWidth': &lt;-1.0&gt;}&gt;]&gt;}&gt;
       }</default>
       <summary>Sensor catalog</summary>
       <description>Every known sensor by category, with its order and last reading, and the sensors in the panel. Written by the extension. Described in docs/catalog-design.md.</description>
@@ -181,6 +158,21 @@
       <summary>Include processor static information</summary>
       <description>Display processor static information that doesn't change</description>
     </key>
+    <key type="b" name="use-processor-cpufreq">
+      <default>false</default>
+      <summary>Read live frequency from cpufreq</summary>
+      <description>Read Frequency, Max frequency and Min frequency from each core's scaling_cur_freq instead of /proc/cpuinfo</description>
+    </key>
+    <key type="b" name="include-processor-cores">
+      <default>false</default>
+      <summary>Show individual CPU cores</summary>
+      <description>Display usage for each processor core</description>
+    </key>
+    <key type="b" name="use-powercap">
+      <default>true</default>
+      <summary>Read powercap</summary>
+      <description>Read power draw from powercap interfaces like Intel RAPL. Most systems let only root read them; there, they are left out.</description>
+    </key>
     <key type="b" name="include-static-gpu-info">
       <default>false</default>
       <summary>Include GPU static information</summary>
@@ -204,6 +196,11 @@
     <key name="fan-colors" type="as">
       <default>[]</default>
       <summary>Fan color scales</summary>
+      <description>The breakpoints of the colour scales of this category. An entry is "threshold r g b target". The target is "sensor:&lt;category&gt;/&lt;key&gt;" for one sensor, or "kind:&lt;format&gt;" for all sensors of the category that show that kind of value. The threshold is in the unit the preferences show next to it.</description>
+    </key>
+    <key name="power-colors" type="as">
+      <default>[]</default>
+      <summary>Power color scales</summary>
       <description>The breakpoints of the colour scales of this category. An entry is "threshold r g b target". The target is "sensor:&lt;category&gt;/&lt;key&gt;" for one sensor, or "kind:&lt;format&gt;" for all sensors of the category that show that kind of value. The threshold is in the unit the preferences show next to it.</description>
     </key>
     <key name="memory-colors" type="as">

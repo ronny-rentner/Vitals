@@ -122,11 +122,11 @@ The panel is a category like the others. The difference is how sensors get into 
 
 The whole catalog is stored on disk as it is, in one setting, except whether each category is switched on. It is the single source for which sensors there are, how they are ordered, and what is visible.
 
-- The setting is called `catalog`. It replaced the `panel-sensors` setting. Its schema default has an empty record for each category and puts three sensors in the panel.
-- Whether each category is switched on is in a setting of its own, `catalog-settings`, laid out like the catalog: `{temperature: {enabled: true}, …}`. It replaced the ten `show-*` settings, and its schema default switches the categories on or off for a new user. Each of the two settings has one writer.
+- The setting is called `catalog`. It replaced the `panel-sensors` setting. Its schema default only puts three sensors in the panel; a category has no record until its first save.
+- Whether each category is switched on is in a setting of its own, `catalog-settings`, laid out like the catalog: `{temperature: {enabled: true}, …}`. It replaced the ten `show-*` settings, and it holds only the categories the user switched. The others are as `enabled` in `sensorCategories` says. Each of the two settings has one writer.
 - It is written when its structure or state changes: discovery finds a new sensor or forgets one, or the user pins, moves or switches something. Discovery writes it only when the number of sensors changed, so a run that finds one sensor and forgets another, or that only changes fields such as a label or a file path, is not written. Until the next write, the colour pages of the preferences window, which read the saved catalog, then miss the new sensor, still list the forgotten one, or show an old label; the extension itself puts its catalog right with the first run after a restart. That is accepted: writing after every run would write the setting each time the menu opens, since the menu starts a run.
 - There are no migrations. Settings saved by earlier versions are not converted.
-- The preferences window is a separate program. Its category switches write `catalog-settings` (`writeCategoryEnabled` in `helpers/storedCatalog.js`), and it reads the sensors' labels from the saved catalog for the colour pages. The extension takes a changed switch over when `catalog-settings` changes.
+- The preferences window is a separate program. Its category switches write `catalog-settings` (`_categoryPage` in `prefs.js`), and it reads the sensors' labels from the saved catalog for the colour pages. The extension takes a changed switch over when `catalog-settings` changes.
 - A sensor and a category are written without their objects. What only means something while the extension runs is in the object `runtime`: `shown`, and `initialTemperature` (what the hide-zeros option remembers). The last reading (`value`, `updated`, `status`) is written; on load every sensor is `pending`, so every value starts as "…".
 
 The setting holds the catalog as a structure, not as text. GNOME's settings format stores nested records and lists directly (type `a{sv}`). `helpers/storedCatalog.js` turns the catalog's plain data into that format; reading it back is built in.
@@ -162,15 +162,14 @@ A reading from `nvidia-smi` holds only the fields that were asked for. When anot
 
 ## Sensors with the same key
 
-Two sensors in one category may have the same key. Nothing is done to prevent it, and nothing needs to be, because the running code never finds a sensor by its key. From the outside the two are hard to tell apart; each still has its own `file`, so both are read correctly.
+Two hwmon devices of the same name are numbered: the second is `nvme2`, so its sensor is `nvme2/temp1`. Devices with a fixed name, confirmed in the kernel source on 2026-10-07:
 
-Where it happens, confirmed in the kernel source on 2026-10-07:
+- **NVMe drives.** `drivers/nvme/host/hwmon.c` registers every drive's hwmon device under the name `"nvme"`.
+- **CPU packages.** `drivers/hwmon/coretemp.c` creates one hwmon device per package, each under the name `"coretemp"`.
 
-- **Two NVMe drives.** `drivers/nvme/host/hwmon.c` registers every drive's hwmon device under the fixed name `"nvme"`, so both give `nvme/temp1`.
-- **Several CPU packages.** `drivers/hwmon/coretemp.c` creates one hwmon device per package, each under the fixed name `"coretemp"`.
-- **Several ACPI thermal zones.** `drivers/acpi/thermal.c` registers every ACPI thermal zone with the fixed type `"acpitz"`.
+Several ACPI thermal zones share one hwmon device, as `acpitz/temp1`, `acpitz/temp2`.
 
-None of these occurs on this machine.
+Still with the same key: two NVIDIA cards of one model, two other graphics cards of one vendor, and two UPSs of one model without a serial number.
 
 ## Discovery
 
@@ -211,7 +210,7 @@ A sensor the user hid (`hidden`) is still present: it has no row in the menu, an
    - If there is none, either because the key is new or because every stored sensor with that key is already matched, a new sensor is added to the category, with the same key if need be.
 3. When a category is complete, the run sets the category's `discovered` to its own timestamp. From that moment the sensors it did not find are no longer present. See below.
 
-With two drives called `nvme`, the first one found takes the first stored `nvme/temp1` and the second takes the second. Which drive is found first follows the kernel's numbering, so if that order differs after a reboot, the two swap their stored state, such as their place in the panel. That is accepted.
+With two drives called `nvme`, the first one found is `nvme/temp1` and the second `nvme2/temp1`. Which drive is found first follows the kernel's numbering, so if that order differs after a reboot, the two swap their stored state, such as their place in the panel. That is accepted.
 
 It can be closed at any time without changing the structure: a sensor can carry one more field that identifies its device for good, such as a drive's serial number, and discovery would then match on that field as well as on the key.
 

@@ -28,7 +28,7 @@ import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
 import * as SensorMath from './helpers/sensorMath.js';
 import {sensorCategories} from './helpers/categories.js';
-import {readCatalog, readCatalogSettings, writeCatalog, sensorPresent} from './helpers/storedCatalog.js';
+import {toVariant, sensorPresent} from './helpers/storedCatalog.js';
 
 // A rate needs two readings, and the next tick can be a minute away.
 const SECOND_READING_SECONDS = 1;
@@ -58,8 +58,13 @@ const LOW_IS_BAD = {lowIsBad: true};
 // A source's definition: its `id`, which is the path of the file it reads or a name, and its sensors, each with its
 // catalog fields and `compute`, which computes its value from a reading. Every function of a definition gets one
 // context object: the `collector`, the `source`, which holds the source's reading and the state the functions keep,
-// and, for a sensor's `compute` and the definition's `icon`, the `sensor` and the `reading`. A source that reads one file takes it apart with `parse`, which gets the `text`;
-// without `parse`, the file is one number. Any other source has `read`.
+// and, for a sensor's `compute` and the definition's `icon`, the `sensor` and the `reading`. A source that reads one
+// file takes it apart with `parse`, which gets the `text`; without `parse`, the file is one number. Any other source
+// has `read`.
+
+// Only the GNOME style has it; in the original style the swap sensors show the memory icon.
+const SWAP_ICON = 'vitals-swap-symbolic';
+
 const MEMORY = {
     id: '/proc/meminfo',
     category: 'memory',
@@ -69,8 +74,14 @@ const MEMORY = {
         'available': {label: 'Available', format: 'memory', ...LOW_IS_BAD, compute: ({reading}) => reading.value.MemAvailable},
         'cached': {label: 'Cached', format: 'memory', compute: ({reading}) => reading.value.Cached},
         'free': {label: 'Free', format: 'memory', ...LOW_IS_BAD, compute: ({reading}) => reading.value.MemFree},
-        'swap-total': {label: 'Swap Total', format: 'memory', compute: ({reading}) => reading.value.SwapTotal},
-        'swap-free': {label: 'Swap Free', format: 'memory', ...LOW_IS_BAD, compute: ({reading}) => reading.value.SwapFree},
+        'swap-total': {label: 'Swap Total', format: 'memory', icon: SWAP_ICON, compute: ({reading}) => reading.value.SwapTotal},
+        'swap-free': {
+            label: 'Swap Free',
+            format: 'memory',
+            icon: SWAP_ICON,
+            ...LOW_IS_BAD,
+            compute: ({reading}) => reading.value.SwapFree
+        },
         'allocated': {
             label: 'Allocated',
             format: 'memory',
@@ -84,11 +95,13 @@ const MEMORY = {
         'swap-used': {
             label: 'Swap Used',
             format: 'memory',
+            icon: SWAP_ICON,
             compute: ({reading}) => reading.value.SwapTotal - reading.value.SwapFree
         },
         'swap-usage': {
             label: 'Swap Usage',
             format: 'percent',
+            icon: SWAP_ICON,
             compute: ({reading}) => reading.value.SwapTotal ? (reading.value.SwapTotal - reading.value.SwapFree) / reading.value.SwapTotal : 0
         }
     }
@@ -183,7 +196,7 @@ const CPU_CORE_FREQUENCIES = {
     id: 'cpu-frequencies',
     category: 'processor',
     read: async ({cancellation, collector}) => ({
-        frequencies: await Promise.all(collector._cores().map(async core =>
+        frequencies: await Promise.all(collector._cores.map(async core =>
             Number(await collector._read('/sys/devices/system/cpu/' + core + '/cpufreq/scaling_cur_freq', cancellation)) * 1000))
     }),
     sensors: CPU_FREQUENCIES.sensors
@@ -199,7 +212,7 @@ const UPTIME = {
             category: 'processor',
             label: 'Process Time',
             format: 'uptime',
-            compute: ({reading, collector}) => reading.value[0] - reading.value[1] / collector._cores().length
+            compute: ({reading, collector}) => reading.value[0] - reading.value[1] / collector._cores.length
         },
         'uptime': {label: 'Uptime', format: 'uptime', compute: ({reading}) => reading.value[0]}
     }
@@ -248,6 +261,18 @@ const POWERCAP = {
             // The file gives microwatts.
             compute: ({reading}) => reading.value / 1000000
         }
+    }
+};
+
+// The energy counter of a powercap zone, such as Intel RAPL's package; discovery gives each zone's counter as `id`. The
+// counter is in microjoules, so its rate is in microwatts. It wraps around at the zone's max_energy_range_uj, which
+// counterRate takes for a restart.
+const POWERCAP_ENERGY = {
+    // The labels of the zones Intel RAPL names other than its packages, which are "package-<number>".
+    labels: {'core': 'Cores', 'uncore': 'Uncore', 'dram': 'Memory', 'psys': 'Platform'},
+    compute({reading}) {
+        let rate = SensorMath.counterRate(reading, energy => energy);
+        return typeof rate == 'number' ? rate / 1000000 : rate;
     }
 };
 
@@ -646,6 +671,62 @@ const BATTERY = {
     }
 };
 
+// A UPS that UPower knows, such as an APC unit on USB, which the kernel lists under no power supply. Discovery gives
+// each its UPower object path as `id`.
+const UPS = {
+    // UPower's device type of a UPS, and its states by number.
+    type: 3,
+    states: ['Unknown', 'Charging', 'Discharging', 'Empty', 'Full', 'Pending charge', 'Pending discharge'],
+    // Calls a method of UPower on the system bus and gives its unpacked answer.
+    call({path, iface, method, parameters = null, replyType, cancellation}) {
+        return new Promise((resolve, reject) => {
+            Gio.bus_get(Gio.BusType.SYSTEM, cancellation, (object, busResult) => {
+                try {
+                    Gio.bus_get_finish(busResult).call('org.freedesktop.UPower', path, iface, method, parameters,
+                        new GLib.VariantType(replyType), Gio.DBusCallFlags.NONE, -1, cancellation, (connection, result) => {
+                            try { resolve(connection.call_finish(result).recursiveUnpack()); }
+                            catch (error) { reject(error); }
+                        });
+                } catch (error) { reject(error); }
+            });
+        });
+    },
+    // The object paths of the devices UPower knows; none without UPower.
+    async devices({cancellation}) {
+        try {
+            let [paths] = await UPS.call({path: '/org/freedesktop/UPower', iface: 'org.freedesktop.UPower',
+                method: 'EnumerateDevices', replyType: '(ao)', cancellation});
+            return paths;
+        } catch (error) {
+            if (error.matches(Gio.DBusError, Gio.DBusError.SERVICE_UNKNOWN) || error.matches(Gio.DBusError, Gio.DBusError.NAME_HAS_NO_OWNER))
+                return [];
+            throw error;
+        }
+    },
+    // A device's properties, such as `Type`, `State` and `Percentage`.
+    async properties({path, cancellation}) {
+        let [properties] = await UPS.call({path, iface: 'org.freedesktop.DBus.Properties', method: 'GetAll',
+            parameters: new GLib.Variant('(s)', ['org.freedesktop.UPower.Device']), replyType: '(a{sv})', cancellation});
+        return properties;
+    },
+    read: ({source, cancellation}) => UPS.properties({path: source.id, cancellation}),
+    sensors: {
+        'state': {label: 'State', format: 'string', compute: ({reading}) => UPS.states[reading.value.State] ?? UPS.states[0]},
+        'percentage': {label: 'Percentage', format: 'percent', ...LOW_IS_BAD, compute: ({reading}) => reading.value.Percentage / 100},
+        // While charging, the time until full, else until empty. UPower gives 0 for a time it does not know.
+        'time-left': {
+            label: 'Time left',
+            format: 'runtime',
+            ...LOW_IS_BAD,
+            compute({reading}) {
+                let charging = reading.value.State == 1 || reading.value.State == 5;
+                let seconds = charging && reading.value.TimeToFull > 0 ? reading.value.TimeToFull : reading.value.TimeToEmpty;
+                return seconds > 0 ? seconds : undefined;
+            }
+        }
+    }
+};
+
 // Read through one nvidia-smi process, which writes a line per card at every update interval. Discovery adds the
 // sensors, with this definition's `compute` as theirs.
 const NVIDIA = {
@@ -813,6 +894,13 @@ function now() {
     return GLib.get_real_time() / 1000000;
 }
 
+// The name for a key, with a number from its second use on, such as "nvme2", so that two devices of the same name
+// do not share keys. `counts` holds how often each name was used so far.
+function numberedName(counts, name) {
+    counts.set(name, (counts.get(name) ?? 0) + 1);
+    return counts.get(name) == 1 ? name : name + counts.get(name);
+}
+
 // The collector: it finds the sensors, reads the shown ones and writes the catalog (docs/catalog-design.md).
 export class Sensors {
     constructor(settings, gettext) {
@@ -835,85 +923,49 @@ export class Sensors {
         this._discoveryCancellation = new Gio.Cancellable();
         // The programs discovery runs, which destroy() stops.
         this._commands = new Set();
+        // The cores as /proc/stat names them, "cpu0", "cpu1", from the latest discovery. Known also while their usage
+        // rows are not shown, since the process time and the per-core frequencies need them.
+        this._cores = [];
         // The read of the mount table under way, which every storage location's read waits for (STORAGE_SPACE).
         this._mountTableRead = null;
-        this.catalog = this._load();
-        // The timestamp of the latest run; _startRun gives every run a later one.
-        this._lastRun = Math.max(0, ...this.categories().map(([, category]) => category.discovered ?? 0));
+        this.catalog = this._buildCatalog();
+        this.reloadEnabled();
     }
 
-    // Reads the saved catalog. Category pins and the panel sensors' references are saved as keys and become the
-    // sensors here.
-    // Whether a category is switched on comes from the catalog settings.
-    _load() {
-        let saved = readCatalog(this._settings);
-        let catalogSettings = readCatalogSettings(this._settings);
-        let catalog = {};
+    // Builds the catalog from the `catalog` setting, with every category of `sensorCategories`.
+    _buildCatalog() {
+        let catalog = this._settings.get_value('catalog').recursiveUnpack();
         for (let name of Object.keys(sensorCategories)) {
-            let {categoryPin, sensors = [], ...category} = saved[name];
-            // A saved value is from an earlier session. `runtime` only means something while the extension runs.
-            for (let sensor of sensors)
+            // A category has no record before its first save.
+            let category = catalog[name] ??= {sensors: []};
+            category.runtime = {};
+            // A saved value is from an earlier session. A default panel sensor in the schema has no `category`.
+            for (let sensor of category.sensors)
                 Object.assign(sensor, {category: name, status: 'pending', runtime: {}});
-            catalog[name] = {
-                ...category,
-                enabled: catalogSettings[name].enabled,
-                runtime: {},
-                sensors,
-                categoryPin: sensors.find(sensor => sensor.key == categoryPin)
-            };
         }
-        // A remembered width is only used with steady widths.
-        let rememberWidths = this._settings.get_boolean('fixed-widths') && this._settings.get_boolean('remember-widths');
-        catalog.panel = {
-            sensors: saved.panel.sensors.map(({category, key, visible, reservedWidth}) => {
-                let sensors = catalog[category].sensors;
-                let sensor = sensors.find(candidate => candidate.key == key);
-                // A pinned sensor no run has found yet, such as a default pin, keeps its place; discovery fills it in by key.
-                if (!sensor) {
-                    sensor = {key, category, status: 'pending', runtime: {}};
-                    sensors.push(sensor);
-                }
-                return {sensor, visible, reservedWidth: rememberWidths ? reservedWidth : undefined, runtime: {}};
-            })
-        };
         return catalog;
     }
 
+    //TODO: rename to saveCatalog()
     save() {
-        let catalog = {};
-        // Objects are left out: `runtime`, and `categoryPin` and `sensors`, which are written below.
-        let plain = record => Object.fromEntries(Object.entries(record).filter(([, fieldValue]) => typeof fieldValue != 'object'));
-        // `enabled` is saved in the catalog settings, by the preferences window. A sensor's `category` is the list
-        // it is saved in.
-        for (let [name, category] of this.categories())
-            catalog[name] = {
-                ...plain(category),
-                enabled: undefined,
-                categoryPin: category.categoryPin?.key,
-                sensors: category.sensors.map(sensor => ({...plain(sensor), category: undefined}))
-            };
-        // A panel sensor's reference to its sensor is saved as that sensor's category and key.
-        catalog.panel = {
-            sensors: this.catalog.panel.sensors.map(({sensor, visible, reservedWidth}) =>
-                ({category: sensor.category, key: sensor.key, visible, reservedWidth}))
-        };
-        writeCatalog(this._settings, catalog);
+        // `runtime` only means something while the extension runs.
+        this._settings.set_value('catalog', toVariant(this.catalog, ['runtime']));
     }
 
     // Returns whether any switch changed.
     reloadEnabled() {
-        let catalogSettings = readCatalogSettings(this._settings);
+        let catalogSettings = this._settings.get_value('catalog-settings').recursiveUnpack();
         let changed = false;
         for (let [name, category] of this.categories()) {
-            if (category.enabled != catalogSettings[name].enabled) {
-                category.enabled = catalogSettings[name].enabled;
+            let enabled = catalogSettings[name]?.enabled ?? sensorCategories[name].enabled;
+            if (category.runtime.enabled != enabled) {
+                category.runtime.enabled = enabled;
                 changed = true;
             }
         }
         return changed;
     }
 
-    // Without the panel, whose panel sensors refer to the sensors of the other categories.
     categories() {
         let categories = [];
         for (let name of Object.keys(sensorCategories))
@@ -921,18 +973,36 @@ export class Sensors {
         return categories;
     }
 
-    hasPanelItem(panelSensor) {
-        let category = this.catalog[panelSensor.sensor.category];
-        return panelSensor.visible && category.enabled && sensorPresent(category, panelSensor.sensor);
+    // The sensors pinned to the top bar, in their order there.
+    panelSensors() {
+        return this.categories().flatMap(([, category]) => category.sensors).filter(sensor => sensor.panelPosition !== undefined)
+            .sort((sensor, other) => sensor.panelPosition - other.panelPosition);
     }
 
-    // A first pin goes to the end; an unpinned sensor keeps its panel sensor, and with it its place.
-    setPanelSensorVisible(sensor, visible) {
-        let panelSensor = this.catalog.panel.sensors.find(candidate => candidate.sensor == sensor);
-        if (panelSensor)
-            panelSensor.visible = visible;
-        else
-            this.catalog.panel.sensors.push({sensor, visible, runtime: {}});
+    hasPanelItem(sensor) {
+        let category = this.catalog[sensor.category];
+        return sensor.panelPosition !== undefined && category.runtime.enabled && sensorPresent(category, sensor);
+    }
+
+    // A pinned sensor goes to the end of the top bar, without room kept for its value yet (-1 is the text's own width).
+    pinToPanel(sensor, pinned) {
+        sensor.reservedWidth = -1;
+        let panelSensors = this.panelSensors().filter(other => other != sensor);
+        this._setPanel(pinned ? [...panelSensors, sensor] : panelSensors);
+    }
+
+    // Without `before`, to the end.
+    movePanelSensor(sensor, before = null) {
+        let panelSensors = this.panelSensors().filter(other => other != sensor);
+        panelSensors.splice(before === null ? panelSensors.length : panelSensors.indexOf(before), 0, sensor);
+        this._setPanel(panelSensors);
+    }
+
+    // Puts these sensors in the top bar, in this order, and takes the others out.
+    _setPanel(panelSensors) {
+        for (let sensor of this.panelSensors())
+            sensor.panelPosition = undefined;
+        panelSensors.forEach((sensor, position) => sensor.panelPosition = position);
         this.save();
     }
 
@@ -955,7 +1025,6 @@ export class Sensors {
         let category = this.catalog[categoryName];
         for (let candidate of category.sensors)
             candidate.pinnedToCategory = candidate == sensor || undefined;
-        category.categoryPin = this._chooseCategoryPin(categoryName);
         this.save();
         this.catalogChanged();
     }
@@ -963,14 +1032,6 @@ export class Sensors {
     setCategoryOrder(categoryNames) {
         for (let [position, name] of categoryNames.entries())
             this.catalog[name].position = position;
-        this.save();
-    }
-
-    // Without `beforePanelSensor`, to the end.
-    movePanelSensor(panelSensor, beforePanelSensor = null) {
-        let panelSensors = this.catalog.panel.sensors;
-        panelSensors.splice(panelSensors.indexOf(panelSensor), 1);
-        panelSensors.splice(beforePanelSensor === null ? panelSensors.length : panelSensors.indexOf(beforePanelSensor), 0, panelSensor);
         this.save();
     }
 
@@ -1022,17 +1083,6 @@ export class Sensors {
         return hardwareInterfaces;
     }
 
-    // As /proc/stat names them: "cpu0", "cpu1".
-    _cores() {
-        let processor = this.catalog.processor;
-        let cores = [];
-        for (let sensor of processor.sensors) {
-            if (sensor.core && sensor.core != 'cpu' && sensorPresent(processor, sensor))
-                cores.push(sensor.core);
-        }
-        return cores;
-    }
-
     // Works out which sources are read: those of what is on screen, and of all sensors an aggregate on screen is
     // computed over.
     _updateActiveSources() {
@@ -1040,7 +1090,8 @@ export class Sensors {
         let aggregatedCategories = new Set();
         if (!this.destroyed) {
             for (let [name, category] of this.categories()) {
-                let onScreen = sensor => (sensor.runtime.shown || (category.runtime.shown && sensor == category.categoryPin)) &&
+                let categoryPin = this.categoryPin(name);
+                let onScreen = sensor => (sensor.runtime.shown || (category.runtime.shown && sensor == categoryPin)) &&
                     sensorPresent(category, sensor);
                 if (category.sensors.some(sensor => sensor.aggregate && onScreen(sensor)))
                     aggregatedCategories.add(name);
@@ -1336,16 +1387,14 @@ export class Sensors {
         }
     }
 
-    // Always later than the last run, even when two runs start in the same second or the clock was set back.
-    _startRun() {
-        this._lastRun = Math.max(Math.floor(now()), this._lastRun + 1);
-        return this._lastRun;
-    }
-
-    // The catalog's sensor with this key that `run` has not registered yet: two devices can have the same key, such as
-    // two NVMe drives, and each takes one sensor, in the order they are found.
-    _unmatched(run, categoryName, key) {
-        return this.catalog[categoryName].sensors.find(sensor => sensor.key == key && sensor.discovered != run);
+    // Whether the file exists and may be read; a file only root may read is no fault.
+    async _readable(filePath) {
+        try {
+            return await this._optionalRead(filePath) !== null;
+        } catch (error) {
+            if (error.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.PERMISSION_DENIED)) return false;
+            throw error;
+        }
     }
 
     // Registers a sensor for the run: the catalog's one with its key, or a new one at the end of the category. `fields`
@@ -1353,7 +1402,7 @@ export class Sensors {
     // the definition's source; one without, such as an aggregate, has no source.
     _registerSensor(run, categoryName, fields, definition) {
         let {compute, ...catalogFields} = fields;
-        let sensor = this._unmatched(run, categoryName, catalogFields.key);
+        let sensor = this.catalog[categoryName].sensors.find(known => known.key == catalogFields.key);
         if (!sensor) {
             sensor = {status: 'pending', runtime: {}};
             this.catalog[categoryName].sensors.push(sensor);
@@ -1393,9 +1442,12 @@ export class Sensors {
         for (let id of this.activeSources.keys())
             this._cancelRead(this.sources.get(id));
         // What changes what discovery finds; a run during which it changed is repeated.
-        let configuration = () => JSON.stringify([this.catalog.gpu.enabled, ...[
+        let configuration = () => JSON.stringify([this.catalog.gpu.runtime.enabled, ...[
             'include-static-info',
             'include-static-gpu-info',
+            'use-processor-cpufreq',
+            'include-processor-cores',
+            'use-powercap',
             'include-public-ip',
             'storage-locations',
             'storage-monitor-volumes',
@@ -1404,13 +1456,15 @@ export class Sensors {
         // A category is complete when every step that feeds it succeeded.
         let steps = [
             ['system', ['memory', 'processor', 'system'], run => this._discoverSystem(run)],
-            ['hwmon', ['temperature', 'voltage', 'fan'], run => this._discoverHwmon(run)],
+            ['hwmon', ['temperature', 'voltage', 'fan', 'power'], run => this._discoverHwmon(run)],
+            ['powercap', ['power'], run => this._discoverPowercap(run)],
             ['network', ['network'], async run => {
                 let interfaces = SensorMath.parseNetwork(await this._read(NETWORK.id, this._discoveryCancellation));
                 this._discoverNetwork(run, interfaces, await this._findHardwareInterfaces(interfaces));
             }],
             ['storage', ['storage'], run => this._discoverStorage(run)],
             ['battery', ['battery'], run => this._discoverBattery(run)],
+            ['ups', ['battery'], run => this._discoverUps(run)],
             ['gpu', ['gpu', 'temperature'], run => this._discoverGpu(run)]
         ];
         let sensorCountBefore = this._sensorCount();
@@ -1418,7 +1472,7 @@ export class Sensors {
             let discoveredConfiguration;
             do {
                 discoveredConfiguration = configuration();
-                let run = this._startRun();
+                let run = now();
                 let incomplete = new Set();
                 await Promise.all(steps.map(async ([stepName, fedCategories, discover]) => {
                     try { await discover(run); }
@@ -1437,8 +1491,6 @@ export class Sensors {
                 this._discoverAggregates(run);
             } while (discoveredConfiguration != configuration());
             this._forget();
-            for (let [name, category] of this.categories())
-                category.categoryPin = this._chooseCategoryPin(name);
             if (this._sensorCount() != sensorCountBefore)
                 this.save();
             this.catalogChanged();
@@ -1453,12 +1505,12 @@ export class Sensors {
     // Drops the sensors no run has found for a year, except pinned ones, such as the interface of a past container.
     _forget() {
         let oldest = now() - 365 * 86400;
-        let inPanel = new Set(this.catalog.panel.sensors.map(panelSensor => panelSensor.sensor));
         for (let [, category] of this.categories())
-            category.sensors = category.sensors.filter(sensor => inPanel.has(sensor) || sensor.discovered >= oldest);
+            category.sensors = category.sensors.filter(sensor => sensor.panelPosition !== undefined || sensor.discovered >= oldest);
     }
 
-    _chooseCategoryPin(categoryName) {
+    // The sensor whose value the category header shows: the one the user pinned there, otherwise the category's rule.
+    categoryPin(categoryName) {
         let category = this.catalog[categoryName];
         let find = test => category.sensors.find(sensor => sensorPresent(category, sensor) && test(sensor));
         let withKey = key => find(sensor => sensor.key == key);
@@ -1480,6 +1532,9 @@ export class Sensors {
             case 'storage':
                 // The first location sorts first, which is "/" while "/" is monitored.
                 return find(sensor => sensor.field == 'free' && sensor.section == 1);
+            case 'power':
+                // The processor's package, where powercap gives it.
+                return withKey('powercap/package-0') ?? find(() => true);
             case 'gpu':
                 return find(sensor => sensor.field == 'utilization.gpu') ??
                     find(sensor => sensor.file?.endsWith('/gpu_busy_percent')) ?? withKey('refresh-rate');
@@ -1491,21 +1546,28 @@ export class Sensors {
     async _discoverSystem(run) {
         this._registerSensors(run, MEMORY);
         this._registerSensors(run, CPU_STAT);
-        let cores = SensorMath.parseCpuStat(await this._read(CPU_STAT.id, this._discoveryCancellation));
+        let stat = SensorMath.parseCpuStat(await this._read(CPU_STAT.id, this._discoveryCancellation));
         // `cpu` is the whole processor, CPU_STAT's own sensor.
-        for (let core of cores.keys()) {
-            if (core == 'cpu') continue;
-            this._registerSensor(run, 'processor', {
-                key: core,
-                label: this._gettext('Core %d').replace('%d', core.slice(3)),
-                format: 'percent',
-                core,
-                file: CPU_STAT.id,
-                compute: CPU_STAT.sensors.usage.compute
-            }, CPU_STAT);
+        this._cores = [...stat.keys()].filter(core => core != 'cpu');
+        // The usage of each core only with `include-processor-cores`.
+        if (this._settings.get_boolean('include-processor-cores')) {
+            for (let core of this._cores) {
+                this._registerSensor(run, 'processor', {
+                    key: core,
+                    label: this._gettext('Core %d').replace('%d', core.slice(3)),
+                    format: 'percent',
+                    core,
+                    file: CPU_STAT.id,
+                    compute: CPU_STAT.sensors.usage.compute
+                }, CPU_STAT);
+            }
         }
         let cpuInfo = await this._read(CPU_FREQUENCIES.id, this._discoveryCancellation);
-        this._registerSensors(run, /^cpu MHz\s*:/m.test(cpuInfo) ? CPU_FREQUENCIES : CPU_CORE_FREQUENCIES);
+        // /proc/cpuinfo is late on some machines. The cores' own files are read with `use-processor-cpufreq` where the
+        // machine has cpufreq, and where /proc/cpuinfo lists no frequencies.
+        let cpufreq = this._settings.get_boolean('use-processor-cpufreq') &&
+            await this._optionalRead('/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq') !== null;
+        this._registerSensors(run, cpufreq || !/^cpu MHz\s*:/m.test(cpuInfo) ? CPU_CORE_FREQUENCIES : CPU_FREQUENCIES);
         this._registerSensors(run, LOADAVG);
         this._registerSensors(run, OPEN_FILES);
         this._registerSensors(run, UPTIME);
@@ -1525,7 +1587,7 @@ export class Sensors {
     async _registerSensorWithHideZeros(run, categoryName, fields, definition, readInitialTemperature) {
         let initialTemperature;
         if (fields.format == 'temp' && this._settings.get_boolean('hide-zeros')) {
-            let known = this._unmatched(run, categoryName, fields.key);
+            let known = this.catalog[categoryName].sensors.find(sensor => sensor.key == fields.key);
             if (known && sensorPresent(this.catalog[categoryName], known))
                 initialTemperature = known.runtime.initialTemperature;
             if (initialTemperature === undefined)
@@ -1536,7 +1598,7 @@ export class Sensors {
         return true;
     }
 
-    // Temperatures, voltages and fans from /sys/class/hwmon, and the temperatures of the thermal zones hwmon lacks.
+    // Temperatures, voltages, fans and power from /sys/class/hwmon, and the temperatures of the thermal zones hwmon lacks.
     async _discoverHwmon(run) {
         let readFile = sensorFile => async () => {
             try {
@@ -1547,7 +1609,8 @@ export class Sensors {
                 return NaN;
             }
         };
-        let hwmonDeviceNames = new Set();
+        // The names of the devices found so far, with how often each was found.
+        let hwmonDeviceNames = new Map();
         let root = '/sys/class/hwmon/';
         for (let directory of await this._list(root, this._discoveryCancellation)) {
             let devicePath = root + directory;
@@ -1558,7 +1621,8 @@ export class Sensors {
                 deviceName = await this._optionalRead(devicePath + '/name');
             }
             if (deviceName === null) continue;
-            hwmonDeviceNames.add(deviceName);
+            // Several drives or processor packages each have a device of the same name.
+            let deviceKey = numberedName(hwmonDeviceNames, deviceName);
             // coretemp's temp1 names the CPU package, such as "Package id 0".
             let labelPrefix = deviceName;
             if (deviceName == 'coretemp')
@@ -1566,7 +1630,7 @@ export class Sensors {
             // drivetemp's only temperature belongs to a drive, which its model names apart from other drives.
             let driveModel = deviceName == 'drivetemp' ? await this._optionalRead(devicePath + '/device/model') : null;
             let files = await this._list(devicePath, this._discoveryCancellation);
-            // For the voltage's default pin (_chooseCategoryPin): 0 for a battery's, 2 for a USB supply's.
+            // For the voltage's default pin (categoryPin): 0 for a battery's, 2 for a USB supply's.
             let priority = 1;
             if (files.some(file => /^in\d+_input$/.test(file))) {
                 let powerSupplyType = await this._optionalRead(root + directory + '/device/type');
@@ -1576,10 +1640,15 @@ export class Sensors {
                     priority = 2;
             }
             for (let file of files) {
-                let match = file.match(/^(temp|in|fan)(\d+)_input$/);
+                let match = file.match(/^(temp|in|fan|power)(\d+)_input$/);
                 if (!match) continue;
-                // hwmon gives temperatures in millidegrees and voltages in millivolts.
-                let [categoryName, divisor] = {temp: ['temperature', 1000], in: ['voltage', 1000], fan: ['fan', 1]}[match[1]];
+                // hwmon gives temperatures in millidegrees, voltages in millivolts and power in microwatts.
+                let [categoryName, divisor] = {
+                    temp: ['temperature', 1000],
+                    in: ['voltage', 1000],
+                    fan: ['fan', 1],
+                    power: ['power', 1000000]
+                }[match[1]];
                 let input = match[1] + match[2];
                 let rawLabel = await this._optionalRead(devicePath + '/' + input + '_label');
                 if (rawLabel === null)
@@ -1597,7 +1666,7 @@ export class Sensors {
                 let inputFile = devicePath + '/' + file;
                 await this._registerSensorWithHideZeros(run, categoryName, {
                     // Not keyed by the hwmon directory, whose number can change at the next boot.
-                    key: deviceName + '/' + input,
+                    key: deviceKey + '/' + input,
                     label: (names[rawLabel] || rawLabel).replace('Package id', 'CPU'),
                     format: match[1],
                     file: inputFile,
@@ -1704,10 +1773,9 @@ export class Sensors {
         if (this._discovery || this.destroyed) return;
         let network = this.catalog.network;
         let sensorCountBefore = network.sensors.length;
-        let run = this._startRun();
+        let run = now();
         this._discoverNetwork(run, interfaces, hardwareInterfaces);
         network.discovered = run;
-        network.categoryPin = this._chooseCategoryPin('network');
         if (network.sensors.length != sensorCountBefore)
             this.save();
         this.catalogChanged();
@@ -1802,6 +1870,56 @@ export class Sensors {
         }
     }
 
+    // The UPSs that UPower knows. A key is the UPS's serial number, or its model, and the field: UPower numbers the
+    // object paths in the order it finds the devices.
+    async _discoverUps(run) {
+        // Two UPSs of one model without a serial number have keys of their own.
+        let names = new Map();
+        for (let path of await UPS.devices({cancellation: this._discoveryCancellation})) {
+            let properties = await UPS.properties({path, cancellation: this._discoveryCancellation});
+            if (properties.Type != UPS.type) continue;
+            let name = numberedName(names, properties.Serial || properties.Model || path.slice(path.lastIndexOf('/') + 1));
+            for (let [field, sensorFields] of Object.entries(UPS.sensors)) {
+                this._registerSensor(run, 'battery', {
+                    key: 'ups/' + name + '/' + field,
+                    ...sensorFields,
+                    field,
+                    heading: properties.Model || 'UPS'
+                }, {...UPS, id: path});
+            }
+        }
+    }
+
+    // The power draw of the powercap zones, with `use-powercap`. Since 2020 most kernels let only root read their energy
+    // counters, against the Platypus side channel, and there a zone gets no sensor. Zones of one name, such as
+    // intel-rapl:0 and intel-rapl-mmio:0, count the same energy, so only the first that can be read is taken.
+    async _discoverPowercap(run) {
+        if (!this._settings.get_boolean('use-powercap')) return;
+        let root = '/sys/class/powercap/';
+        let zones;
+        try {
+            zones = await this._list(root, this._discoveryCancellation);
+        } catch (error) {
+            // Without the directory, the machine has no powercap.
+            if (error.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.NOT_FOUND)) return;
+            throw error;
+        }
+        let names = new Set();
+        for (let zone of zones) {
+            let name = await this._optionalRead(root + zone + '/name');
+            let file = root + zone + '/energy_uj';
+            if (name === null || names.has(name) || !await this._readable(file)) continue;
+            names.add(name);
+            this._registerSensor(run, 'power', {
+                key: 'powercap/' + name,
+                label: POWERCAP_ENERGY.labels[name] ?? name.replace(/^package-(\d+)$/, 'Package $1'),
+                format: 'power',
+                file,
+                compute: POWERCAP_ENERGY.compute
+            }, {...POWERCAP_ENERGY, id: file});
+        }
+    }
+
     _discoverAggregates(run) {
         for (let [categoryName, format] of Object.entries(AGGREGATED)) {
             let category = this.catalog[categoryName];
@@ -1840,7 +1958,7 @@ export class Sensors {
     // NVIDIA cards through nvidia-smi, the others through /sys/class/drm. A key is the card's name and the field.
     async _discoverGpu(run) {
         // A switched-off category starts no nvidia-smi.
-        if (!this.catalog.gpu.enabled) return;
+        if (!this.catalog.gpu.runtime.enabled) return;
         let staticInfo = this._settings.get_boolean('include-static-gpu-info');
         let nvidiaCards = [];
         let nvidiaFields = ['uuid', 'name'];
@@ -1882,15 +2000,18 @@ export class Sensors {
         }
         let cardNumber = 0;
         let heading = () => this._gettext('GPU %d').replace('%d', cardNumber);
+        // Two cards of one model, or of one vendor, have keys of their own.
+        let cardNames = new Map();
 
         for (let parts of nvidiaCards) {
             cardNumber++;
             let uuid = parts[0];
             let cardName = parts[1];
+            let cardKey = numberedName(cardNames, cardName);
             let part = field => parts[nvidiaFields.indexOf(field)];
             if (staticInfo) {
                 this._registerConstant(run, 'gpu', {
-                    key: cardName + '/name',
+                    key: cardKey + '/name',
                     label: 'Vendor',
                     format: 'string',
                     heading: heading()
@@ -1898,7 +2019,7 @@ export class Sensors {
                 for (let [label, field, format] of nvidiaStaticFields) {
                     if (part(field) == 'N/A' || part(field) == '[N/A]') continue;
                     this._registerConstant(run, 'gpu', {
-                        key: cardName + '/' + field,
+                        key: cardKey + '/' + field,
                         label,
                         format,
                         heading: heading()
@@ -1908,7 +2029,7 @@ export class Sensors {
                 let width = part('pcie.link.width.max');
                 if (Number.isFinite(Number(generation)) && Number.isFinite(Number(width))) {
                     this._registerConstant(run, 'gpu', {
-                        key: cardName + '/pcie.link.max',
+                        key: cardKey + '/pcie.link.max',
                         label: 'Maximum Link Speed',
                         format: 'pcie',
                         heading: heading()
@@ -1935,7 +2056,7 @@ export class Sensors {
                 ['Average Power', 'power.draw.average', 'watt-gpu']
             ]) {
                 let registered = await this._registerSensorWithHideZeros(run, 'gpu', {
-                    key: cardName + '/' + field,
+                    key: cardKey + '/' + field,
                     label,
                     format,
                     heading: heading(),
@@ -1948,7 +2069,7 @@ export class Sensors {
                     hasTemperature = registered;
             }
             this._registerSensor(run, 'gpu', {
-                key: cardName + '/memory-usage',
+                key: cardKey + '/memory-usage',
                 label: 'Memory Usage',
                 format: 'percent',
                 heading: heading(),
@@ -1957,7 +2078,7 @@ export class Sensors {
                 compute: NVIDIA.compute
             }, NVIDIA);
             this._registerSensor(run, 'gpu', {
-                key: cardName + '/link-speed',
+                key: cardKey + '/link-speed',
                 label: 'Link Speed',
                 format: 'pcie',
                 heading: heading(),
@@ -1968,7 +2089,7 @@ export class Sensors {
             // Also among the temperatures, where it counts in their average.
             if (hasTemperature) {
                 this._registerSensor(run, 'temperature', {
-                    key: cardName + '/temperature.gpu',
+                    key: cardKey + '/temperature.gpu',
                     label: nvidiaCards.length > 1 ? heading() : 'GPU',
                     format: 'temp',
                     nvidia: uuid,
@@ -1980,6 +2101,7 @@ export class Sensors {
 
         for (let {devicePath, vendor, files} of otherCards) {
             cardNumber++;
+            let cardKey = numberedName(cardNames, vendor);
             if (staticInfo) {
                 let vendors = {
                     '0x1002': 'AMD',
@@ -1990,7 +2112,7 @@ export class Sensors {
                     '0x1234': 'QEMU'
                 };
                 this._registerConstant(run, 'gpu', {
-                    key: vendor + '/vendor',
+                    key: cardKey + '/vendor',
                     label: 'Vendor',
                     format: 'string',
                     heading: heading()
@@ -2004,7 +2126,7 @@ export class Sensors {
             ]) {
                 if (!files.includes(file)) continue;
                 this._registerSensor(run, 'gpu', {
-                    key: vendor + '/' + file,
+                    key: cardKey + '/' + file,
                     label,
                     format,
                     heading: heading(),

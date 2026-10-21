@@ -1,6 +1,7 @@
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import {devices, filesystems} from './fixtures/machine.js';
+import {toVariant} from '../helpers/storedCatalog.js';
 
 // The functions Machine stands behind, as they are before it is installed.
 const real = {
@@ -9,7 +10,9 @@ const real = {
     volumeMonitor: Gio.VolumeMonitor.get,
     monotonicTime: GLib.get_monotonic_time,
     timeoutAdd: GLib.timeout_add,
-    sourceRemove: GLib.Source.remove
+    sourceRemove: GLib.Source.remove,
+    busGet: Gio.bus_get,
+    busGetFinish: Gio.bus_get_finish
 };
 
 function notFound(path) {
@@ -17,7 +20,8 @@ function notFound(path) {
 }
 
 // The test double for the system that Sensors monitors: its /sys and /proc, the space of its filesystems, the mounts
-// of Gio.VolumeMonitor, the answers of the public IP services and the monotonic clock. It starts as the fixture's
+// of Gio.VolumeMonitor, the answers of the public IP services, UPower on the system bus with the devices in `upower`,
+// and the monotonic clock. It starts as the fixture's
 // `system`; the test changes it by plugging device groups of the fixture in and out, setting and removing files, and
 // failing or holding reads. Every other path goes to the real Gio.
 export class Machine {
@@ -40,6 +44,8 @@ export class Machine {
         this.asked = [];
         // The paths of the mounts that `Gio.VolumeMonitor` reports. A mount that has no path is null.
         this.volumes = [];
+        // The devices UPower knows, by object path, each with its properties as UPower gives them.
+        this.upower = {};
     }
 
     // Puts the machine in place of the system, for every caller in this interpreter. Only a test that runs in an
@@ -58,6 +64,16 @@ export class Machine {
             return this._lastTimer;
         };
         GLib.Source.remove = id => this._timers.delete(id);
+        // The system bus answers for UPower with the devices in `upower`, so that no test asks the real UPower.
+        Gio.bus_get = (busType, cancellable, callback) => callback(null, null);
+        Gio.bus_get_finish = () => ({
+            call: (name, path, iface, method, parameters, replyType, flags, timeout, cancellable, callback) => {
+                let answer = new GLib.Variant('(ao)', [Object.keys(this.upower)]);
+                if (method == 'GetAll')
+                    answer = GLib.Variant.new_tuple([toVariant(this.upower[path])]);
+                callback({call_finish: () => answer}, null);
+            }
+        });
     }
 
     uninstall() {
@@ -67,6 +83,8 @@ export class Machine {
         GLib.get_monotonic_time = real.monotonicTime;
         GLib.timeout_add = real.timeoutAdd;
         GLib.Source.remove = real.sourceRemove;
+        Gio.bus_get = real.busGet;
+        Gio.bus_get_finish = real.busGetFinish;
     }
 
     plug(name) {
