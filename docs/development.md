@@ -48,6 +48,7 @@ The constructor runs once, when the extension is loaded. It creates no GObjects,
 - GObject subclasses use `GObject.registerClass` with a unique `GTypeName`.
 - Every sensor icon comes from Vitals' own `icons/` folder, never from GNOME's icons.
 - Icons are `St.Icon` and `Gtk.Image`, never emoji. An icon is looked up by name in the user's icon theme, so that a theme can replace it. Vitals' own icons are named `vitals-…-symbolic` and lie in the folder of each icon style, which is searched last. The country icons in `icons/countries/` are drawn by `make country-icons`.
+- The `crop-icons` setting selects `CroppedIcon` or stock `St.Icon` through `PanelIconType` in `extension.js`. Cropping, its cache and lifecycle are confined to `croppedIcon.js`. Menu icons always use stock `St.Icon`.
 - Lines stay under about 200 characters, which is what the review page of extensions.gnome.org shows.
 - A new sensor goes into the definition of its source in `sensors.js`; a new source is a new definition there, with the discovery of its sensors.
 - Logging: a read that fails is logged with `console.debug`; `console.warn` and `console.error` are for faults. The journal is shared by the whole system, so messages are few.

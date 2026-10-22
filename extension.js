@@ -19,6 +19,7 @@ import {Extension, gettext as _} from 'resource:///org/gnome/shell/extensions/ex
 
 import * as Formatter from './formatter.js';
 import * as MenuItem from './menuItem.js';
+import {CroppedIcon} from './croppedIcon.js';
 import * as SensorCategories from './helpers/categories.js';
 import {sensorPresent} from './helpers/storedCatalog.js';
 
@@ -144,6 +145,7 @@ class VitalsMenuButton extends PanelMenu.Button {
             'changed::update-time', this._initializeTimer.bind(this),
             'changed::position-in-panel', this._positionInPanelChanged.bind(this),
             'changed::allow-panel-dragging', this._redrawPanelItems.bind(this),
+            'changed::crop-icons', this._redrawPanelItems.bind(this),
             'changed::allow-category-dragging', this._rebuildCategories.bind(this),
             'changed::category-order', this._rebuildCategories.bind(this),
             'changed::emphasize-values', () => {
@@ -482,13 +484,18 @@ class VitalsMenuButton extends PanelMenu.Button {
         );
     }
 
+    _createPanelIcon(params) {
+        const PanelIconType = this._settings.get_boolean('crop-icons') ? CroppedIcon : St.Icon;
+        return new PanelIconType(params);
+    }
+
     _createPlaceholderIcon() {
         this._placeholderIcon = new St.BoxLayout({
             style_class: 'vitals-panel-item',
             reactive: true,
         });
         this._menuLayout.add_child(this._placeholderIcon);
-        this._placeholderIcon.add_child(new St.Icon({
+        this._placeholderIcon.add_child(this._createPanelIcon({
             style_class: 'system-status-icon',
             reactive: true,
             gicon: this._gicon('system')
@@ -512,7 +519,7 @@ class VitalsMenuButton extends PanelMenu.Button {
 
         let icon = null;
         if (!this._settings.get_boolean('hide-icons')) {
-            icon = new St.Icon({
+            icon = this._createPanelIcon({
                 style_class: 'system-status-icon',
                 opacity: PANEL_ICON_OPACITY[emphasizeValues],
                 reactive: true,
@@ -547,9 +554,16 @@ class VitalsMenuButton extends PanelMenu.Button {
 
         // The item starts with the value its sensor has, so a pin does not flash "…" or uncoloured text.
         let formatted = this._formatted(sensor.category, sensor);
-        let value = new St.Label({ y_expand: true, y_align: Clutter.ActorAlign.CENTER });
-        // A value is never shortened with "…" (0 is the text engine's "do not shorten"): it gets the width it needs.
-        value.clutter_text.ellipsize = 0;
+        let value = new St.BoxLayout({ y_expand: true, y_align: Clutter.ActorAlign.CENTER });
+        value.add_child(new St.Label({ y_align: Clutter.ActorAlign.CENTER }));
+        value.add_child(new St.Label({
+            style_class: 'vitals-panel-unit',
+            opacity: emphasizeValues ? Math.round(255 * 0.67) : 255,
+            y_align: Clutter.ActorAlign.CENTER
+        }));
+        // Neither part is shortened with "…" (0 is the text engine's "do not shorten").
+        for (let label of value.get_children())
+            label.clutter_text.ellipsize = 0;
         value.style = formatted.style || null;
         this._panelItems.set(sensor, {item, icon, value});
         // The value is in the item before it gets its text: a text is measured in the font the item gives it.
@@ -559,17 +573,10 @@ class VitalsMenuButton extends PanelMenu.Button {
         this._updateSteadyWidth(sensor, value);
     }
 
-    // Writes a top-bar value. With the "emphasize values" option the unit is smaller, thinner and lighter than the
-    // number. It is marked inside the one text, so the text engine keeps both on one line of writing.
-    _setPanelText(value, {text, unit}) {
-        let escaped = part => GLib.markup_escape_text(part, -1);
-        let markup = unit && this._settings.get_boolean('emphasize-values')
-            ? escaped(text.slice(0, -unit.length)) + '<span size="85%" weight="normal" alpha="67%">' + escaped(unit) + '</span>'
-            : escaped(text);
-        // Set twice: after the first time, the Shell's text actor reports the width of the new text with the marks
-        // of the text before it, and keeps doing so until the text is set again (seen in GNOME Shell 50.5).
-        value.clutter_text.set_markup(markup);
-        value.clutter_text.set_markup(markup);
+    _setPanelText(value, {text, unit = ''}) {
+        value.get_first_child().text = unit ? text.slice(0, -unit.length) : text;
+        // The formatter's leading space stays with the unit, so it follows the unit's font size.
+        value.get_last_child().text = unit;
     }
 
     // Measures the text of a top-bar value and, with steady widths, widens the value to its widest text so far, and
@@ -581,7 +588,7 @@ class VitalsMenuButton extends PanelMenu.Button {
         if (value.get_stage()) {
             // The width the text needs, whatever width is set on the value. It has the theme's font once it is styled.
             value.ensure_style();
-            let textWidth = value.clutter_text.get_preferred_width(-1)[1];
+            let textWidth = value.get_children().reduce((width, label) => width + label.get_preferred_width(-1)[1], 0);
             let now = this._clock();
             // The text has not filled the room for a minute.
             let reservedWidthIsUnused = now - sensor.runtime.reservedWidthLastFilled >= WIDTH_MEMORY_SECONDS;
@@ -1001,7 +1008,7 @@ class VitalsMenuButton extends PanelMenu.Button {
             let gicon = this._gicon(sensor.category, sensor);
             if (icon && icon.gicon != gicon) icon.gicon = gicon;
             item.visible = sensor.status != 'unavailable';
-            if (value.text != formatted.text) this._setPanelText(value, formatted);
+            if (value.get_children().map(label => label.text).join('') != formatted.text) this._setPanelText(value, formatted);
             if (value.style != formatted.style) value.style = formatted.style;
             this._updateSteadyWidth(sensor, value);
         }

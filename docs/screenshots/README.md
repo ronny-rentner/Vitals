@@ -8,6 +8,7 @@ By default, the top bar shows memory usage, system load and download speed. For 
 |---|---|
 | Default settings | ![](top-bar.png) ![](top-bar-light.png) |
 | Top Bar › **Emphasize values** disabled. When enabled, icons and units are drawn lighter and smaller than the numbers. | ![](top-bar-plain.png) ![](top-bar-plain-light.png) |
+| Top Bar › **Crop icons** enabled. Transparent borders are removed while preserving each icon's aspect ratio. | ![](top-bar-cropped-icons.png) ![](top-bar-cropped-icons-light.png) |
 | General › **Icon style** set to GNOME. | ![](top-bar-gnome-icons.png) ![](top-bar-gnome-icons-light.png) |
 | Top Bar › **Hide icons** enabled. The icons in the menu stay. | ![](top-bar-no-icons.png) ![](top-bar-no-icons-light.png) |
 | General › **Use higher precision** enabled. Values have one more decimal place, and uptimes include seconds. Shown: battery charge, battery power rate, processor frequency and uptime. | ![](top-bar-precision.png) ![](top-bar-precision-light.png) |

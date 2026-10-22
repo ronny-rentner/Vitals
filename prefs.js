@@ -67,6 +67,7 @@ export default class VitalsPrefs extends ExtensionPreferences {
                 this._switchRow('remember-widths', _('Remember widths'),
                     _('With steady widths, each value starts with the room it had when Vitals was last switched off.')),
                 this._switchRow('emphasize-values', _('Emphasize values'), _('Draw icons and units lighter and smaller than the numbers.')),
+                this._switchRow('crop-icons', _('Crop icons'), _('Remove transparent borders while preserving each icon’s aspect ratio.')),
                 this._switchRow('hide-icons', _('Hide icons'), _('The icons in the menu stay.'))));
 
         this._page('menu', _('Menu'), 'open-menu-symbolic',

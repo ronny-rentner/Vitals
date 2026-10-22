@@ -1,5 +1,5 @@
 UUID := Vitals@CoreCoding.com
-EXTENSION_FILES := extension.js metadata.json prefs.js stylesheet.css sensors.js formatter.js menuItem.js helpers icons locale schemas
+EXTENSION_FILES := extension.js metadata.json prefs.js stylesheet.css sensors.js formatter.js menuItem.js croppedIcon.js helpers icons locale schemas
 ZIP := vitals.zip
 
 # The scale of the screen, a whole number, and of the text: `make test-shell SCALE=2 TEXT_SCALE=1.25`.

@@ -147,7 +147,15 @@ msgstr ""
 msgid "Draw icons and units lighter and smaller than the numbers."
 msgstr ""
 
-#: prefs.js:66
+#: prefs.js:70
+msgid "Crop icons"
+msgstr ""
+
+#: prefs.js:70
+msgid "Remove transparent borders while preserving each icon’s aspect ratio."
+msgstr ""
+
+#: prefs.js:71
 msgid "Hide icons"
 msgstr ""
 

@@ -56,9 +56,10 @@ The rules for its look were decided on 2026-10-11. The values themselves are in 
 
 - A distance is a fixed value in the stylesheet, set in one place: the `spacing` of the box whose children it separates. A user who wants another distance overrides that one rule. Nothing else adds to a distance, so the margin and padding that the Shell's theme gives a status icon are taken off.
 - Nothing about a text or an actor is measured to place it. Code that measured where the glyphs are drawn gave uneven distances three times.
+- With `crop-icons` on (on by default), top-bar icons crop transparent borders from the loaded image, preserving its scale and aspect ratio. The crop is cached per loaded image; GNOME handles loading, recolouring, shadows and layout. Menu icons keep GNOME's default sizing.
 - There is no special case: hidden icons get the same distances, and there is no margin per icon.
 - A class of the Shell is not put on something for a side effect; the battery's class `power-status` on every sensor was such a case.
-- A value is one label, with the unit marked inside its text for the "emphasize values" option. Only inside one text do two sizes stand on one line of writing: the Shell's boxes line their children up by edges and know no baseline.
+- A top-bar value and its unit are separate labels, vertically centred by the Shell's box layout. The unit keeps the formatter's leading space, scaled with its font by the "emphasize values" option.
 - The stylesheet does not set `tnum`: the Shell's theme sets it on the whole top bar.
 
 The `emphasize-values` option (on by default) is the part of the look that is a matter of taste: icons and units lighter and smaller than the numbers.

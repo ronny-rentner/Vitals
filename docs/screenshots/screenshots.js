@@ -173,6 +173,7 @@ export async function run() {
         await Scripting.sleep(500);
         await topBar('top-bar' + style);
         await topBar('top-bar-plain' + style, {'emphasize-values': false});
+        await topBar('top-bar-cropped-icons' + style, {'crop-icons': true});
         await topBar('top-bar-gnome-icons' + style, {'icon-style': 1});
         await topBar('top-bar-no-icons' + style, {'hide-icons': true});
         await topBarWith(precise, 'top-bar-precision' + style, {'use-higher-precision': true});

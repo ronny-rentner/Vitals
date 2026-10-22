@@ -9,6 +9,7 @@ import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import * as Scripting from 'resource:///org/gnome/shell/ui/scripting.js';
 import {equal} from './harness.js';
 import {sensorCategories} from '../helpers/categories.js';
+import {run as testCroppedIcon} from './croppedIcon.test.js';
 
 const UUID = 'Vitals@CoreCoding.com';
 
@@ -22,7 +23,7 @@ function step(name, run) {
 
 async function waitFor(predicate, message) {
     let deadline = GLib.get_monotonic_time() + 10000000;
-    while (!predicate()) {
+    while (!await predicate()) {
         if (GLib.get_monotonic_time() > deadline)
             throw new Error('Timed out: ' + message);
         await Scripting.sleep(50);
@@ -125,12 +126,12 @@ async function pressKey(keyval) {
 
 // The texts of the values in the top bar, from left to right.
 function topBarTexts() {
-    return labels(button).map(label => label.text);
+    return topBarItems().map(item => labels(item).map(label => label.text).join(''));
 }
 
 // The items in the top bar, each an icon and its value.
 function topBarItems() {
-    return labels(button).map(label => label.get_parent());
+    return onScreen(button, actor => actor instanceof St.BoxLayout && actor.has_style_class_name('vitals-panel-item') && labels(actor).length > 0);
 }
 
 async function openMenu() {
@@ -182,6 +183,11 @@ async function heightsWhile(actor, act) {
 step('the top bar shows the sensors a new user starts with, and their values once they are read', async () => {
     await waitFor(() => topBarTexts().length == 3 && !topBarTexts().includes('…'), 'three values');
     equal(topBarTexts()[0].endsWith('%'), true, 'the memory usage first: ' + topBarTexts());
+});
+
+step('cropped icons preserve their rectangular viewport and GNOME recolouring through reloads', async () => {
+    let {CroppedIcon} = await import(Main.extensionManager.lookup(UUID).dir.get_uri() + '/croppedIcon.js');
+    await testCroppedIcon(CroppedIcon, waitFor);
 });
 
 step('a click on the top bar opens the menu, with the categories in alphabetical order and a value in each category header', async () => {
@@ -277,19 +283,26 @@ step('the menu opens under the pointer, or under the middle of the top bar\'s se
 step('with emphasized values the icons are lighter and the units are set off; without, everything is as strong', async () => {
     let look = () => {
         // The memory usage, whose value has a unit.
-        let item = topBarItems().find(candidate => labels(candidate)[0].text.endsWith('%'));
+        let item = topBarItems().find(candidate => labels(candidate).some(label => label.text.endsWith('%')));
         let icon = item.get_first_child();
+        let [number, unit] = labels(item);
+        equal(Math.abs(middle(number)[1] - middle(unit)[1]) <= 1, true, 'value and unit are vertically centred');
         return {
             iconOpacity: icon.opacity, iconSize: icon.get_theme_node().get_length('icon-size'),
-            unitMarked: /weight/.test(labels(item)[0].clutter_text.get_layout().get_attributes().to_string())
+            unitOpacity: unit.opacity,
+            numberFont: number.get_theme_node().get_font(), unitFont: unit.get_theme_node().get_font()
         };
     };
     let emphasized = look();
-    equal(emphasized.iconOpacity < 255 && emphasized.unitMarked, true, 'by default');
+    equal(emphasized.iconOpacity < 255 && emphasized.unitOpacity < 255, true, 'icons and units are lighter by default');
+    equal(emphasized.unitFont.get_size() < emphasized.numberFont.get_size(), true, 'the unit is smaller');
+    equal(emphasized.unitFont.get_weight() < emphasized.numberFont.get_weight(), true, 'the unit is thinner');
     settings.set_boolean('emphasize-values', false);
     await Scripting.sleep(100);
     let plain = look();
-    equal(plain.iconOpacity == 255 && !plain.unitMarked, true, 'with the option off');
+    equal(plain.iconOpacity == 255 && plain.unitOpacity == 255, true, 'with the option off');
+    equal(plain.unitFont.get_size(), plain.numberFont.get_size(), 'the same font size');
+    equal(plain.unitFont.get_weight(), plain.numberFont.get_weight(), 'the same font weight');
     equal(plain.iconSize > emphasized.iconSize, true, 'and the icon has the size of the Shell\'s status icons');
     settings.reset('emphasize-values');
 });

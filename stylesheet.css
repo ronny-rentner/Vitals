@@ -2,10 +2,11 @@
    icon a margin and a padding, which would add to both. The padding is the room at both ends that the Shell's own
    buttons have inside the button's padding. */
 .vitals-panel-sensors { spacing: 10px; padding: 0 3px; }
-.vitals-panel-item { spacing: 4px; }
+.vitals-panel-item { spacing: 5px; }
 #panel .panel-button .vitals-panel-item > .system-status-icon { margin: 0; padding: 0; }
 /* "Emphasize values": the icon at 80 % of the Shell's size (1.091em). */
 #panel .panel-button .vitals-panel-item-emphasized > .system-status-icon { icon-size: 0.873em; }
+.vitals-panel-item-emphasized .vitals-panel-unit { font-size: 85%; font-weight: normal; }
 /* The theme's .button gives the round buttons their background and their hover and focus look. */
 .vitals-button-action { -st-icon-style: symbolic; border-radius: 32px; margin: 0px; min-height: 22px; min-width: 22px; padding: 10px; font-size: 100%; }
 .vitals-button-action > StIcon { icon-size: 16px; }

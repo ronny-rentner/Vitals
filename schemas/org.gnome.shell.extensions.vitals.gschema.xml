@@ -138,6 +138,11 @@
       <summary>Slide menu categories open and shut</summary>
       <description>Slide a category of the menu open and shut. Off opens and closes it at once.</description>
     </key>
+    <key type="b" name="crop-icons">
+      <default>true</default>
+      <summary>Crop icons in top bar</summary>
+      <description>Remove transparent borders while preserving each icon’s aspect ratio.</description>
+    </key>
     <key type="b" name="hide-icons">
       <default>false</default>
       <summary>Hide icons in top bar</summary>
