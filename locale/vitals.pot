@@ -1,752 +1,1103 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the Vitals package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
 #, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: \n"
-"POT-Creation-Date: 2023-10-22 21:04+0200\n"
-"PO-Revision-Date: \n"
-"Last-Translator: Chris Monahan <cmonahan@corecoding.com>\n"
-"Language-Team: \n"
-"Language: en\n"
+"Project-Id-Version: Vitals\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-30 12:35+0100\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Plural-Forms: nplurals=2; plural=(n != 1);\n"
-"POT-Revision-Date: 2018-12-29 10:26+0100\n"
-"X-Generator: Poedit 3.4\n"
-"X-Poedit-Basepath: ..\n"
-"X-Poedit-KeywordsList: _returnValue:2\n"
-"X-Poedit-SearchPath-0: values.js\n"
-"X-Poedit-SearchPath-1: sensors.js\n"
-"X-Poedit-SearchPath-2: prefs.js\n"
-"X-Poedit-SearchPath-3: menuItem.js\n"
-"X-Poedit-SearchPath-4: extension.js\n"
-"X-Poedit-SearchPath-5: schemas/org.gnome.shell.extensions."
-"vitals.gschema.xml\n"
-"X-Poedit-SearchPath-6: prefs.ui\n"
 
-#: extension.js:109
-msgid "Batteries"
-msgstr ""
-
-#: extension.js:133
-msgid "No Data"
-msgstr ""
-
-#: extension.js:159
+#: extension.js:213
 msgid "Refresh"
 msgstr ""
 
-#: extension.js:174
+#: extension.js:220
 msgid "System Monitor"
 msgstr ""
 
-#: extension.js:182 prefs.js:106
+#: extension.js:228
 msgid "Preferences"
 msgstr ""
 
-#: prefs.ui:42
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:81
-msgid "Include public IP address"
+#: extension.js:237 extension.js:242
+msgid "Show hidden sensors"
 msgstr ""
 
-#: prefs.ui:70
-msgid "Format"
+#: extension.js:242
+msgid "Leave out hidden sensors"
 msgstr ""
 
-#: prefs.ui:78
-msgid "Bytes"
+#: extension.js:825
+msgid "Pin to top bar"
 msgstr ""
 
-#: prefs.ui:79
-msgid "Bits"
+#: extension.js:832
+msgid "Pin to category"
 msgstr ""
 
-#: prefs.ui:121
+#: extension.js:834
+msgid "Rename"
+msgstr ""
+
+#: extension.js:837
+msgid "Hide"
+msgstr ""
+
+#: prefs.js:34 prefs.js:49
 msgid "General"
 msgstr ""
 
-#: prefs.ui:149
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:11
-msgid "Seconds between updates"
+#: prefs.js:38
+msgid "Vitals"
 msgstr ""
 
-#: prefs.ui:184
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:16
-msgid "Position in panel"
-msgstr ""
-
-#: prefs.ui:193
-msgid "Left"
-msgstr ""
-
-#: prefs.ui:194
-msgid "Center"
-msgstr ""
-
-#: prefs.ui:195
-msgid "Right"
-msgstr ""
-
-#: prefs.ui:196
-msgid "Far Left"
-msgstr ""
-
-#: prefs.ui:197
-msgid "Far Right"
-msgstr ""
-
-#: prefs.ui:220
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:21
+#: prefs.js:52
 msgid "Use higher precision"
 msgstr ""
 
-#: prefs.ui:247
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:26
-msgid "Alphabetize sensors"
+#: prefs.js:52
+msgid "One more decimal place, and seconds in uptimes."
 msgstr ""
 
-#: prefs.ui:274
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:31
-msgid "Hide zero values"
+#: prefs.js:53
+msgid "Icon Style"
 msgstr ""
 
-#: prefs.ui:301
-msgid "Use fixed widths"
-msgstr ""
-
-#: prefs.ui:328
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:171
-msgid "Hide icons in top bar"
-msgstr ""
-
-#: prefs.ui:355
-msgid "Menu always centered"
-msgstr ""
-
-#: prefs.ui:379
+#: prefs.js:55
 msgid "About"
 msgstr ""
 
-#: prefs.ui:394
+#: prefs.js:56
 msgid ""
-"Feature requests or bugs? Please visit <a href=\"https://github."
-"com/corecoding/Vitals/issues\">GitHub</a>. No warranty, "
-"expressed or implied. <a href=\"https://corecoding.com/donate."
-"php\">Donate</a> if you found this useful."
+"Feature requests or bugs? Please visit <a href=\"https://github.com/"
+"corecoding/Vitals/issues\">GitHub</a>. No warranty, expressed or implied. <a "
+"href=\"https://corecoding.com/donate.php\">Donate</a> if you found this "
+"useful."
 msgstr ""
 
-#: prefs.ui:421
+#: prefs.js:59
+msgid "Top Bar"
+msgstr ""
+
+#: prefs.js:60
+msgid "Placement"
+msgstr ""
+
+#: prefs.js:61
+msgid "Position"
+msgstr ""
+
+#: prefs.js:61
+msgid "Far left and far right are the outer ends of the bar."
+msgstr ""
+
+#: prefs.js:62
+msgid "Far left"
+msgstr ""
+
+#: prefs.js:62
+msgid "Left"
+msgstr ""
+
+#: prefs.js:62
+msgid "Center"
+msgstr ""
+
+#: prefs.js:62
+msgid "Right"
+msgstr ""
+
+#: prefs.js:62
+msgid "Far right"
+msgstr ""
+
+#: prefs.js:63
+msgid "Reorder sensors by drag and drop"
+msgstr ""
+
+#: prefs.js:64
+msgid "Appearance"
+msgstr ""
+
+#: prefs.js:65
+msgid "Steady widths"
+msgstr ""
+
+#: prefs.js:66
+msgid ""
+"Keep room for a value’s widest text, so its neighbours do not jump. The room "
+"is given back after a minute."
+msgstr ""
+
+#: prefs.js:67
+msgid "Remember widths"
+msgstr ""
+
+#: prefs.js:68
+msgid ""
+"With steady widths, each value starts with the room it had when Vitals was "
+"last switched off."
+msgstr ""
+
+#: prefs.js:69
+msgid "Emphasize values"
+msgstr ""
+
+#: prefs.js:69
+msgid "Draw icons and units lighter and smaller than the numbers."
+msgstr ""
+
+#: prefs.js:70
+msgid "Crop icons"
+msgstr ""
+
+#: prefs.js:70
+msgid "Remove transparent borders while preserving each icon’s aspect ratio."
+msgstr ""
+
+#: prefs.js:71
+msgid "Hide icons"
+msgstr ""
+
+#: prefs.js:71
+msgid "The icons in the menu stay."
+msgstr ""
+
+#: prefs.js:73
+msgid "Menu"
+msgstr ""
+
+#: prefs.js:75
+msgid "Open centered under the sensors"
+msgstr ""
+
+#: prefs.js:75
+msgid "Otherwise the menu opens centered under the pointer."
+msgstr ""
+
+#: prefs.js:76
+msgid "System monitor command"
+msgstr ""
+
+#: prefs.js:77
+msgid ""
+"The program that the System Monitor button at the bottom of the menu starts."
+msgstr ""
+
+#: prefs.js:78
+msgid "Categories"
+msgstr ""
+
+#: prefs.js:79
+msgid "Order"
+msgstr ""
+
+#: prefs.js:79
+msgid "Manual is the order given by dragging categories in the menu."
+msgstr ""
+
+#: prefs.js:80
+msgid "Alphabetical"
+msgstr ""
+
+#: prefs.js:80
+msgid "Manual"
+msgstr ""
+
+#: prefs.js:82
+msgid "Reorder by drag and drop"
+msgstr ""
+
+#: prefs.js:82
+msgid "Only in the manual order."
+msgstr ""
+
+#: prefs.js:83
+msgid "Slide open and shut"
+msgstr ""
+
+#: prefs.js:84 prefs.js:439
 msgid "Sensors"
 msgstr ""
 
-#: prefs.ui:449
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:36
+#: prefs.js:85
+msgid "Show average, minimum and maximum"
+msgstr ""
+
+#: prefs.js:86
+msgid "In the temperature and fan categories, below the sensors."
+msgstr ""
+
+#: prefs.js:88
 msgid "Monitor temperature"
 msgstr ""
 
-#: prefs.ui:500
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:46
-msgid "Monitor voltage"
-msgstr ""
-
-#: prefs.ui:528
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:51
-msgid "Monitor fan"
-msgstr ""
-
-#: prefs.ui:556
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:56
-msgid "Monitor memory"
-msgstr ""
-
-#: prefs.ui:607
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:61
-msgid "Monitor processor"
-msgstr ""
-
-#: prefs.ui:658
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:66
-msgid "Monitor system"
-msgstr ""
-
-#: prefs.ui:709
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:76
-msgid "Monitor network"
-msgstr ""
-
-#: prefs.ui:760
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:71
-msgid "Monitor storage"
-msgstr ""
-
-#: prefs.ui:811
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:96
-msgid "Monitor battery"
-msgstr ""
-
-#: prefs.ui:890
-msgid "Path"
-msgstr ""
-
-#: prefs.ui:922 prefs.ui:1031
-msgid "Measurement"
-msgstr ""
-
-#: prefs.ui:930 prefs.ui:1039
-msgid "Binary"
-msgstr ""
-
-#: prefs.ui:931 prefs.ui:1040
-msgid "Decimal"
-msgstr ""
-
-#: prefs.ui:976
+#: prefs.js:89 prefs.js:500
 msgid "Unit"
 msgstr ""
 
-#: prefs.ui:985
+#: prefs.js:89
 msgid "°C"
 msgstr ""
 
-#: prefs.ui:986
+#: prefs.js:89
 msgid "°F"
 msgstr ""
 
-#: prefs.ui:1086
-msgid "Monitor BAT0"
+#: prefs.js:90
+msgid "Skip sensors that read zero"
 msgstr ""
 
-#: prefs.ui:1116
-msgid "Monitor BAT1"
-msgstr ""
-
-#: prefs.ui:1146
-msgid "Monitor BAT2"
-msgstr ""
-
-#: prefs.ui:1176
-msgid "Monitor CMB0"
-msgstr ""
-
-#: prefs.ui:1206
-msgid "Monitor macsmc-battery"
-msgstr ""
-
-#: prefs.ui:1247
-msgid "Calculate Combined Values"
-msgstr ""
-
-#: prefs.ui:1277
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:141
-msgid "Include BAT0"
-msgstr ""
-
-#: prefs.ui:1307
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:146
-msgid "Include BAT1"
-msgstr ""
-
-#: prefs.ui:1337
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:151
-msgid "Include BAT2"
-msgstr ""
-
-#: prefs.ui:1367
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:156
-msgid "Include CMB0"
-msgstr ""
-
-#: prefs.ui:1397
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:161
-msgid "Include macsmc-battery"
-msgstr ""
-
-#: prefs.ui:1446
-msgid "Monitor command"
-msgstr ""
-
-#: prefs.ui:1498
-msgid "Include static info"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:6
-msgid "Sensors to show in panel"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:7
-msgid "List of sensors to be shown in the panel"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:12
-msgid "Delay between sensor polling"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:17
-msgid "Position in Panel ('left', 'center', 'right')"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:22
-msgid "Show one extra digit after decimal"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:27
-msgid "Display sensors in alphabetical order"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:32
-msgid "Hide data from sensors that are invalid"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:37
-msgid "Display temperature of various components"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:41
-msgid "Temperature unit"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:42
+#: prefs.js:91
 msgid ""
-"The unit ('centigrade' or 'fahrenheit') the extension should "
-"display the temperature in"
+"A sensor that reads zero when it is found is left out. One that reads zero "
+"later stays."
 msgstr ""
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:47
-msgid "Display voltage of various components"
+#: prefs.js:93
+msgid "Monitor voltage"
 msgstr ""
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:52
-msgid "Display fan rotation per minute"
+#: prefs.js:95
+msgid "Monitor fan"
 msgstr ""
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:57
-msgid "Display memory information"
+#: prefs.js:97
+msgid "Monitor power"
 msgstr ""
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:62
-msgid "Display processor information"
+#: prefs.js:98
+msgid "Read powercap"
 msgstr ""
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:67
-msgid "Display system information"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:72
-msgid "Display storage information"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:77
-msgid "Display network information"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:82
-msgid "Display public IP address of internet connection"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:86
-msgid "Network speed format"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:87
-msgid "Should speed display in bits or bytes?"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:91
-msgid "Storage path"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:92
-msgid "Storage path for monitoring"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:97
-msgid "Monitor battery health"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:101
-msgid "Memory measurement"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:102
-msgid "Can use gigabyte or gibibyte for memory"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:106
-msgid "Storage measurement"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:107
-msgid "Can use gigabyte or gibibyte for storage"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:111
-msgid "Display battery BAT0"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:112
-msgid "Should battery 'BAT0' be displayed?"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:116
-msgid "Display battery BAT1"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:117
-msgid "Should battery 'BAT1' be displayed?"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:121
-msgid "Display battery BAT2"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:122
-msgid "Should battery 'BAT2' be displayed?"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:126
-msgid "Display battery CMB0"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:127
-msgid "Should battery 'CMB0' be displayed?"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:131
-msgid "Display battery macsmc-battery"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:132
-msgid "Should battery 'macsmc-battery' be displayed?"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:136
-msgid "Display combined battery data"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:137
-msgid "Display combined values for selected batteries"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:142
-msgid "Include 'BAT0' when calculating combined Battery"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:147
-msgid "Include 'BAT1' when calculating combined Battery"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:152
-msgid "Include 'BAT2' when calculating combined Battery"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:157
-msgid "Include 'CMB0' when calculating combined Battery"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:162
-msgid "Include 'macsmc-battery' when calculating combined Battery"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:166
-msgid "Use fixed widths in top bar"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:167
-msgid "Keep sensors in top bar from jumping around"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:172
-msgid "Keep top bar clean by only showing sensor values"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:176
-msgid "Make the menu centered"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:177
+#: prefs.js:99
 msgid ""
-"Center the menu to the icon regardless of the position in the "
-"panel"
+"The power draw of the processor, such as Intel RAPL. Most systems let only "
+"root read it."
 msgstr ""
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:181
-msgid "System Monitor command"
+#: prefs.js:101
+msgid "Monitor memory"
 msgstr ""
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:182
-msgid "The command run when system monitor button is clicked"
+#: prefs.js:102
+msgid "Show details"
 msgstr ""
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:186
-msgid "Include processor static information"
+#: prefs.js:103
+msgid "Additional readings in the menu; pinned readings stay in the top bar."
 msgstr ""
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:187
-msgid "Display processor static information that doesn't change"
+#: prefs.js:104 prefs.js:128
+msgid "Units"
 msgstr ""
 
-#: sensors.js:65
-msgid "Public IP"
+#: prefs.js:106 prefs.js:130
+msgid "Binary"
 msgstr ""
 
-#: sensors.js:133 sensors.js:181
-msgid "Usage"
+#: prefs.js:106 prefs.js:130
+msgid "KiB, MiB, GiB"
 msgstr ""
 
-#: sensors.js:134
-msgid "memory"
+#: prefs.js:106
+msgid "15.5 GiB"
 msgstr ""
 
-#: sensors.js:135
-msgid "Physical"
+#: prefs.js:107 prefs.js:131
+msgid "Decimal"
 msgstr ""
 
-#: sensors.js:136
-msgid "Available"
+#: prefs.js:107 prefs.js:131
+msgid "kB, MB, GB"
 msgstr ""
 
-#: sensors.js:137
-msgid "Allocated"
+#: prefs.js:107
+msgid "16.6 GB"
 msgstr ""
 
-#: sensors.js:138
-msgid "Cached"
+#: prefs.js:109
+msgid "Monitor processor"
 msgstr ""
 
-#: sensors.js:139 sensors.js:355
-msgid "Free"
+#: prefs.js:110 prefs.js:140
+msgid "Include static information"
 msgstr ""
 
-#: sensors.js:140
-msgid "Swap"
+#: prefs.js:110
+msgid "Values that never change, such as vendor and cache size."
 msgstr ""
 
-#: sensors.js:248
-msgid "Average"
+#: prefs.js:111
+msgid "Show individual cores"
 msgstr ""
 
-#: sensors.js:180
-msgid "processor"
+#: prefs.js:111
+msgid "The usage of each core."
 msgstr ""
 
-#: sensors.js:183
+#: prefs.js:112
+msgid "Read live frequency from cpufreq"
+msgstr ""
+
+#: prefs.js:113
+msgid ""
+"Reads each core instead of /proc/cpuinfo, which some machines report late. "
+"Without cpufreq, /proc/cpuinfo is used."
+msgstr ""
+
+#: prefs.js:115
+msgid "Monitor system"
+msgstr ""
+
+#: prefs.js:117
+msgid "Monitor network"
+msgstr ""
+
+#: prefs.js:118
+msgid "Only show hardware interfaces"
+msgstr ""
+
+#: prefs.js:118
+msgid "Hide bridges, container, VPN and loopback interfaces."
+msgstr ""
+
+#: prefs.js:119
+msgid "Speeds"
+msgstr ""
+
+#: prefs.js:120
+msgid "Measure in"
+msgstr ""
+
+#: prefs.js:120
+msgid "Bytes"
+msgstr ""
+
+#: prefs.js:120
+msgid "Bits"
+msgstr ""
+
+#: prefs.js:122
+msgid "Public IP Address"
+msgstr ""
+
+#: prefs.js:123
+msgid "Show public IP address"
+msgstr ""
+
+#: prefs.js:123
+msgid "Looked up over the internet."
+msgstr ""
+
+#: prefs.js:124
+msgid "Minutes between lookups"
+msgstr ""
+
+#: prefs.js:125
+msgid "Refresh in the menu looks it up at once."
+msgstr ""
+
+#: prefs.js:127
+msgid "Monitor storage"
+msgstr ""
+
+#: prefs.js:130
+msgid "100.5 GiB"
+msgstr ""
+
+#: prefs.js:131
+msgid "107.9 GB"
+msgstr ""
+
+#: prefs.js:133
+msgid "Network Storage Locations"
+msgstr ""
+
+#: prefs.js:134
+msgid "Minutes between updates"
+msgstr ""
+
+#: prefs.js:135
+msgid "A share is asked over the network, so less often than a disk."
+msgstr ""
+
+#: prefs.js:137
+msgid "Monitor battery"
+msgstr ""
+
+#: prefs.js:139
+msgid "Monitor GPU"
+msgstr ""
+
+#: prefs.js:139
+msgid "NVIDIA cards are read with the nvidia-smi tool."
+msgstr ""
+
+#: prefs.js:141
+msgid "Values that never change, such as driver version and power limit."
+msgstr ""
+
+#: prefs.js:166
+msgid "Classic"
+msgstr ""
+
+#: prefs.js:166
+msgid "Filled and detailed"
+msgstr ""
+
+#: prefs.js:167
+msgid "Adwaita"
+msgstr ""
+
+#: prefs.js:167
+msgid "Rounded outlines"
+msgstr ""
+
+#: prefs.js:252
+#, javascript-format
+msgid "%s (unavailable)"
+msgstr ""
+
+#: prefs.js:271
+msgid "Up to"
+msgstr ""
+
+#: prefs.js:271
+msgid "From"
+msgstr ""
+
+#: prefs.js:275
+msgid "Remove breakpoint"
+msgstr ""
+
+#: prefs.js:279
+msgid "Add breakpoint"
+msgstr ""
+
+#: prefs.js:284
+msgid "Remove color scale"
+msgstr ""
+
+#: prefs.js:294
+msgid "Add"
+msgstr ""
+
+#: prefs.js:297
+msgid "Add color scale"
+msgstr ""
+
+#: prefs.js:300
+msgid "Threshold Colors"
+msgstr ""
+
+#: prefs.js:341
+#, javascript-format
+msgid "All values in %s"
+msgstr ""
+
+#: prefs.js:341
+msgid "All values without a unit"
+msgstr ""
+
+#: prefs.js:353
+msgid "Storage Locations"
+msgstr ""
+
+#: prefs.js:354
+msgid "Add storage location"
+msgstr ""
+
+#: prefs.js:355
+msgid "Monitor drives mounted by GNOME"
+msgstr ""
+
+#: prefs.js:367
+#, javascript-format
+msgid "Now: %s"
+msgstr ""
+
+#: prefs.js:367
+msgid "None at the moment"
+msgstr ""
+
+#: prefs.js:369
+msgid "Not mounted"
+msgstr ""
+
+#: prefs.js:370
+msgid "Remove storage location"
+msgstr ""
+
+#: prefs.js:399
+msgid "Add Storage Location"
+msgstr ""
+
+#: prefs.js:401
+msgid "Other mount points"
+msgstr ""
+
+#: prefs.js:497
+msgid "Automatic"
+msgstr ""
+
+#: prefs.js:497
+msgid "kbit/s"
+msgstr ""
+
+#: prefs.js:497
+msgid "Mbit/s"
+msgstr ""
+
+#: prefs.js:497
+msgid "kB/s"
+msgstr ""
+
+#: prefs.js:497
+msgid "MB/s"
+msgstr ""
+
+#: prefs.js:516
+msgid "1 second"
+msgstr ""
+
+#: prefs.js:516
+msgid "2 seconds"
+msgstr ""
+
+#: prefs.js:516
+msgid "3 seconds"
+msgstr ""
+
+#: prefs.js:516
+msgid "5 seconds"
+msgstr ""
+
+#: prefs.js:516
+msgid "10 seconds"
+msgstr ""
+
+#: prefs.js:517
+msgid "15 seconds"
+msgstr ""
+
+#: prefs.js:517
+msgid "30 seconds"
+msgstr ""
+
+#: prefs.js:517
+msgid "60 seconds"
+msgstr ""
+
+#: prefs.js:519
+msgid "Update every"
+msgstr ""
+
+#: prefs.js:520
+msgid ""
+"Only sensors on screen are read: those in the top bar and in the open menu."
+msgstr ""
+
+#: sensors.js:317
+msgid "on"
+msgstr ""
+
+#: sensors.js:1595
 #, javascript-format
 msgid "Core %d"
 msgstr ""
 
-#: sensors.js:213 sensors.js:222
-msgid "Frequency"
+#: sensors.js:2041
+#, javascript-format
+msgid "GPU %d"
 msgstr ""
 
-#: sensors.js:231
-msgid "Open Files"
-msgstr ""
-
-#: sensors.js:238
-msgid "Load 1m"
-msgstr ""
-
-#: sensors.js:239
-msgid "system"
-msgstr ""
-
-#: sensors.js:240
-msgid "Load 5m"
-msgstr ""
-
-#: sensors.js:241
-msgid "Load 15m"
-msgstr ""
-
-#: sensors.js:242
-msgid "Threads Active"
-msgstr ""
-
-#: sensors.js:243
-msgid "Threads Total"
-msgstr ""
-
-#: sensors.js:248
-msgid "Uptime"
-msgstr ""
-
-#: sensors.js:252
-msgid "Process Time"
-msgstr ""
-
-#: sensors.js:302
-msgid "WiFi Link Quality"
-msgstr ""
-
-#: sensors.js:303
-msgid "WiFi Signal Level"
-msgstr ""
-
-#: sensors.js:318
-msgid "ARC Target"
-msgstr ""
-
-#: sensors.js:319
-msgid "ARC Maximum"
-msgstr ""
-
-#: sensors.js:320
-msgid "ARC Current"
-msgstr ""
-
-#: sensors.js:330
-msgid "Read total"
-msgstr ""
-
-#: sensors.js:331
-msgid "Write total"
-msgstr ""
-
-#: sensors.js:332
-msgid "Read rate"
-msgstr ""
-
-#: sensors.js:333
-msgid "Write rate"
-msgstr ""
-
-#: sensors.js:352
+#: sensors.js:84
 msgid "Total"
 msgstr ""
 
-#: sensors.js:353
+#: sensors.js:85
+msgid "Available"
+msgstr ""
+
+#: sensors.js:87
+msgid "File cache"
+msgstr ""
+
+#: sensors.js:87
+msgid "Memory details"
+msgstr ""
+
+#: sensors.js:88
+msgid "Shared"
+msgstr ""
+
+#: sensors.js:89
+msgid "Kernel cache"
+msgstr ""
+
+#: sensors.js:90
+msgid "Buffers"
+msgstr ""
+
+#: sensors.js:91
+msgid "Reclaimable"
+msgstr ""
+
+#: sensors.js:93
+msgid "Free"
+msgstr ""
+
+#: sensors.js:94
+msgid "Swap Total"
+msgstr ""
+
+#: sensors.js:94
+msgid "Swap"
+msgstr ""
+
+#: sensors.js:96
+msgid "Swap Free"
+msgstr ""
+
+#: sensors.js:106
 msgid "Used"
 msgstr ""
 
-#: sensors.js:354
-msgid "Reserved"
+#: sensors.js:112
+msgid "Usage"
 msgstr ""
 
-#: sensors.js:356
-msgid "storage"
+#: sensors.js:120
+msgid "Swap Used"
 msgstr ""
 
-#: sensors.js:393
-msgid "Label"
+#: sensors.js:129
+msgid "Swap Usage"
 msgstr ""
 
-#: sensors.js:404 sensors.js:529
-msgid "State"
-msgstr ""
-
-#: sensors.js:409 sensors.js:519
-msgid "Cycles"
-msgstr ""
-
-#: sensors.js:414
-msgid "Voltage"
-msgstr ""
-
-#: sensors.js:418
-msgid "Level"
-msgstr ""
-
-#: sensors.js:422 sensors.js:553
-msgid "Percentage"
-msgstr ""
-
-#: sensors.js:432 sensors.js:527
-msgid "Rate"
-msgstr ""
-
-#: sensors.js:442 sensors.js:535
-msgid "Energy (full)"
-msgstr ""
-
-#: sensors.js:451 sensors.js:541
-msgid "Energy (design)"
-msgstr ""
-
-#: sensors.js:455
-msgid "Capacity"
-msgstr ""
-
-#: sensors.js:464 sensors.js:547
-msgid "Energy (now)"
-msgstr ""
-
-#: sensors.js:501 sensors.js:504 sensors.js:588 sensors.js:591
-msgid "Time left"
-msgstr ""
-
-#: sensors.js:677
+#: sensors.js:178
 msgid "Vendor"
 msgstr ""
 
-#: sensors.js:678
+#: sensors.js:179
 msgid "Bogomips"
 msgstr ""
 
-#: sensors.js:679
+#: sensors.js:180
 msgid "Sockets"
 msgstr ""
 
-#: sensors.js:680
+#: sensors.js:182
 msgid "Cache"
 msgstr ""
 
-#: sensors.js:685
+#: sensors.js:194
+msgid "Frequency"
+msgstr ""
+
+#: sensors.js:200
+msgid "Min frequency"
+msgstr ""
+
+#: sensors.js:206
+msgid "Max frequency"
+msgstr ""
+
+#: sensors.js:220
 msgid "Kernel"
 msgstr ""
 
-
-#: prefs.js:98
-msgid "Temperature"
+#: sensors.js:243
+msgid "Process Time"
 msgstr ""
 
-#: prefs.js:98
-msgid "Network"
+#: sensors.js:247
+msgid "Uptime"
 msgstr ""
 
-#: prefs.js:98
-msgid "Storage"
+#: sensors.js:256
+msgid "Load 1m"
 msgstr ""
 
-#: prefs.js:98
+#: sensors.js:257
+msgid "Load 5m"
+msgstr ""
+
+#: sensors.js:258
+msgid "Load 15m"
+msgstr ""
+
+#: sensors.js:261
+msgid "Threads Active"
+msgstr ""
+
+#: sensors.js:266
+msgid "Threads Total"
+msgstr ""
+
+#: sensors.js:279
+msgid "Open Files"
+msgstr ""
+
+#: sensors.js:288
+msgid "Powercap"
+msgstr ""
+
+#: sensors.js:302
+msgid "Cores"
+msgstr ""
+
+#: sensors.js:302
+msgid "Uncore"
+msgstr ""
+
+#: sensors.js:302
 msgid "Memory"
 msgstr ""
 
-#: prefs.js:98
-msgid "Battery"
+#: sensors.js:302
+msgid "Platform"
 msgstr ""
 
-#: extension.js:112
-msgid "Battery 1"
+#: sensors.js:315
+msgid "Lap mode"
 msgstr ""
 
-#: extension.js:112
-msgid "Battery 2"
+#: sensors.js:326
+msgid "WiFi"
 msgstr ""
 
-#: extension.js:112
-msgid "Battery 3"
+#: sensors.js:326
+msgid "Mobile"
 msgstr ""
 
-#: extension.js:112
-msgid "Battery 4"
+#: sensors.js:398
+msgid "Download speed"
 msgstr ""
 
-#: extension.js:112
-msgid "Battery 5"
+#: sensors.js:406
+msgid "Downloaded since boot"
 msgstr ""
 
-#: extension.js:115
-msgid "Battery (hidden)"
+#: sensors.js:414
+msgid "Downloaded this session"
 msgstr ""
 
-#: prefs.js:98
-msgid "System"
+#: sensors.js:422
+msgid "Upload speed"
 msgstr ""
 
-#: prefs.js:98
+#: sensors.js:430
+msgid "Uploaded since boot"
+msgstr ""
+
+#: sensors.js:438
+msgid "Uploaded this session"
+msgstr ""
+
+#: sensors.js:446
+msgid "Total speed"
+msgstr ""
+
+#: sensors.js:479
+msgid "WiFi Link Quality"
+msgstr ""
+
+#: sensors.js:486
+msgid "WiFi Signal Level"
+msgstr ""
+
+#: sensors.js:534
+msgid "Public IP"
+msgstr ""
+
+#: sensors.js:582
+msgid "Reserved"
+msgstr ""
+
+#: sensors.js:586
+msgid "Used %"
+msgstr ""
+
+#: sensors.js:588
+msgid "Free %"
+msgstr ""
+
+#: sensors.js:609
+msgid "Read total"
+msgstr ""
+
+#: sensors.js:615
+msgid "Read rate"
+msgstr ""
+
+#: sensors.js:621
+msgid "Write total"
+msgstr ""
+
+#: sensors.js:627
+msgid "Write rate"
+msgstr ""
+
+#: sensors.js:649
+msgid "ARC Target"
+msgstr ""
+
+#: sensors.js:650
+msgid "ARC Maximum"
+msgstr ""
+
+#: sensors.js:651
+msgid "ARC Current"
+msgstr ""
+
+#: sensors.js:685
+msgid "State"
+msgstr ""
+
+#: sensors.js:686
+msgid "Cycles"
+msgstr ""
+
+#: sensors.js:687
+msgid "Voltage"
+msgstr ""
+
+#: sensors.js:688
+msgid "Level"
+msgstr ""
+
+#: sensors.js:689
+msgid "Percentage"
+msgstr ""
+
+#: sensors.js:690
+msgid "Power Rate"
+msgstr ""
+
+#: sensors.js:691
+msgid "Energy (full)"
+msgstr ""
+
+#: sensors.js:692
+msgid "Energy (design)"
+msgstr ""
+
+#: sensors.js:693
+msgid "Energy (now)"
+msgstr ""
+
+#: sensors.js:695
+msgid "Capacity"
+msgstr ""
+
+#: sensors.js:701
+msgid "Time left"
+msgstr ""
+
+#: sensors.js:915
+msgid "Screen Redraws"
+msgstr ""
+
+#: sensors.js:1698
+msgid "ACPI Thermal Zone"
+msgstr ""
+
+#: sensors.js:1699
+msgid "Platform Controller Hub"
+msgstr ""
+
+#: sensors.js:1700
+msgid "Wireless Adapter"
+msgstr ""
+
+#: sensors.js:1701
+msgid "Processor 0"
+msgstr ""
+
+#: sensors.js:1702
+msgid "Processor 1"
+msgstr ""
+
+#: sensors.js:1760
+msgid "Transferred"
+msgstr ""
+
+#: sensors.js:1857
+msgid "ZFS cache"
+msgstr ""
+
+#: sensors.js:1904
+msgid "Total power rate"
+msgstr ""
+
+#: sensors.js:1972
+msgid "Average"
+msgstr ""
+
+#: sensors.js:1972
+msgid "Minimum"
+msgstr ""
+
+#: sensors.js:1972
+msgid "Maximum"
+msgstr ""
+
+#: sensors.js:2005
+msgid "Temperature Limit"
+msgstr ""
+
+#: sensors.js:2006
+msgid "Power Limit"
+msgstr ""
+
+#: sensors.js:2007
+msgid "Addressing Mode"
+msgstr ""
+
+#: sensors.js:2008
+msgid "Driver Version"
+msgstr ""
+
+#: sensors.js:2009
+msgid "vBIOS Version"
+msgstr ""
+
+#: sensors.js:2010
+msgid "Serial Number"
+msgstr ""
+
+#: sensors.js:2011
+msgid "Domain Number"
+msgstr ""
+
+#: sensors.js:2012
+msgid "Bus Number"
+msgstr ""
+
+#: sensors.js:2013
+msgid "Device Number"
+msgstr ""
+
+#: sensors.js:2014
+msgid "Device ID"
+msgstr ""
+
+#: sensors.js:2015
+msgid "Sub Device ID"
+msgstr ""
+
+#: sensors.js:2072
+msgid "Maximum Link Speed"
+msgstr ""
+
+#: sensors.js:2080
+msgid "Fan"
+msgstr ""
+
+#: sensors.js:2081
+msgid "Temperature"
+msgstr ""
+
+#: sensors.js:2082
+msgid "Memory Temperature"
+msgstr ""
+
+#: sensors.js:2083
+msgid "Memory Total"
+msgstr ""
+
+#: sensors.js:2084
+msgid "Memory Used"
+msgstr ""
+
+#: sensors.js:2085
+msgid "Memory Reserved"
+msgstr ""
+
+#: sensors.js:2086
+msgid "Memory Free"
+msgstr ""
+
+#: sensors.js:2087
+msgid "Memory Utilization"
+msgstr ""
+
+#: sensors.js:2088
+msgid "Utilization"
+msgstr ""
+
+#: sensors.js:2089
+msgid "Encoder Utilization"
+msgstr ""
+
+#: sensors.js:2090
+msgid "Decoder Utilization"
+msgstr ""
+
+#: sensors.js:2092
+msgid "Memory Frequency"
+msgstr ""
+
+#: sensors.js:2093
+msgid "Encoder/Decoder Frequency"
+msgstr ""
+
+#: sensors.js:2094
+msgid "Power"
+msgstr ""
+
+#: sensors.js:2095
+msgid "Average Power"
+msgstr ""
+
+#: sensors.js:2112
+msgid "Memory Usage"
+msgstr ""
+
+#: sensors.js:2121
+msgid "Link Speed"
+msgstr ""
+
+#: helpers/categories.js:12
 msgid "Processor"
 msgstr ""
 
-#: sensors.js:759
-msgid "Fan"
+#: helpers/categories.js:13
+msgid "System"
+msgstr ""
+
+#: helpers/categories.js:14
+msgid "Network"
+msgstr ""
+
+#: helpers/categories.js:15
+msgid "Storage"
+msgstr ""
+
+#: helpers/categories.js:16
+msgid "Battery"
+msgstr ""
+
+#: helpers/categories.js:17
+msgid "GPU"
+msgstr ""
+
+#: sensors.js:1802
+msgid "Ethernet"
+msgstr ""
+
+#: sensors.js:317
+msgid "off"
 msgstr ""

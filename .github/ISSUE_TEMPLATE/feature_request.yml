@@ -1,16 +1,16 @@
 name: Feature Request
-description: Please read Wiki before submitting!
+description: Please read the documentation before submitting!
 labels: ["feature"]
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for taking the time to submit a feature request! Please read this form carefully.
+        Please read the [documentation](https://github.com/ronny-rentner/Vitals/blob/catalog-rewrite/README.md) before submitting a feature request.
   - type: checkboxes
     attributes:
-      label: Has this issue been covered in the Wiki?
+      label: Is this covered in the documentation?
       options:
-      - label: I have read the Wiki and my issue is not covered.
+      - label: I have read the documentation and my issue is not covered.
         required: true
   - type: checkboxes
     attributes:

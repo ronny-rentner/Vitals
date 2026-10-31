@@ -1,7 +1,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: \n"
-"POT-Creation-Date: 2022-04-10 21:29+0200\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-30 12:35+0100\n"
 "PO-Revision-Date: \n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -9,8 +10,8 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n"
-"%10<=4 && (n%100<12 || n%100>14) ? 1 : 2);\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && "
+"n%10<=4 && (n%100<12 || n%100>14) ? 1 : 2);\n"
 "POT-Revision-Date: 2018-12-29 10:26+0100\n"
 "X-Generator: Poedit 3.1.1\n"
 "X-Poedit-Basepath: ..\n"
@@ -22,91 +23,67 @@ msgstr ""
 "X-Poedit-SearchPath-5: extension.js\n"
 "X-Poedit-SearchPath-6: schemas/prefs.ui\n"
 
-#: extension.js:129
+#: extension.js:213
 msgid "Refresh"
 msgstr "Обновить"
 
-#: extension.js:147
+#: extension.js:220
 msgid "System Monitor"
 msgstr "Системный монитор"
 
-#: extension.js:155
+#: extension.js:228
 msgid "Preferences"
 msgstr "Параметры"
 
-#: prefs.ui:42 schemas/org.gnome.shell.extensions.vitals.gschema.xml:81
-msgid "Include public IP address"
-msgstr "Включить публичный IP-адрес"
+#: extension.js:237 extension.js:242
+msgid "Show hidden sensors"
+msgstr "Показать скрытые датчики"
 
-#: prefs.ui:70
-msgid "Format"
-msgstr "Формат"
+#: extension.js:242
+msgid "Leave out hidden sensors"
+msgstr "Не показывать скрытые датчики"
 
-#: prefs.ui:78
-msgid "Bytes"
-msgstr "Байты"
+#: extension.js:825
+msgid "Pin to top bar"
+msgstr "Закрепить на верхней панели"
 
-#: prefs.ui:79
-msgid "Bits"
-msgstr "Биты"
+#: extension.js:832
+msgid "Pin to category"
+msgstr "Закрепить в категории"
 
-#: prefs.ui:121
+#: extension.js:834
+msgid "Rename"
+msgstr "Переименовать"
+
+#: extension.js:837
+msgid "Hide"
+msgstr "Скрыть"
+
+#: prefs.js:34 prefs.js:49
 msgid "General"
 msgstr "Основное"
 
-#: prefs.ui:149 schemas/org.gnome.shell.extensions.vitals.gschema.xml:11
-msgid "Seconds between updates"
-msgstr "Секунды между обновлениями"
+#: prefs.js:38
+msgid "Vitals"
+msgstr "Vitals"
 
-#: prefs.ui:184 schemas/org.gnome.shell.extensions.vitals.gschema.xml:16
-msgid "Position in panel"
-msgstr "Позиция на панели"
-
-#: prefs.ui:193
-msgid "Left"
-msgstr "Слева"
-
-#: prefs.ui:194
-msgid "Center"
-msgstr "По центру"
-
-#: prefs.ui:195
-msgid "Right"
-msgstr "Справа"
-
-#: prefs.ui:196
-msgid "Far Left"
-msgstr "Далеко слева"
-
-#: prefs.ui:197
-msgid "Far Right"
-msgstr "Далеко справа"
-
-#: prefs.ui:220 schemas/org.gnome.shell.extensions.vitals.gschema.xml:21
+#: prefs.js:52
 msgid "Use higher precision"
 msgstr "Использовать более высокую точность"
 
-#: prefs.ui:247 schemas/org.gnome.shell.extensions.vitals.gschema.xml:26
-msgid "Alphabetize sensors"
-msgstr "Располагать в алфавитном порядке"
+#: prefs.js:52
+msgid "One more decimal place, and seconds in uptimes."
+msgstr "Ещё один знак после запятой и секунды во времени работы."
 
-#: prefs.ui:274 schemas/org.gnome.shell.extensions.vitals.gschema.xml:31
-msgid "Hide zero values"
-msgstr "Скрывать нулевые значения"
+#: prefs.js:53
+msgid "Icon Style"
+msgstr "Стиль значков"
 
-#: prefs.ui:301
-msgid "Use fixed widths"
-msgstr "Использовать фиксированную ширину"
-
-#: prefs.ui:328 schemas/org.gnome.shell.extensions.vitals.gschema.xml:121
-msgid "Hide icons in top bar"
-msgstr "Скрывать иконки в верхней панели"
-
-#: prefs.ui:352
+#: prefs.js:55
 msgid "About"
 msgstr "О Расширении"
 
-#: prefs.ui:367
+#: prefs.js:56
 msgid ""
 "Feature requests or bugs? Please visit <a href=\"https://github.com/"
 "corecoding/Vitals/issues\">GitHub</a>. No warranty, expressed or implied. <a "
@@ -118,415 +95,1150 @@ msgstr ""
 "подразумеваемых. <a href=\"https://corecoding.com/donate.php\">Пожертвуйте</"
 "a>, если вы нашли это полезным."
 
-#: prefs.ui:394
+#: prefs.js:59
+msgid "Top Bar"
+msgstr "Верхняя панель"
+
+#: prefs.js:60
+msgid "Placement"
+msgstr "Размещение"
+
+#: prefs.js:61
+msgid "Position"
+msgstr "Положение"
+
+#: prefs.js:61
+msgid "Far left and far right are the outer ends of the bar."
+msgstr "Крайнее левое и крайнее правое положения — у краёв панели."
+
+#: prefs.js:62
+msgid "Far left"
+msgstr "У левого края"
+
+#: prefs.js:62
+msgid "Left"
+msgstr "Слева"
+
+#: prefs.js:62
+msgid "Center"
+msgstr "По центру"
+
+#: prefs.js:62
+msgid "Right"
+msgstr "Справа"
+
+#: prefs.js:62
+msgid "Far right"
+msgstr "У правого края"
+
+#: prefs.js:63
+msgid "Reorder sensors by drag and drop"
+msgstr "Менять порядок датчиков перетаскиванием"
+
+#: prefs.js:64
+msgid "Appearance"
+msgstr "Внешний вид"
+
+#: prefs.js:65
+msgid "Steady widths"
+msgstr "Стабильная ширина"
+
+#: prefs.js:66
+msgid ""
+"Keep room for a value’s widest text, so its neighbours do not jump. The room "
+"is given back after a minute."
+msgstr "Сохранять место для самого широкого текста значения, чтобы соседние значения не сдвигались. Через минуту место освобождается."
+
+#: prefs.js:67
+msgid "Remember widths"
+msgstr "Запоминать ширину"
+
+#: prefs.js:68
+msgid ""
+"With steady widths, each value starts with the room it had when Vitals was "
+"last switched off."
+msgstr "При стабильной ширине каждое значение получает столько места, сколько занимало при последнем выключении Vitals."
+
+#: prefs.js:69
+msgid "Emphasize values"
+msgstr "Выделять значения"
+
+#: prefs.js:69
+msgid "Draw icons and units lighter and smaller than the numbers."
+msgstr "Показывать значки и единицы светлее и меньше чисел."
+
+#: prefs.js:70
+msgid "Crop icons"
+msgstr "Обрезать значки"
+
+#: prefs.js:70
+msgid "Remove transparent borders while preserving each icon’s aspect ratio."
+msgstr "Убирать прозрачные края, сохраняя пропорции каждого значка."
+
+#: prefs.js:71
+msgid "Hide icons"
+msgstr "Скрывать значки"
+
+#: prefs.js:71
+msgid "The icons in the menu stay."
+msgstr "Значки в меню остаются."
+
+#: prefs.js:73
+msgid "Menu"
+msgstr "Меню"
+
+#: prefs.js:75
+msgid "Open centered under the sensors"
+msgstr "Открывать по центру под датчиками"
+
+#: prefs.js:75
+msgid "Otherwise the menu opens centered under the pointer."
+msgstr "Иначе меню открывается по центру под указателем."
+
+#: prefs.js:76
+msgid "System monitor command"
+msgstr "Команда системного монитора"
+
+#: prefs.js:77
+msgid ""
+"The program that the System Monitor button at the bottom of the menu starts."
+msgstr "Программа, запускаемая кнопкой «Системный монитор» внизу меню."
+
+#: prefs.js:78
+msgid "Categories"
+msgstr "Категории"
+
+#: prefs.js:79
+msgid "Order"
+msgstr "Порядок"
+
+#: prefs.js:79
+msgid "Manual is the order given by dragging categories in the menu."
+msgstr "Ручной порядок задаётся перетаскиванием категорий в меню."
+
+#: prefs.js:80
+msgid "Alphabetical"
+msgstr "По алфавиту"
+
+#: prefs.js:80
+msgid "Manual"
+msgstr "Вручную"
+
+#: prefs.js:82
+msgid "Reorder by drag and drop"
+msgstr "Менять порядок перетаскиванием"
+
+#: prefs.js:82
+msgid "Only in the manual order."
+msgstr "Только при ручном порядке."
+
+#: prefs.js:83
+msgid "Slide open and shut"
+msgstr "Плавно открывать и закрывать"
+
+#: prefs.js:84 prefs.js:439
 msgid "Sensors"
 msgstr "Сенсоры"
 
-#: prefs.ui:422 schemas/org.gnome.shell.extensions.vitals.gschema.xml:36
+#: prefs.js:85
+msgid "Show average, minimum and maximum"
+msgstr "Показывать среднее, минимум и максимум"
+
+#: prefs.js:86
+msgid "In the temperature and fan categories, below the sensors."
+msgstr "В категориях температуры и вентиляторов, под датчиками."
+
+#: prefs.js:88
 msgid "Monitor temperature"
 msgstr "Мониторинг температуры"
 
-#: prefs.ui:473 schemas/org.gnome.shell.extensions.vitals.gschema.xml:46
-msgid "Monitor voltage"
-msgstr "Мониторинг напряжения"
-
-#: prefs.ui:501 schemas/org.gnome.shell.extensions.vitals.gschema.xml:51
-msgid "Monitor fan"
-msgstr "Мониторинг вентилятора"
-
-#: prefs.ui:529 schemas/org.gnome.shell.extensions.vitals.gschema.xml:56
-msgid "Monitor memory"
-msgstr "Мониторинг памяти"
-
-#: prefs.ui:580 schemas/org.gnome.shell.extensions.vitals.gschema.xml:61
-msgid "Monitor processor"
-msgstr "Мониторинг процессора"
-
-#: prefs.ui:608 schemas/org.gnome.shell.extensions.vitals.gschema.xml:66
-msgid "Monitor system"
-msgstr "Мониторинг системы"
-
-#: prefs.ui:636 schemas/org.gnome.shell.extensions.vitals.gschema.xml:76
-msgid "Monitor network"
-msgstr "Мониторинг сети"
-
-#: prefs.ui:687 schemas/org.gnome.shell.extensions.vitals.gschema.xml:71
-msgid "Monitor storage"
-msgstr "Мониторинг хранилища"
-
-#: prefs.ui:738 schemas/org.gnome.shell.extensions.vitals.gschema.xml:96
-msgid "Monitor battery"
-msgstr "Мониторинг батареи"
-
-#: prefs.ui:817
-msgid "Path"
-msgstr "Путь"
-
-#: prefs.ui:849 prefs.ui:958
-msgid "Measurement"
-msgstr "Измерение"
-
-#: prefs.ui:903
+#: prefs.js:89 prefs.js:500
 msgid "Unit"
 msgstr "Единица"
 
-#: prefs.ui:1012
-msgid "Display Battery"
-msgstr "Отображать батарею"
+#: prefs.js:89
+msgid "°C"
+msgstr "°C"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:6
-msgid "Sensors to show in panel"
-msgstr "Сенсоры, отображаемые на панели"
+#: prefs.js:89
+msgid "°F"
+msgstr "°F"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:7
-msgid "List of sensors to be shown in the panel"
-msgstr "Список сенсоров, которые будут отображаться на панели"
+#: prefs.js:90
+msgid "Skip sensors that read zero"
+msgstr "Пропускать датчики с нулевыми показаниями"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:12
-msgid "Delay between sensor polling"
-msgstr "Задержка между опросом сенсоров"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:17
-msgid "Position in Panel ('left', 'center', 'right')"
-msgstr "Положение на панели ('слева', 'по центру', 'справа')"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:22
-msgid "Show one extra digit after decimal"
-msgstr "Показать одну дополнительную цифру после запятой"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:27
-msgid "Display sensors in alphabetical order"
-msgstr "Отображать сенсоры в алфавитном порядке"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:32
-msgid "Hide data from sensors that are invalid"
-msgstr "Скрывать данные от сенсоров, которые недействительны"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:37
-msgid "Display temperature of various components"
-msgstr "Отображать температуры различных компонентов"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:41
-msgid "Temperature unit"
-msgstr "Единица температуры"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:42
+#: prefs.js:91
 msgid ""
-"The unit ('centigrade' or 'fahrenheit') the extension should display the "
-"temperature in"
-msgstr ""
-"Единица измерения ('цельсий' или 'фаренгейт') в котором расширение должно "
-"отображать температуру"
+"A sensor that reads zero when it is found is left out. One that reads zero "
+"later stays."
+msgstr "Датчик с нулевым показанием при обнаружении пропускается. Если ноль появится позже, датчик останется."
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:47
-msgid "Display voltage of various components"
-msgstr "Отображать напряжения различных компонентов"
+#: prefs.js:93
+msgid "Monitor voltage"
+msgstr "Мониторинг напряжения"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:52
-msgid "Display fan rotation per minute"
-msgstr "Отображать обороты вентилятора в минуту"
+#: prefs.js:95
+msgid "Monitor fan"
+msgstr "Мониторинг вентилятора"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:57
-msgid "Display memory information"
-msgstr "Отображать информацию о памяти"
+#: prefs.js:97
+msgid "Monitor power"
+msgstr "Следить за мощностью"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:62
-msgid "Display processor information"
-msgstr "Отображать информацию о процессоре"
+#: prefs.js:98
+msgid "Read powercap"
+msgstr "Читать powercap"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:67
-msgid "Display system information"
-msgstr "Отображать информацию о системе"
+#: prefs.js:99
+msgid ""
+"The power draw of the processor, such as Intel RAPL. Most systems let only "
+"root read it."
+msgstr "Потребляемая мощность процессора, например Intel RAPL. В большинстве систем доступна только root."
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:72
-msgid "Display storage information"
-msgstr "Отображать информацию о хранилище"
+#: prefs.js:101
+msgid "Monitor memory"
+msgstr "Мониторинг памяти"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:77
-msgid "Display network information"
-msgstr "Отображать информацию о сети"
+#: prefs.js:102
+msgid "Show details"
+msgstr "Показывать подробности"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:82
-msgid "Display public IP address of internet connection"
-msgstr "Отображать публичный IP-адрес интернет соединения"
+#: prefs.js:103
+msgid "Additional readings in the menu; pinned readings stay in the top bar."
+msgstr "Дополнительные показания в меню; закреплённые показания остаются на верхней панели."
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:86
-msgid "Network speed format"
-msgstr "Формат скорости сети"
+#: prefs.js:104 prefs.js:128
+msgid "Units"
+msgstr "Единицы"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:87
-msgid "Should speed display in bits or bytes?"
-msgstr "Должна ли скорость отображаться в битах или байтах?"
+#: prefs.js:106 prefs.js:130
+msgid "Binary"
+msgstr "Двоичные"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:91
-msgid "Storage path"
-msgstr "Путь хранилища"
+#: prefs.js:106 prefs.js:130
+msgid "KiB, MiB, GiB"
+msgstr "KiB, MiB, GiB"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:92
-msgid "Storage path for monitoring"
-msgstr "Путь хранилища для мониторинга"
+#: prefs.js:106
+msgid "15.5 GiB"
+msgstr "15,5 GiB"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:97
-msgid "Monitor battery health"
-msgstr "Мониторинг здоровья батареи"
+#: prefs.js:107 prefs.js:131
+msgid "Decimal"
+msgstr "Десятичные"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:101
-msgid "Memory measurement"
-msgstr "Измерение памяти"
+#: prefs.js:107 prefs.js:131
+msgid "kB, MB, GB"
+msgstr "kB, MB, GB"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:102
-msgid "Can use gigabyte or gibibyte for memory"
-msgstr "Может использовать гигабайт или гибибит для памяти"
+#: prefs.js:107
+msgid "16.6 GB"
+msgstr "16,6 GB"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:106
-msgid "Storage measurement"
-msgstr "Измерение хранилища"
+#: prefs.js:109
+msgid "Monitor processor"
+msgstr "Мониторинг процессора"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:107
-msgid "Can use gigabyte or gibibyte for storage"
-msgstr "Может использовать гигабайт или гибибит для хранилища"
+#: prefs.js:110 prefs.js:140
+msgid "Include static information"
+msgstr "Включать статические сведения"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:111
-msgid "Battery slot to monitor"
-msgstr "Слот батареи для мониторинга"
+#: prefs.js:110
+msgid "Values that never change, such as vendor and cache size."
+msgstr "Неизменные значения, например производитель и размер кэша."
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:112
-msgid "Which numerical battery slot should vitals monitor"
-msgstr "Какой числовой слот батареи следует мониторить vitals"
+#: prefs.js:111
+msgid "Show individual cores"
+msgstr "Показывать отдельные ядра"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:116
-msgid "Use fixed widths in top bar"
-msgstr "Использовать фиксированную ширину в верхней панели"
+#: prefs.js:111
+msgid "The usage of each core."
+msgstr "Загрузка каждого ядра."
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:117
-msgid "Keep sensors in top bar from jumping around"
-msgstr "Не позволяйте датчикам в верхней панели прыгать"
+#: prefs.js:112
+msgid "Read live frequency from cpufreq"
+msgstr "Читать текущую частоту из cpufreq"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:122
-msgid "Keep top bar clean by only showing sensor values"
-msgstr "Держать верхнюю панель чистой, показывая только значения датчиков"
+#: prefs.js:113
+msgid ""
+"Reads each core instead of /proc/cpuinfo, which some machines report late. "
+"Without cpufreq, /proc/cpuinfo is used."
+msgstr "Читает частоту каждого ядра вместо /proc/cpuinfo, где на некоторых компьютерах данные запаздывают. Без cpufreq используется /proc/cpuinfo."
 
-#: sensors.js:42
-msgid "Temperature"
-msgstr "Температура"
+#: prefs.js:115
+msgid "Monitor system"
+msgstr "Мониторинг системы"
 
-#: sensors.js:43 sensors.js:307 sensors.js:337
-msgid "Voltage"
-msgstr "Напряжение"
+#: prefs.js:117
+msgid "Monitor network"
+msgstr "Мониторинг сети"
 
-#: sensors.js:44
-msgid "Fan"
-msgstr "Вентилятор"
+#: prefs.js:118
+msgid "Only show hardware interfaces"
+msgstr "Показывать только аппаратные интерфейсы"
 
-#: sensors.js:45
-msgid "Memory"
-msgstr "Память"
+#: prefs.js:118
+msgid "Hide bridges, container, VPN and loopback interfaces."
+msgstr "Скрывать мосты, интерфейсы контейнеров, VPN и петлевые интерфейсы."
 
-#: sensors.js:46
-msgid "Processor"
-msgstr "Процессор"
+#: prefs.js:119
+msgid "Speeds"
+msgstr "Скорости"
 
-#: sensors.js:47
-msgid "System"
-msgstr "Система"
+#: prefs.js:120
+msgid "Measure in"
+msgstr "Измерять в"
 
-#: sensors.js:48
-msgid "Network"
-msgstr "Сеть"
+#: prefs.js:120
+msgid "Bytes"
+msgstr "Байты"
 
-#: sensors.js:49
-msgid "Storage"
-msgstr "Хранилище"
+#: prefs.js:120
+msgid "Bits"
+msgstr "Биты"
 
-#: sensors.js:76
-msgid "Public IP"
+#: prefs.js:122
+msgid "Public IP Address"
 msgstr "Публичный IP-адрес"
 
-#: sensors.js:144
-msgid "Usage"
-msgstr "Использование"
+#: prefs.js:123
+msgid "Show public IP address"
+msgstr "Показывать публичный IP-адрес"
 
-#: sensors.js:145
-msgid "memory"
-msgstr "Память"
+#: prefs.js:123
+msgid "Looked up over the internet."
+msgstr "Определяется через интернет."
 
-#: sensors.js:146
-msgid "Physical"
-msgstr "Физическая"
+#: prefs.js:124
+msgid "Minutes between lookups"
+msgstr "Минуты между запросами"
 
-#: sensors.js:147
-msgid "Available"
-msgstr "Доступно"
+#: prefs.js:125
+msgid "Refresh in the menu looks it up at once."
+msgstr "Кнопка «Обновить» в меню запрашивает адрес сразу."
 
-#: sensors.js:148
-msgid "Allocated"
-msgstr "Использовано"
+#: prefs.js:127
+msgid "Monitor storage"
+msgstr "Мониторинг хранилища"
 
-#: sensors.js:149
-msgid "Swap"
-msgstr "Своп"
+#: prefs.js:130
+msgid "100.5 GiB"
+msgstr "100,5 GiB"
 
-#: sensors.js:189
-msgid "Average"
-msgstr "В среднем"
+#: prefs.js:131
+msgid "107.9 GB"
+msgstr "107,9 GB"
 
-#: sensors.js:190
-msgid "processor"
-msgstr "Процессор"
+#: prefs.js:133
+msgid "Network Storage Locations"
+msgstr "Сетевые хранилища"
 
-#: sensors.js:192
+#: prefs.js:134
+msgid "Minutes between updates"
+msgstr "Минуты между обновлениями"
+
+#: prefs.js:135
+msgid "A share is asked over the network, so less often than a disk."
+msgstr "Сетевой ресурс опрашивается по сети, поэтому реже, чем диск."
+
+#: prefs.js:137
+msgid "Monitor battery"
+msgstr "Мониторинг батареи"
+
+#: prefs.js:139
+msgid "Monitor GPU"
+msgstr "Следить за GPU"
+
+#: prefs.js:139
+msgid "NVIDIA cards are read with the nvidia-smi tool."
+msgstr "Данные карт NVIDIA считываются утилитой nvidia-smi."
+
+#: prefs.js:141
+msgid "Values that never change, such as driver version and power limit."
+msgstr "Неизменные значения, например версия драйвера и ограничение мощности."
+
+#: prefs.js:166
+msgid "Classic"
+msgstr "Классический"
+
+#: prefs.js:166
+msgid "Filled and detailed"
+msgstr "Заливка и детали"
+
+#: prefs.js:167
+msgid "Adwaita"
+msgstr "Adwaita"
+
+#: prefs.js:167
+msgid "Rounded outlines"
+msgstr "Скруглённые контуры"
+
+#: prefs.js:252
+#, javascript-format
+msgid "%s (unavailable)"
+msgstr "%s (недоступно)"
+
+#: prefs.js:271
+msgid "Up to"
+msgstr "До"
+
+#: prefs.js:271
+msgid "From"
+msgstr "От"
+
+#: prefs.js:275
+msgid "Remove breakpoint"
+msgstr "Удалить порог"
+
+#: prefs.js:279
+msgid "Add breakpoint"
+msgstr "Добавить порог"
+
+#: prefs.js:284
+msgid "Remove color scale"
+msgstr "Удалить цветовую шкалу"
+
+#: prefs.js:294
+msgid "Add"
+msgstr "Добавить"
+
+#: prefs.js:297
+msgid "Add color scale"
+msgstr "Добавить цветовую шкалу"
+
+#: prefs.js:300
+msgid "Threshold Colors"
+msgstr "Цвета порогов"
+
+#: prefs.js:341
+#, javascript-format
+msgid "All values in %s"
+msgstr "Все значения в %s"
+
+#: prefs.js:341
+msgid "All values without a unit"
+msgstr "Все значения без единицы"
+
+#: prefs.js:353
+msgid "Storage Locations"
+msgstr "Хранилища"
+
+#: prefs.js:354
+msgid "Add storage location"
+msgstr "Добавить хранилище"
+
+#: prefs.js:355
+msgid "Monitor drives mounted by GNOME"
+msgstr "Следить за дисками, смонтированными GNOME"
+
+#: prefs.js:367
+#, javascript-format
+msgid "Now: %s"
+msgstr "Сейчас: %s"
+
+#: prefs.js:367
+msgid "None at the moment"
+msgstr "Сейчас нет"
+
+#: prefs.js:369
+msgid "Not mounted"
+msgstr "Не смонтировано"
+
+#: prefs.js:370
+msgid "Remove storage location"
+msgstr "Удалить хранилище"
+
+#: prefs.js:399
+msgid "Add Storage Location"
+msgstr "Добавить хранилище"
+
+#: prefs.js:401
+msgid "Other mount points"
+msgstr "Другие точки монтирования"
+
+#: prefs.js:497
+msgid "Automatic"
+msgstr "Автоматически"
+
+#: prefs.js:497
+msgid "kbit/s"
+msgstr "kbit/s"
+
+#: prefs.js:497
+msgid "Mbit/s"
+msgstr "Mbit/s"
+
+#: prefs.js:497
+msgid "kB/s"
+msgstr "kB/s"
+
+#: prefs.js:497
+msgid "MB/s"
+msgstr "MB/s"
+
+#: prefs.js:516
+msgid "1 second"
+msgstr "1 секунда"
+
+#: prefs.js:516
+msgid "2 seconds"
+msgstr "2 секунды"
+
+#: prefs.js:516
+msgid "3 seconds"
+msgstr "3 секунды"
+
+#: prefs.js:516
+msgid "5 seconds"
+msgstr "5 секунд"
+
+#: prefs.js:516
+msgid "10 seconds"
+msgstr "10 секунд"
+
+#: prefs.js:517
+msgid "15 seconds"
+msgstr "15 секунд"
+
+#: prefs.js:517
+msgid "30 seconds"
+msgstr "30 секунд"
+
+#: prefs.js:517
+msgid "60 seconds"
+msgstr "60 секунд"
+
+#: prefs.js:519
+msgid "Update every"
+msgstr "Интервал обновления"
+
+#: prefs.js:520
+msgid ""
+"Only sensors on screen are read: those in the top bar and in the open menu."
+msgstr "Считываются только видимые датчики: на верхней панели и в открытом меню."
+
+#: sensors.js:317
+msgid "on"
+msgstr "вкл."
+
+#: sensors.js:1595
 #, javascript-format
 msgid "Core %d"
 msgstr "Ядро %d"
 
-#: sensors.js:236
-msgid "Frequency"
-msgstr "Частота"
+#: sensors.js:2041
+#, javascript-format
+msgid "GPU %d"
+msgstr "GPU %d"
 
-#: sensors.js:237
-msgid "Boost"
-msgstr "Разгон"
-
-#: sensors.js:238
-msgid "Vendor"
-msgstr "Производитель"
-
-#: sensors.js:239
-msgid "Bogomips"
-msgstr "Bogomips"
-
-#: sensors.js:240
-msgid "Sockets"
-msgstr "Сокеты"
-
-#: sensors.js:241
-msgid "Cache"
-msgstr "Кэш"
-
-#: sensors.js:250
-msgid "Open Files"
-msgstr "Открыть Файлы"
-
-#: sensors.js:258
-msgid "Load 1m"
-msgstr "Нагрузка 1мин"
-
-#: sensors.js:259
-msgid "system"
-msgstr "Система"
-
-#: sensors.js:260
-msgid "Load 5m"
-msgstr "Нагрузка 5мин"
-
-#: sensors.js:261
-msgid "Load 15m"
-msgstr "Нагрузка 15мин"
-
-#: sensors.js:262
-msgid "Threads Active"
-msgstr "Активные потоки"
-
-#: sensors.js:263
-msgid "Threads Total"
-msgstr "Всего потоков"
-
-#: sensors.js:269
-msgid "Uptime"
-msgstr "Время работы"
-
-#: sensors.js:273
-msgid "Process Time"
-msgstr "Время процесса"
-
-#: sensors.js:290
-msgid "State"
-msgstr "Состояние"
-
-#: sensors.js:295
-msgid "Cycles"
-msgstr "Циклы"
-
-#: sensors.js:300 sensors.js:330
-msgid "Energy (full)"
-msgstr "Энергия (полный)"
-
-#: sensors.js:302 sensors.js:332
-msgid "Capacity"
-msgstr "Ёмкость"
-
-#: sensors.js:303 sensors.js:333
-msgid "Energy (design)"
-msgstr "Энергия (изначальная)"
-
-#: sensors.js:311 sensors.js:340
-msgid "Rate"
-msgstr "Показатель"
-
-#: sensors.js:312 sensors.js:341
-msgid "battery"
-msgstr "Батарея"
-
-#: sensors.js:316 sensors.js:344
-msgid "Energy (now)"
-msgstr "Энергия (сейчас)"
-
-#: sensors.js:322 sensors.js:350
-msgid "Percentage"
-msgstr "Процент"
-
-#: sensors.js:411
-msgid "WiFi Link Quality"
-msgstr "Качество соединения WiFi"
-
-#: sensors.js:412
-msgid "WiFi Signal Level"
-msgstr "Уровень сигнала WiFi"
-
-#: sensors.js:432
-msgid "ARC Target"
-msgstr "Цель ARC"
-
-#: sensors.js:433
-msgid "ARC Maximum"
-msgstr "Максимум ARC"
-
-#: sensors.js:434
-msgid "ARC Current"
-msgstr "Текущий ARC"
-
-#: sensors.js:445
-msgid "Read total"
-msgstr "Чтение всего"
-
-#: sensors.js:446
-msgid "Write total"
-msgstr "Запись всего"
-
-#: sensors.js:447
-msgid "Read rate"
-msgstr "Показатель чтения"
-
-#: sensors.js:448
-msgid "Write rate"
-msgstr "Показатель записи"
-
-#: sensors.js:467
+#: sensors.js:84
 msgid "Total"
 msgstr "Всего"
 
-#: sensors.js:468
-msgid "Used"
-msgstr "Использовано"
+#: sensors.js:85
+msgid "Available"
+msgstr "Доступно"
 
-#: sensors.js:469
-msgid "Reserved"
-msgstr "Зарезервиравано"
+#: sensors.js:87
+msgid "File cache"
+msgstr "Файловый кэш"
 
-#: sensors.js:470
+#: sensors.js:87
+msgid "Memory details"
+msgstr "Сведения о памяти"
+
+#: sensors.js:88
+msgid "Shared"
+msgstr "Общая"
+
+#: sensors.js:89
+msgid "Kernel cache"
+msgstr "Кэш ядра"
+
+#: sensors.js:90
+msgid "Buffers"
+msgstr "Буферы"
+
+#: sensors.js:91
+msgid "Reclaimable"
+msgstr "Освобождаемая"
+
+#: sensors.js:93
 msgid "Free"
 msgstr "Свободно"
 
-#: sensors.js:471
-msgid "storage"
+#: sensors.js:94
+msgid "Swap Total"
+msgstr "Подкачка: всего"
+
+#: sensors.js:94
+msgid "Swap"
+msgstr "Подкачка"
+
+#: sensors.js:96
+msgid "Swap Free"
+msgstr "Подкачка: свободно"
+
+#: sensors.js:106
+msgid "Used"
+msgstr "Использовано"
+
+#: sensors.js:112
+msgid "Usage"
+msgstr "Использование"
+
+#: sensors.js:120
+msgid "Swap Used"
+msgstr "Подкачка: занято"
+
+#: sensors.js:129
+msgid "Swap Usage"
+msgstr "Использование подкачки"
+
+#: sensors.js:178
+msgid "Vendor"
+msgstr "Производитель"
+
+#: sensors.js:179
+msgid "Bogomips"
+msgstr "Bogomips"
+
+#: sensors.js:180
+msgid "Sockets"
+msgstr "Сокеты"
+
+#: sensors.js:182
+msgid "Cache"
+msgstr "Кэш"
+
+#: sensors.js:194
+msgid "Frequency"
+msgstr "Частота"
+
+#: sensors.js:200
+msgid "Min frequency"
+msgstr "Мин. частота"
+
+#: sensors.js:206
+msgid "Max frequency"
+msgstr "Макс. частота"
+
+#: sensors.js:220
+msgid "Kernel"
+msgstr "Ядро"
+
+#: sensors.js:243
+msgid "Process Time"
+msgstr "Время процесса"
+
+#: sensors.js:247
+msgid "Uptime"
+msgstr "Время работы"
+
+#: sensors.js:256
+msgid "Load 1m"
+msgstr "Нагрузка 1мин"
+
+#: sensors.js:257
+msgid "Load 5m"
+msgstr "Нагрузка 5мин"
+
+#: sensors.js:258
+msgid "Load 15m"
+msgstr "Нагрузка 15мин"
+
+#: sensors.js:261
+msgid "Threads Active"
+msgstr "Активные потоки"
+
+#: sensors.js:266
+msgid "Threads Total"
+msgstr "Всего потоков"
+
+#: sensors.js:279
+msgid "Open Files"
+msgstr "Открытые файлы"
+
+#: sensors.js:288
+msgid "Powercap"
+msgstr "Powercap"
+
+#: sensors.js:302
+msgid "Cores"
+msgstr "Ядра"
+
+#: sensors.js:302
+msgid "Uncore"
+msgstr "Внеядерные компоненты"
+
+#: sensors.js:302
+msgid "Memory"
+msgstr "Память"
+
+#: sensors.js:302
+msgid "Platform"
+msgstr "Платформа"
+
+#: sensors.js:315
+msgid "Lap mode"
+msgstr "Режим на коленях"
+
+#: sensors.js:326
+msgid "WiFi"
+msgstr "WiFi"
+
+#: sensors.js:326
+msgid "Mobile"
+msgstr "Мобильная сеть"
+
+#: sensors.js:398
+msgid "Download speed"
+msgstr "Скорость загрузки"
+
+#: sensors.js:406
+msgid "Downloaded since boot"
+msgstr "Загружено с запуска"
+
+#: sensors.js:414
+msgid "Downloaded this session"
+msgstr "Загружено за сеанс"
+
+#: sensors.js:422
+msgid "Upload speed"
+msgstr "Скорость отправки"
+
+#: sensors.js:430
+msgid "Uploaded since boot"
+msgstr "Отправлено с запуска"
+
+#: sensors.js:438
+msgid "Uploaded this session"
+msgstr "Отправлено за сеанс"
+
+#: sensors.js:446
+msgid "Total speed"
+msgstr "Общая скорость"
+
+#: sensors.js:479
+msgid "WiFi Link Quality"
+msgstr "Качество соединения WiFi"
+
+#: sensors.js:486
+msgid "WiFi Signal Level"
+msgstr "Уровень сигнала WiFi"
+
+#: sensors.js:534
+msgid "Public IP"
+msgstr "Публичный IP-адрес"
+
+#: sensors.js:582
+msgid "Reserved"
+msgstr "Зарезервировано"
+
+#: sensors.js:586
+msgid "Used %"
+msgstr "Занято %"
+
+#: sensors.js:588
+msgid "Free %"
+msgstr "Свободно %"
+
+#: sensors.js:609
+msgid "Read total"
+msgstr "Чтение всего"
+
+#: sensors.js:615
+msgid "Read rate"
+msgstr "Скорость чтения"
+
+#: sensors.js:621
+msgid "Write total"
+msgstr "Запись всего"
+
+#: sensors.js:627
+msgid "Write rate"
+msgstr "Скорость записи"
+
+#: sensors.js:649
+msgid "ARC Target"
+msgstr "Цель ARC"
+
+#: sensors.js:650
+msgid "ARC Maximum"
+msgstr "Максимум ARC"
+
+#: sensors.js:651
+msgid "ARC Current"
+msgstr "Текущий ARC"
+
+#: sensors.js:685
+msgid "State"
+msgstr "Состояние"
+
+#: sensors.js:686
+msgid "Cycles"
+msgstr "Циклы"
+
+#: sensors.js:687
+msgid "Voltage"
+msgstr "Напряжение"
+
+#: sensors.js:688
+msgid "Level"
+msgstr "Уровень"
+
+#: sensors.js:689
+msgid "Percentage"
+msgstr "Процент"
+
+#: sensors.js:690
+msgid "Power Rate"
+msgstr "Мощность"
+
+#: sensors.js:691
+msgid "Energy (full)"
+msgstr "Энергия (полная)"
+
+#: sensors.js:692
+msgid "Energy (design)"
+msgstr "Энергия (проектная)"
+
+#: sensors.js:693
+msgid "Energy (now)"
+msgstr "Энергия (сейчас)"
+
+#: sensors.js:695
+msgid "Capacity"
+msgstr "Ёмкость"
+
+#: sensors.js:701
+msgid "Time left"
+msgstr "Осталось времени"
+
+#: sensors.js:915
+msgid "Screen Redraws"
+msgstr "Перерисовки экрана"
+
+#: sensors.js:1698
+msgid "ACPI Thermal Zone"
+msgstr "Тепловая зона ACPI"
+
+#: sensors.js:1699
+msgid "Platform Controller Hub"
+msgstr "Контроллер платформы"
+
+#: sensors.js:1700
+msgid "Wireless Adapter"
+msgstr "Беспроводной адаптер"
+
+#: sensors.js:1701
+msgid "Processor 0"
+msgstr "Процессор 0"
+
+#: sensors.js:1702
+msgid "Processor 1"
+msgstr "Процессор 1"
+
+#: sensors.js:1760
+msgid "Transferred"
+msgstr "Передано"
+
+#: sensors.js:1857
+msgid "ZFS cache"
+msgstr "Кэш ZFS"
+
+#: sensors.js:1904
+msgid "Total power rate"
+msgstr "Общая мощность"
+
+#: sensors.js:1972
+msgid "Average"
+msgstr "В среднем"
+
+#: sensors.js:1972
+msgid "Minimum"
+msgstr "Минимум"
+
+#: sensors.js:1972
+msgid "Maximum"
+msgstr "Максимум"
+
+#: sensors.js:2005
+msgid "Temperature Limit"
+msgstr "Предел температуры"
+
+#: sensors.js:2006
+msgid "Power Limit"
+msgstr "Ограничение мощности"
+
+#: sensors.js:2007
+msgid "Addressing Mode"
+msgstr "Режим адресации"
+
+#: sensors.js:2008
+msgid "Driver Version"
+msgstr "Версия драйвера"
+
+#: sensors.js:2009
+msgid "vBIOS Version"
+msgstr "Версия vBIOS"
+
+#: sensors.js:2010
+msgid "Serial Number"
+msgstr "Серийный номер"
+
+#: sensors.js:2011
+msgid "Domain Number"
+msgstr "Номер домена"
+
+#: sensors.js:2012
+msgid "Bus Number"
+msgstr "Номер шины"
+
+#: sensors.js:2013
+msgid "Device Number"
+msgstr "Номер устройства"
+
+#: sensors.js:2014
+msgid "Device ID"
+msgstr "ID устройства"
+
+#: sensors.js:2015
+msgid "Sub Device ID"
+msgstr "ID подустройства"
+
+#: sensors.js:2072
+msgid "Maximum Link Speed"
+msgstr "Макс. скорость соединения"
+
+#: sensors.js:2080
+msgid "Fan"
+msgstr "Вентилятор"
+
+#: sensors.js:2081
+msgid "Temperature"
+msgstr "Температура"
+
+#: sensors.js:2082
+msgid "Memory Temperature"
+msgstr "Температура памяти"
+
+#: sensors.js:2083
+msgid "Memory Total"
+msgstr "Всего памяти"
+
+#: sensors.js:2084
+msgid "Memory Used"
+msgstr "Занятая память"
+
+#: sensors.js:2085
+msgid "Memory Reserved"
+msgstr "Зарезервированная память"
+
+#: sensors.js:2086
+msgid "Memory Free"
+msgstr "Свободная память"
+
+#: sensors.js:2087
+msgid "Memory Utilization"
+msgstr "Загрузка памяти"
+
+#: sensors.js:2088
+msgid "Utilization"
+msgstr "Загрузка"
+
+#: sensors.js:2089
+msgid "Encoder Utilization"
+msgstr "Загрузка кодировщика"
+
+#: sensors.js:2090
+msgid "Decoder Utilization"
+msgstr "Загрузка декодировщика"
+
+#: sensors.js:2092
+msgid "Memory Frequency"
+msgstr "Частота памяти"
+
+#: sensors.js:2093
+msgid "Encoder/Decoder Frequency"
+msgstr "Частота кодировщика/декодировщика"
+
+#: sensors.js:2094
+msgid "Power"
+msgstr "Мощность"
+
+#: sensors.js:2095
+msgid "Average Power"
+msgstr "Средняя мощность"
+
+#: sensors.js:2112
+msgid "Memory Usage"
+msgstr "Использование памяти"
+
+#: sensors.js:2121
+msgid "Link Speed"
+msgstr "Скорость соединения"
+
+#: helpers/categories.js:12
+msgid "Processor"
+msgstr "Процессор"
+
+#: helpers/categories.js:13
+msgid "System"
+msgstr "Система"
+
+#: helpers/categories.js:14
+msgid "Network"
+msgstr "Сеть"
+
+#: helpers/categories.js:15
+msgid "Storage"
 msgstr "Хранилище"
+
+#: helpers/categories.js:16
+msgid "Battery"
+msgstr "Батарея"
+
+#: helpers/categories.js:17
+msgid "GPU"
+msgstr "GPU"
+
+#: sensors.js:1802
+msgid "Ethernet"
+msgstr "Ethernet"
+
+#: sensors.js:317
+msgid "off"
+msgstr "выкл."
+
+#~ msgid "Physical"
+#~ msgstr "Физическая"
+
+#, fuzzy
+#~ msgid "Cached"
+#~ msgstr "Кэш"
+
+#~ msgid "Allocated"
+#~ msgstr "Использовано"
+
+#~ msgid "Format"
+#~ msgstr "Формат"
+
+#~ msgid "Path"
+#~ msgstr "Путь"
+
+#~ msgid "Display Battery"
+#~ msgstr "Отображать батарею"
+
+#~ msgid "Sensors to show in panel"
+#~ msgstr "Сенсоры, отображаемые на панели"
+
+#~ msgid "List of sensors to be shown in the panel"
+#~ msgstr "Список сенсоров, которые будут отображаться на панели"
+
+#~ msgid "Delay between sensor polling"
+#~ msgstr "Задержка между опросом сенсоров"
+
+#~ msgid "Position in Panel ('left', 'center', 'right')"
+#~ msgstr "Положение на панели ('слева', 'по центру', 'справа')"
+
+#~ msgid "Show one extra digit after decimal"
+#~ msgstr "Показать одну дополнительную цифру после запятой"
+
+#~ msgid "Display sensors in alphabetical order"
+#~ msgstr "Отображать сенсоры в алфавитном порядке"
+
+#~ msgid "Hide data from sensors that are invalid"
+#~ msgstr "Скрывать данные от сенсоров, которые недействительны"
+
+#~ msgid "Display temperature of various components"
+#~ msgstr "Отображать температуры различных компонентов"
+
+#~ msgid ""
+#~ "The unit ('centigrade' or 'fahrenheit') the extension should display the "
+#~ "temperature in"
+#~ msgstr ""
+#~ "Единица измерения ('цельсий' или 'фаренгейт') в котором расширение должно "
+#~ "отображать температуру"
+
+#~ msgid "Display voltage of various components"
+#~ msgstr "Отображать напряжения различных компонентов"
+
+#~ msgid "Display fan rotation per minute"
+#~ msgstr "Отображать обороты вентилятора в минуту"
+
+#~ msgid "Display memory information"
+#~ msgstr "Отображать информацию о памяти"
+
+#~ msgid "Display processor information"
+#~ msgstr "Отображать информацию о процессоре"
+
+#~ msgid "Display system information"
+#~ msgstr "Отображать информацию о системе"
+
+#~ msgid "Display network information"
+#~ msgstr "Отображать информацию о сети"
+
+#~ msgid "Display public IP address of internet connection"
+#~ msgstr "Отображать публичный IP-адрес интернет соединения"
+
+#~ msgid "Network speed format"
+#~ msgstr "Формат скорости сети"
+
+#~ msgid "Should speed display in bits or bytes?"
+#~ msgstr "Должна ли скорость отображаться в битах или байтах?"
+
+#~ msgid "Storage path for monitoring"
+#~ msgstr "Путь хранилища для мониторинга"
+
+#~ msgid "Monitor battery health"
+#~ msgstr "Мониторинг здоровья батареи"
+
+#~ msgid "Memory measurement"
+#~ msgstr "Измерение памяти"
+
+#~ msgid "Can use gigabyte or gibibyte for memory"
+#~ msgstr "Может использовать гигабайт или гибибит для памяти"
+
+#~ msgid "Storage measurement"
+#~ msgstr "Измерение хранилища"
+
+#~ msgid "Can use gigabyte or gibibyte for storage"
+#~ msgstr "Может использовать гигабайт или гибибит для хранилища"
+
+#~ msgid "Battery slot to monitor"
+#~ msgstr "Слот батареи для мониторинга"
+
+#~ msgid "Which numerical battery slot should vitals monitor"
+#~ msgstr "Какой числовой слот батареи следует мониторить vitals"
+
+#~ msgid "Use fixed widths in top bar"
+#~ msgstr "Использовать фиксированную ширину в верхней панели"
+
+#~ msgid "Keep sensors in top bar from jumping around"
+#~ msgstr "Не позволяйте датчикам в верхней панели прыгать"
+
+#~ msgid "Keep top bar clean by only showing sensor values"
+#~ msgstr "Держать верхнюю панель чистой, показывая только значения датчиков"
+
+#~ msgid "memory"
+#~ msgstr "Память"
+
+#~ msgid "processor"
+#~ msgstr "Процессор"
+
+#~ msgid "Boost"
+#~ msgstr "Разгон"
+
+#~ msgid "system"
+#~ msgstr "Система"
+
+#~ msgid "Rate"
+#~ msgstr "Показатель"
+
+#~ msgid "battery"
+#~ msgstr "Батарея"
+
+#~ msgid "storage"
+#~ msgstr "Хранилище"

@@ -1,7 +1,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: \n"
-"POT-Creation-Date: 2022-04-10 21:29+0200\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-30 12:35+0100\n"
 "PO-Revision-Date: \n"
 "Last-Translator: Elias Arno Eskelinen <elias.eskelinen@protonmail.com>\n"
 "Language-Team: \n"
@@ -21,93 +22,67 @@ msgstr ""
 "X-Poedit-SearchPath-5: extension.js\n"
 "X-Poedit-SearchPath-6: schemas/prefs.ui\n"
 
-#: extension.js:129
+#: extension.js:213
 msgid "Refresh"
 msgstr "Virkistä"
 
-#: extension.js:147
+#: extension.js:220
 msgid "System Monitor"
 msgstr "Järjestelmänvalvonta"
 
-#: extension.js:155
+#: extension.js:228
 msgid "Preferences"
 msgstr "Asetukset"
 
-#: prefs.ui:42 schemas/org.gnome.shell.extensions.vitals.gschema.xml:81
-msgid "Include public IP address"
-msgstr "Sisällytä julkinen IP-osoite"
+#: extension.js:237 extension.js:242
+msgid "Show hidden sensors"
+msgstr "Näytä piilotetut anturit"
 
-#: prefs.ui:70
-msgid "Format"
-msgstr "Muoto"
+#: extension.js:242
+msgid "Leave out hidden sensors"
+msgstr "Jätä piilotetut anturit pois"
 
-#: prefs.ui:78
-msgid "Bytes"
-msgstr "Tavut"
+#: extension.js:825
+msgid "Pin to top bar"
+msgstr "Kiinnitä yläpalkkiin"
 
-#: prefs.ui:79
-msgid "Bits"
-msgstr "Bitit"
+#: extension.js:832
+msgid "Pin to category"
+msgstr "Kiinnitä luokkaan"
 
-#: prefs.ui:121
+#: extension.js:834
+msgid "Rename"
+msgstr "Nimeä uudelleen"
+
+#: extension.js:837
+msgid "Hide"
+msgstr "Piilota"
+
+#: prefs.js:34 prefs.js:49
 msgid "General"
 msgstr "Yleinen"
 
-#: prefs.ui:149 schemas/org.gnome.shell.extensions.vitals.gschema.xml:11
-msgid "Seconds between updates"
-msgstr "Sekunnit virkistysten välillä"
+#: prefs.js:38
+msgid "Vitals"
+msgstr "Vitals"
 
-#: prefs.ui:184 schemas/org.gnome.shell.extensions.vitals.gschema.xml:16
-msgid "Position in panel"
-msgstr "Sijainti paneelissa"
-
-#: prefs.ui:193
-msgid "Left"
-msgstr "Vasemmalla"
-
-#: prefs.ui:194
-msgid "Center"
-msgstr "Keskellä"
-
-#: prefs.ui:195
-msgid "Right"
-msgstr "Oikealla"
-
-#: prefs.ui:196
-#, fuzzy
-msgid "Far Left"
-msgstr "Vasemmalla"
-
-#: prefs.ui:197
-#, fuzzy
-msgid "Far Right"
-msgstr "Oikealla"
-
-#: prefs.ui:220 schemas/org.gnome.shell.extensions.vitals.gschema.xml:21
+#: prefs.js:52
 msgid "Use higher precision"
 msgstr "Käytä korkeampaa tarkkuutta"
 
-#: prefs.ui:247 schemas/org.gnome.shell.extensions.vitals.gschema.xml:26
-msgid "Alphabetize sensors"
-msgstr "Luetteloi anturit aakkosjärjestyksessä"
+#: prefs.js:52
+msgid "One more decimal place, and seconds in uptimes."
+msgstr "Yksi desimaali lisää ja sekunnit käyntiaikoihin."
 
-#: prefs.ui:274 schemas/org.gnome.shell.extensions.vitals.gschema.xml:31
-msgid "Hide zero values"
-msgstr "Piilota tyhjät arvot"
+#: prefs.js:53
+msgid "Icon Style"
+msgstr "Kuvakkeiden tyyli"
 
-#: prefs.ui:301
-msgid "Use fixed widths"
-msgstr ""
-
-#: prefs.ui:328 schemas/org.gnome.shell.extensions.vitals.gschema.xml:121
-msgid "Hide icons in top bar"
-msgstr ""
-
-#: prefs.ui:352
+#: prefs.js:55
 msgid "About"
 msgstr "Tietoja"
 
-#: prefs.ui:367
+#: prefs.js:56
 msgid ""
 "Feature requests or bugs? Please visit <a href=\"https://github.com/"
 "corecoding/Vitals/issues\">GitHub</a>. No warranty, expressed or implied. <a "
@@ -116,431 +91,1070 @@ msgid ""
 msgstr ""
 "Onko sinulla ominaisuuspyyntöjä tai oletko löytänyt bugeja? Käy osoitteessa "
 "<a href=\"https://github.com/corecoding/Vitals/issues\">GitHub</a>. "
-"Ohjelmisto ei sisällä minkäänlaisia takuuta, ilmaistua taiko epäsuoraa. <a "
+"Ohjelmistolla ei ole minkäänlaista takuuta, nimenomaista tai epäsuoraa. <a "
 "href=\"https://corecoding.com/donate.php\">Lahjoita</a> jos pidät tätä "
 "ohjelmistoa hyödyllisenä."
 
-#: prefs.ui:394
+#: prefs.js:59
+msgid "Top Bar"
+msgstr "Yläpalkki"
+
+#: prefs.js:60
+msgid "Placement"
+msgstr "Sijoittelu"
+
+#: prefs.js:61
+msgid "Position"
+msgstr "Sijainti"
+
+#: prefs.js:61
+msgid "Far left and far right are the outer ends of the bar."
+msgstr "Äärivasen ja äärioikea ovat palkin uloimmat päät."
+
+#: prefs.js:62
+msgid "Far left"
+msgstr "Äärivasemmalla"
+
+#: prefs.js:62
+msgid "Left"
+msgstr "Vasemmalla"
+
+#: prefs.js:62
+msgid "Center"
+msgstr "Keskellä"
+
+#: prefs.js:62
+msgid "Right"
+msgstr "Oikealla"
+
+#: prefs.js:62
+msgid "Far right"
+msgstr "Äärioikealla"
+
+#: prefs.js:63
+msgid "Reorder sensors by drag and drop"
+msgstr "Järjestä anturit vetämällä ja pudottamalla"
+
+#: prefs.js:64
+msgid "Appearance"
+msgstr "Ulkoasu"
+
+#: prefs.js:65
+msgid "Steady widths"
+msgstr "Vakaat leveydet"
+
+#: prefs.js:66
+msgid ""
+"Keep room for a value’s widest text, so its neighbours do not jump. The room "
+"is given back after a minute."
+msgstr "Varaa tilaa arvon leveimmälle tekstille, jotta viereiset arvot eivät hypi. Tila vapautetaan minuutin kuluttua."
+
+#: prefs.js:67
+msgid "Remember widths"
+msgstr "Muista leveydet"
+
+#: prefs.js:68
+msgid ""
+"With steady widths, each value starts with the room it had when Vitals was "
+"last switched off."
+msgstr "Kun leveydet pidetään vakaina, kukin arvo saa aluksi saman tilan kuin silloin, kun Vitals poistettiin viimeksi käytöstä."
+
+#: prefs.js:69
+msgid "Emphasize values"
+msgstr "Korosta arvoja"
+
+#: prefs.js:69
+msgid "Draw icons and units lighter and smaller than the numbers."
+msgstr "Näytä kuvakkeet ja yksiköt numeroita vaaleampina ja pienempinä."
+
+#: prefs.js:70
+msgid "Crop icons"
+msgstr "Rajaa kuvakkeet"
+
+#: prefs.js:70
+msgid "Remove transparent borders while preserving each icon’s aspect ratio."
+msgstr "Poista läpinäkyvät reunat säilyttäen kunkin kuvakkeen kuvasuhde."
+
+#: prefs.js:71
+msgid "Hide icons"
+msgstr "Piilota kuvakkeet"
+
+#: prefs.js:71
+msgid "The icons in the menu stay."
+msgstr "Valikon kuvakkeet säilyvät."
+
+#: prefs.js:73
+msgid "Menu"
+msgstr "Valikko"
+
+#: prefs.js:75
+msgid "Open centered under the sensors"
+msgstr "Avaa keskitettynä anturien alle"
+
+#: prefs.js:75
+msgid "Otherwise the menu opens centered under the pointer."
+msgstr "Muuten valikko avautuu keskitettynä osoittimen alle."
+
+#: prefs.js:76
+msgid "System monitor command"
+msgstr "Järjestelmänvalvonnan komento"
+
+#: prefs.js:77
+msgid ""
+"The program that the System Monitor button at the bottom of the menu starts."
+msgstr "Ohjelma, jonka valikon alareunan Järjestelmänvalvonta-painike käynnistää."
+
+#: prefs.js:78
+msgid "Categories"
+msgstr "Luokat"
+
+#: prefs.js:79
+msgid "Order"
+msgstr "Järjestys"
+
+#: prefs.js:79
+msgid "Manual is the order given by dragging categories in the menu."
+msgstr "Manuaalinen järjestys asetetaan vetämällä luokkia valikossa."
+
+#: prefs.js:80
+msgid "Alphabetical"
+msgstr "Aakkosjärjestys"
+
+#: prefs.js:80
+msgid "Manual"
+msgstr "Manuaalinen"
+
+#: prefs.js:82
+msgid "Reorder by drag and drop"
+msgstr "Järjestä vetämällä ja pudottamalla"
+
+#: prefs.js:82
+msgid "Only in the manual order."
+msgstr "Vain manuaalisessa järjestyksessä."
+
+#: prefs.js:83
+msgid "Slide open and shut"
+msgstr "Avaa ja sulje liukuen"
+
+#: prefs.js:84 prefs.js:439
 msgid "Sensors"
 msgstr "Anturit"
 
-#: prefs.ui:422 schemas/org.gnome.shell.extensions.vitals.gschema.xml:36
+#: prefs.js:85
+msgid "Show average, minimum and maximum"
+msgstr "Näytä keskiarvo, minimi ja maksimi"
+
+#: prefs.js:86
+msgid "In the temperature and fan categories, below the sensors."
+msgstr "Lämpötila- ja tuuletinluokissa anturien alla."
+
+#: prefs.js:88
 msgid "Monitor temperature"
 msgstr "Valvo lämpötilaa"
 
-#: prefs.ui:473 schemas/org.gnome.shell.extensions.vitals.gschema.xml:46
-msgid "Monitor voltage"
-msgstr "Valvo jännitettä"
-
-#: prefs.ui:501 schemas/org.gnome.shell.extensions.vitals.gschema.xml:51
-msgid "Monitor fan"
-msgstr "Valvo tuuletinta"
-
-#: prefs.ui:529 schemas/org.gnome.shell.extensions.vitals.gschema.xml:56
-msgid "Monitor memory"
-msgstr "Valvo muistia"
-
-#: prefs.ui:580 schemas/org.gnome.shell.extensions.vitals.gschema.xml:61
-msgid "Monitor processor"
-msgstr "Valvo suoritinta"
-
-#: prefs.ui:608 schemas/org.gnome.shell.extensions.vitals.gschema.xml:66
-msgid "Monitor system"
-msgstr "Valvo järjestelmää"
-
-#: prefs.ui:636 schemas/org.gnome.shell.extensions.vitals.gschema.xml:76
-msgid "Monitor network"
-msgstr "Valvo verkkoa"
-
-#: prefs.ui:687 schemas/org.gnome.shell.extensions.vitals.gschema.xml:71
-msgid "Monitor storage"
-msgstr "Valvo tallennustilaa"
-
-#: prefs.ui:738 schemas/org.gnome.shell.extensions.vitals.gschema.xml:96
-#, fuzzy
-msgid "Monitor battery"
-msgstr "Valvo muistia"
-
-#: prefs.ui:817
-msgid "Path"
-msgstr "Polku"
-
-#: prefs.ui:849 prefs.ui:958
-msgid "Measurement"
-msgstr ""
-
-#: prefs.ui:903
+#: prefs.js:89 prefs.js:500
 msgid "Unit"
 msgstr "Yksikkö"
 
-#: prefs.ui:1012
-msgid "Display Battery"
-msgstr ""
+#: prefs.js:89
+msgid "°C"
+msgstr "°C"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:6
-#, fuzzy
-msgid "Sensors to show in panel"
-msgstr "Sijainti paneelissa"
+#: prefs.js:89
+msgid "°F"
+msgstr "°F"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:7
-msgid "List of sensors to be shown in the panel"
-msgstr ""
+#: prefs.js:90
+msgid "Skip sensors that read zero"
+msgstr "Ohita nollaa näyttävät anturit"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:12
-msgid "Delay between sensor polling"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:17
-msgid "Position in Panel ('left', 'center', 'right')"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:22
-msgid "Show one extra digit after decimal"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:27
-msgid "Display sensors in alphabetical order"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:32
-msgid "Hide data from sensors that are invalid"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:37
-msgid "Display temperature of various components"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:41
-#, fuzzy
-msgid "Temperature unit"
-msgstr "Lämpötila"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:42
+#: prefs.js:91
 msgid ""
-"The unit ('centigrade' or 'fahrenheit') the extension should display the "
-"temperature in"
-msgstr ""
+"A sensor that reads zero when it is found is left out. One that reads zero "
+"later stays."
+msgstr "Anturi jätetään pois, jos se näyttää nollaa löydettäessä. Myöhemmin nollaa näyttävä anturi säilyy."
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:47
-msgid "Display voltage of various components"
-msgstr ""
+#: prefs.js:93
+msgid "Monitor voltage"
+msgstr "Valvo jännitettä"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:52
-msgid "Display fan rotation per minute"
-msgstr ""
+#: prefs.js:95
+msgid "Monitor fan"
+msgstr "Valvo tuuletinta"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:57
-msgid "Display memory information"
-msgstr ""
+#: prefs.js:97
+msgid "Monitor power"
+msgstr "Valvo tehoa"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:62
-msgid "Display processor information"
-msgstr ""
+#: prefs.js:98
+msgid "Read powercap"
+msgstr "Lue powercap"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:67
-msgid "Display system information"
-msgstr ""
+#: prefs.js:99
+msgid ""
+"The power draw of the processor, such as Intel RAPL. Most systems let only "
+"root read it."
+msgstr "Suorittimen tehonkulutus, kuten Intel RAPL. Useimmissa järjestelmissä vain root voi lukea sen."
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:72
-msgid "Display storage information"
-msgstr ""
+#: prefs.js:101
+msgid "Monitor memory"
+msgstr "Valvo muistia"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:77
-msgid "Display network information"
-msgstr ""
+#: prefs.js:102
+msgid "Show details"
+msgstr "Näytä lisätiedot"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:82
-msgid "Display public IP address of internet connection"
-msgstr ""
+#: prefs.js:103
+msgid "Additional readings in the menu; pinned readings stay in the top bar."
+msgstr "Lisälukemat valikossa; kiinnitetyt lukemat säilyvät yläpalkissa."
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:86
-msgid "Network speed format"
-msgstr ""
+#: prefs.js:104 prefs.js:128
+msgid "Units"
+msgstr "Yksiköt"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:87
-msgid "Should speed display in bits or bytes?"
-msgstr ""
+#: prefs.js:106 prefs.js:130
+msgid "Binary"
+msgstr "Binäärinen"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:91
-#, fuzzy
-msgid "Storage path"
-msgstr "Tallennustila"
+#: prefs.js:106 prefs.js:130
+msgid "KiB, MiB, GiB"
+msgstr "KiB, MiB, GiB"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:92
-msgid "Storage path for monitoring"
-msgstr ""
+#: prefs.js:106
+msgid "15.5 GiB"
+msgstr "15,5 GiB"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:97
-#, fuzzy
-msgid "Monitor battery health"
-msgstr "Valvo lämpötilaa"
+#: prefs.js:107 prefs.js:131
+msgid "Decimal"
+msgstr "Desimaalinen"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:101
-msgid "Memory measurement"
-msgstr ""
+#: prefs.js:107 prefs.js:131
+msgid "kB, MB, GB"
+msgstr "kB, MB, GB"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:102
-msgid "Can use gigabyte or gibibyte for memory"
-msgstr ""
+#: prefs.js:107
+msgid "16.6 GB"
+msgstr "16,6 GB"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:106
-#, fuzzy
-msgid "Storage measurement"
-msgstr "Tallennustilan Asetukset"
+#: prefs.js:109
+msgid "Monitor processor"
+msgstr "Valvo suoritinta"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:107
-msgid "Can use gigabyte or gibibyte for storage"
-msgstr ""
+#: prefs.js:110 prefs.js:140
+msgid "Include static information"
+msgstr "Sisällytä muuttumattomat tiedot"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:111
-msgid "Battery slot to monitor"
-msgstr ""
+#: prefs.js:110
+msgid "Values that never change, such as vendor and cache size."
+msgstr "Arvot, jotka eivät muutu, kuten valmistaja ja välimuistin koko."
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:112
-msgid "Which numerical battery slot should vitals monitor"
-msgstr ""
+#: prefs.js:111
+msgid "Show individual cores"
+msgstr "Näytä yksittäiset ytimet"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:116
-msgid "Use fixed widths in top bar"
-msgstr ""
+#: prefs.js:111
+msgid "The usage of each core."
+msgstr "Kunkin ytimen käyttöaste."
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:117
-msgid "Keep sensors in top bar from jumping around"
-msgstr ""
+#: prefs.js:112
+msgid "Read live frequency from cpufreq"
+msgstr "Lue reaaliaikainen taajuus cpufreqistä"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:122
-msgid "Keep top bar clean by only showing sensor values"
-msgstr ""
+#: prefs.js:113
+msgid ""
+"Reads each core instead of /proc/cpuinfo, which some machines report late. "
+"Without cpufreq, /proc/cpuinfo is used."
+msgstr "Lukee jokaisen ytimen /proc/cpuinfo-tiedoston sijaan, jota jotkin koneet päivittävät viiveellä. Ilman cpufreqiä käytetään /proc/cpuinfo-tiedostoa."
 
-#: sensors.js:42
-#, fuzzy
-msgid "Temperature"
-msgstr "Lämpötila"
+#: prefs.js:115
+msgid "Monitor system"
+msgstr "Valvo järjestelmää"
 
-#: sensors.js:43 sensors.js:307 sensors.js:337
-msgid "Voltage"
-msgstr "Jännite"
+#: prefs.js:117
+msgid "Monitor network"
+msgstr "Valvo verkkoa"
 
-#: sensors.js:44
-msgid "Fan"
-msgstr "Tuuletin"
+#: prefs.js:118
+msgid "Only show hardware interfaces"
+msgstr "Näytä vain laitteiston verkkoliitännät"
 
-#: sensors.js:45
-msgid "Memory"
-msgstr "Muisti"
+#: prefs.js:118
+msgid "Hide bridges, container, VPN and loopback interfaces."
+msgstr "Piilota silta-, kontti-, VPN- ja loopback-liitännät."
 
-#: sensors.js:46
-msgid "Processor"
-msgstr "Suoritin"
+#: prefs.js:119
+msgid "Speeds"
+msgstr "Nopeudet"
 
-#: sensors.js:47
-msgid "System"
-msgstr "Järjestelmä"
+#: prefs.js:120
+msgid "Measure in"
+msgstr "Mittayksikkö"
 
-#: sensors.js:48
-msgid "Network"
-msgstr "Verkko"
+#: prefs.js:120
+msgid "Bytes"
+msgstr "Tavut"
 
-#: sensors.js:49
-#, fuzzy
-msgid "Storage"
-msgstr "Tallennustila"
+#: prefs.js:120
+msgid "Bits"
+msgstr "Bitit"
 
-#: sensors.js:76
-msgid "Public IP"
-msgstr "Julkinen IP"
+#: prefs.js:122
+msgid "Public IP Address"
+msgstr "Julkinen IP-osoite"
 
-#: sensors.js:144
-msgid "Usage"
-msgstr "Käyttöaste"
+#: prefs.js:123
+msgid "Show public IP address"
+msgstr "Näytä julkinen IP-osoite"
 
-#: sensors.js:145
-#, fuzzy
-msgid "memory"
-msgstr "Muisti"
+#: prefs.js:123
+msgid "Looked up over the internet."
+msgstr "Haetaan internetistä."
 
-#: sensors.js:146
-msgid "Physical"
-msgstr "Fyysinen"
+#: prefs.js:124
+msgid "Minutes between lookups"
+msgstr "Minuuttia hakujen välillä"
 
-#: sensors.js:147
-msgid "Available"
-msgstr "Saatavilla"
+#: prefs.js:125
+msgid "Refresh in the menu looks it up at once."
+msgstr "Valikon Virkistä-toiminto hakee sen heti."
 
-#: sensors.js:148
-msgid "Allocated"
-msgstr "Varattu"
+#: prefs.js:127
+msgid "Monitor storage"
+msgstr "Valvo tallennustilaa"
 
-#: sensors.js:149
-msgid "Swap"
-msgstr "Vaihtaa"
+#: prefs.js:130
+msgid "100.5 GiB"
+msgstr "100,5 GiB"
 
-#: sensors.js:189
-msgid "Average"
-msgstr "Keskiarvo"
+#: prefs.js:131
+msgid "107.9 GB"
+msgstr "107,9 GB"
 
-#: sensors.js:190
-#, fuzzy
-msgid "processor"
-msgstr "Suoritin"
+#: prefs.js:133
+msgid "Network Storage Locations"
+msgstr "Verkkotallennussijainnit"
 
-#: sensors.js:192
+#: prefs.js:134
+msgid "Minutes between updates"
+msgstr "Minuuttia päivitysten välillä"
+
+#: prefs.js:135
+msgid "A share is asked over the network, so less often than a disk."
+msgstr "Jakoa kysellään verkon kautta, joten harvemmin kuin levyä."
+
+#: prefs.js:137
+msgid "Monitor battery"
+msgstr "Valvo akkua"
+
+#: prefs.js:139
+msgid "Monitor GPU"
+msgstr "Valvo näytönohjainta"
+
+#: prefs.js:139
+msgid "NVIDIA cards are read with the nvidia-smi tool."
+msgstr "NVIDIA-kortit luetaan nvidia-smi-työkalulla."
+
+#: prefs.js:141
+msgid "Values that never change, such as driver version and power limit."
+msgstr "Arvot, jotka eivät muutu, kuten ajuriversio ja tehoraja."
+
+#: prefs.js:166
+msgid "Classic"
+msgstr "Klassinen"
+
+#: prefs.js:166
+msgid "Filled and detailed"
+msgstr "Täytetyt ja yksityiskohtaiset"
+
+#: prefs.js:167
+msgid "Adwaita"
+msgstr "Adwaita"
+
+#: prefs.js:167
+msgid "Rounded outlines"
+msgstr "Pyöristetyt ääriviivat"
+
+#: prefs.js:252
+#, javascript-format
+msgid "%s (unavailable)"
+msgstr "%s (ei saatavilla)"
+
+#: prefs.js:271
+msgid "Up to"
+msgstr "Enintään"
+
+#: prefs.js:271
+msgid "From"
+msgstr "Alkaen"
+
+#: prefs.js:275
+msgid "Remove breakpoint"
+msgstr "Poista rajapiste"
+
+#: prefs.js:279
+msgid "Add breakpoint"
+msgstr "Lisää rajapiste"
+
+#: prefs.js:284
+msgid "Remove color scale"
+msgstr "Poista väriasteikko"
+
+#: prefs.js:294
+msgid "Add"
+msgstr "Lisää"
+
+#: prefs.js:297
+msgid "Add color scale"
+msgstr "Lisää väriasteikko"
+
+#: prefs.js:300
+msgid "Threshold Colors"
+msgstr "Raja-arvojen värit"
+
+#: prefs.js:341
+#, javascript-format
+msgid "All values in %s"
+msgstr "Kaikki arvot yksikössä %s"
+
+#: prefs.js:341
+msgid "All values without a unit"
+msgstr "Kaikki yksiköttömät arvot"
+
+#: prefs.js:353
+msgid "Storage Locations"
+msgstr "Tallennussijainnit"
+
+#: prefs.js:354
+msgid "Add storage location"
+msgstr "Lisää tallennussijainti"
+
+#: prefs.js:355
+msgid "Monitor drives mounted by GNOME"
+msgstr "Valvo GNOMEn liittämiä asemia"
+
+#: prefs.js:367
+#, javascript-format
+msgid "Now: %s"
+msgstr "Nyt: %s"
+
+#: prefs.js:367
+msgid "None at the moment"
+msgstr "Ei tällä hetkellä"
+
+#: prefs.js:369
+msgid "Not mounted"
+msgstr "Ei liitetty"
+
+#: prefs.js:370
+msgid "Remove storage location"
+msgstr "Poista tallennussijainti"
+
+#: prefs.js:399
+msgid "Add Storage Location"
+msgstr "Lisää tallennussijainti"
+
+#: prefs.js:401
+msgid "Other mount points"
+msgstr "Muut liitospisteet"
+
+#: prefs.js:497
+msgid "Automatic"
+msgstr "Automaattinen"
+
+#: prefs.js:497
+msgid "kbit/s"
+msgstr "kbit/s"
+
+#: prefs.js:497
+msgid "Mbit/s"
+msgstr "Mbit/s"
+
+#: prefs.js:497
+msgid "kB/s"
+msgstr "kB/s"
+
+#: prefs.js:497
+msgid "MB/s"
+msgstr "MB/s"
+
+#: prefs.js:516
+msgid "1 second"
+msgstr "1 sekunti"
+
+#: prefs.js:516
+msgid "2 seconds"
+msgstr "2 sekuntia"
+
+#: prefs.js:516
+msgid "3 seconds"
+msgstr "3 sekuntia"
+
+#: prefs.js:516
+msgid "5 seconds"
+msgstr "5 sekuntia"
+
+#: prefs.js:516
+msgid "10 seconds"
+msgstr "10 sekuntia"
+
+#: prefs.js:517
+msgid "15 seconds"
+msgstr "15 sekuntia"
+
+#: prefs.js:517
+msgid "30 seconds"
+msgstr "30 sekuntia"
+
+#: prefs.js:517
+msgid "60 seconds"
+msgstr "60 sekuntia"
+
+#: prefs.js:519
+msgid "Update every"
+msgstr "Päivitysväli"
+
+#: prefs.js:520
+msgid ""
+"Only sensors on screen are read: those in the top bar and in the open menu."
+msgstr "Vain näkyvät anturit luetaan: yläpalkissa ja avoimessa valikossa olevat."
+
+#: sensors.js:317
+msgid "on"
+msgstr "päällä"
+
+#: sensors.js:1595
 #, javascript-format
 msgid "Core %d"
 msgstr "Ydin %d"
 
-#: sensors.js:236
-msgid "Frequency"
-msgstr "Taajuus"
+#: sensors.js:2041
+#, javascript-format
+msgid "GPU %d"
+msgstr "GPU %d"
 
-#: sensors.js:237
-msgid "Boost"
-msgstr "Boost-taajuus"
-
-#: sensors.js:238
-msgid "Vendor"
-msgstr ""
-
-#: sensors.js:239
-msgid "Bogomips"
-msgstr ""
-
-#: sensors.js:240
-msgid "Sockets"
-msgstr ""
-
-#: sensors.js:241
-msgid "Cache"
-msgstr ""
-
-#: sensors.js:250
-msgid "Open Files"
-msgstr "Tiedostoja Avoinna"
-
-#: sensors.js:258
-msgid "Load 1m"
-msgstr "Kuormitus 1m"
-
-#: sensors.js:259
-#, fuzzy
-msgid "system"
-msgstr "Järjestelmä"
-
-#: sensors.js:260
-msgid "Load 5m"
-msgstr "Kuormitus 5m"
-
-#: sensors.js:261
-msgid "Load 15m"
-msgstr "Kuormitus 15m"
-
-#: sensors.js:262
-msgid "Threads Active"
-msgstr "Aktiivisia Säikeitä"
-
-#: sensors.js:263
-msgid "Threads Total"
-msgstr "Säikeitä Yhteensä"
-
-#: sensors.js:269
-msgid "Uptime"
-msgstr "Käyntiaika"
-
-#: sensors.js:273
-msgid "Process Time"
-msgstr "Prosessin Pituus"
-
-#: sensors.js:290
-msgid "State"
-msgstr ""
-
-#: sensors.js:295
-msgid "Cycles"
-msgstr ""
-
-#: sensors.js:300 sensors.js:330
-msgid "Energy (full)"
-msgstr ""
-
-#: sensors.js:302 sensors.js:332
-msgid "Capacity"
-msgstr ""
-
-#: sensors.js:303 sensors.js:333
-msgid "Energy (design)"
-msgstr ""
-
-#: sensors.js:311 sensors.js:340
-msgid "Rate"
-msgstr ""
-
-#: sensors.js:312 sensors.js:341
-#, fuzzy
-msgid "battery"
-msgstr "Valvo muistia"
-
-#: sensors.js:316 sensors.js:344
-msgid "Energy (now)"
-msgstr ""
-
-#: sensors.js:322 sensors.js:350
-msgid "Percentage"
-msgstr ""
-
-#: sensors.js:411
-msgid "WiFi Link Quality"
-msgstr ""
-
-#: sensors.js:412
-msgid "WiFi Signal Level"
-msgstr ""
-
-#: sensors.js:432
-msgid "ARC Target"
-msgstr ""
-
-#: sensors.js:433
-#, fuzzy
-msgid "ARC Maximum"
-msgstr "Maksimi "
-
-#: sensors.js:434
-msgid "ARC Current"
-msgstr ""
-
-#: sensors.js:445
-msgid "Read total"
-msgstr "Dataa luettu"
-
-#: sensors.js:446
-msgid "Write total"
-msgstr "Dataa kirjoitettu"
-
-#: sensors.js:447
-msgid "Read rate"
-msgstr "Dataa luettu/sekunti"
-
-#: sensors.js:448
-msgid "Write rate"
-msgstr "Dataa kirjoitettu/sekunti"
-
-#: sensors.js:467
+#: sensors.js:84
 msgid "Total"
 msgstr "Yhteensä"
 
-#: sensors.js:468
-msgid "Used"
-msgstr "Käytetty"
+#: sensors.js:85
+msgid "Available"
+msgstr "Saatavilla"
 
-#: sensors.js:469
-msgid "Reserved"
-msgstr "Varattu"
+#: sensors.js:87
+msgid "File cache"
+msgstr "Tiedostovälimuisti"
 
-#: sensors.js:470
+#: sensors.js:87
+msgid "Memory details"
+msgstr "Muistin lisätiedot"
+
+#: sensors.js:88
+msgid "Shared"
+msgstr "Jaettu"
+
+#: sensors.js:89
+msgid "Kernel cache"
+msgstr "Ydinvälimuisti"
+
+#: sensors.js:90
+msgid "Buffers"
+msgstr "Puskurit"
+
+#: sensors.js:91
+msgid "Reclaimable"
+msgstr "Vapautettavissa"
+
+#: sensors.js:93
 msgid "Free"
 msgstr "Vapaana"
 
-#: sensors.js:471
+#: sensors.js:94
+msgid "Swap Total"
+msgstr "Sivutustila yhteensä"
+
+#: sensors.js:94
+msgid "Swap"
+msgstr "Sivutustila"
+
+#: sensors.js:96
+msgid "Swap Free"
+msgstr "Sivutustilaa vapaana"
+
+#: sensors.js:106
+msgid "Used"
+msgstr "Käytetty"
+
+#: sensors.js:112
+msgid "Usage"
+msgstr "Käyttöaste"
+
+#: sensors.js:120
+msgid "Swap Used"
+msgstr "Sivutustilaa käytetty"
+
+#: sensors.js:129
+msgid "Swap Usage"
+msgstr "Sivutustilan käyttöaste"
+
+#: sensors.js:178
+msgid "Vendor"
+msgstr "Valmistaja"
+
+#: sensors.js:179
+msgid "Bogomips"
+msgstr "Bogomips"
+
+#: sensors.js:180
+msgid "Sockets"
+msgstr "Kannat"
+
+#: sensors.js:182
+msgid "Cache"
+msgstr "Välimuisti"
+
+#: sensors.js:194
+msgid "Frequency"
+msgstr "Taajuus"
+
+#: sensors.js:200
+msgid "Min frequency"
+msgstr "Vähimmäistaajuus"
+
+#: sensors.js:206
+msgid "Max frequency"
+msgstr "Enimmäistaajuus"
+
+#: sensors.js:220
+msgid "Kernel"
+msgstr "Ydin"
+
+#: sensors.js:243
+msgid "Process Time"
+msgstr "Suoritinaika"
+
+#: sensors.js:247
+msgid "Uptime"
+msgstr "Käyntiaika"
+
+#: sensors.js:256
+msgid "Load 1m"
+msgstr "Kuormitus 1m"
+
+#: sensors.js:257
+msgid "Load 5m"
+msgstr "Kuormitus 5m"
+
+#: sensors.js:258
+msgid "Load 15m"
+msgstr "Kuormitus 15m"
+
+#: sensors.js:261
+msgid "Threads Active"
+msgstr "Aktiivisia Säikeitä"
+
+#: sensors.js:266
+msgid "Threads Total"
+msgstr "Säikeitä Yhteensä"
+
+#: sensors.js:279
+msgid "Open Files"
+msgstr "Tiedostoja Avoinna"
+
+#: sensors.js:288
+msgid "Powercap"
+msgstr "Powercap"
+
+#: sensors.js:302
+msgid "Cores"
+msgstr "Ytimet"
+
+#: sensors.js:302
+msgid "Uncore"
+msgstr "Uncore"
+
+#: sensors.js:302
+msgid "Memory"
+msgstr "Muisti"
+
+#: sensors.js:302
+msgid "Platform"
+msgstr "Alusta"
+
+#: sensors.js:315
+msgid "Lap mode"
+msgstr "Sylitila"
+
+#: sensors.js:326
+msgid "WiFi"
+msgstr "Wi-Fi"
+
+#: sensors.js:326
+msgid "Mobile"
+msgstr "Mobiili"
+
+#: sensors.js:398
+msgid "Download speed"
+msgstr "Latausnopeus"
+
+#: sensors.js:406
+msgid "Downloaded since boot"
+msgstr "Ladattu käynnistyksen jälkeen"
+
+#: sensors.js:414
+msgid "Downloaded this session"
+msgstr "Ladattu tässä istunnossa"
+
+#: sensors.js:422
+msgid "Upload speed"
+msgstr "Lähetysnopeus"
+
+#: sensors.js:430
+msgid "Uploaded since boot"
+msgstr "Lähetetty käynnistyksen jälkeen"
+
+#: sensors.js:438
+msgid "Uploaded this session"
+msgstr "Lähetetty tässä istunnossa"
+
+#: sensors.js:446
+msgid "Total speed"
+msgstr "Kokonaisnopeus"
+
+#: sensors.js:479
+msgid "WiFi Link Quality"
+msgstr "Wi-Fi-yhteyden laatu"
+
+#: sensors.js:486
+msgid "WiFi Signal Level"
+msgstr "Wi-Fi-signaalin voimakkuus"
+
+#: sensors.js:534
+msgid "Public IP"
+msgstr "Julkinen IP"
+
+#: sensors.js:582
+msgid "Reserved"
+msgstr "Varattu"
+
+#: sensors.js:586
+msgid "Used %"
+msgstr "Käytetty %"
+
+#: sensors.js:588
+msgid "Free %"
+msgstr "Vapaana %"
+
+#: sensors.js:609
+msgid "Read total"
+msgstr "Dataa luettu"
+
+#: sensors.js:615
+msgid "Read rate"
+msgstr "Dataa luettu/sekunti"
+
+#: sensors.js:621
+msgid "Write total"
+msgstr "Dataa kirjoitettu"
+
+#: sensors.js:627
+msgid "Write rate"
+msgstr "Dataa kirjoitettu/sekunti"
+
+#: sensors.js:649
+msgid "ARC Target"
+msgstr "ARC-tavoite"
+
+#: sensors.js:650
+msgid "ARC Maximum"
+msgstr "ARC-enimmäiskoko"
+
+#: sensors.js:651
+msgid "ARC Current"
+msgstr "ARC:n nykyinen koko"
+
+#: sensors.js:685
+msgid "State"
+msgstr "Tila"
+
+#: sensors.js:686
+msgid "Cycles"
+msgstr "Latauskerrat"
+
+#: sensors.js:687
+msgid "Voltage"
+msgstr "Jännite"
+
+#: sensors.js:688
+msgid "Level"
+msgstr "Taso"
+
+#: sensors.js:689
+msgid "Percentage"
+msgstr "Prosenttiosuus"
+
+#: sensors.js:690
+msgid "Power Rate"
+msgstr "Teho"
+
+#: sensors.js:691
+msgid "Energy (full)"
+msgstr "Energia (täysi)"
+
+#: sensors.js:692
+msgid "Energy (design)"
+msgstr "Energia (suunniteltu)"
+
+#: sensors.js:693
+msgid "Energy (now)"
+msgstr "Energia (nyt)"
+
+#: sensors.js:695
+msgid "Capacity"
+msgstr "Kapasiteetti"
+
+#: sensors.js:701
+msgid "Time left"
+msgstr "Aikaa jäljellä"
+
+#: sensors.js:915
+msgid "Screen Redraws"
+msgstr "Näytön uudelleenpiirrot"
+
+#: sensors.js:1698
+msgid "ACPI Thermal Zone"
+msgstr "ACPI-lämpövyöhyke"
+
+#: sensors.js:1699
+msgid "Platform Controller Hub"
+msgstr "Platform Controller Hub"
+
+#: sensors.js:1700
+msgid "Wireless Adapter"
+msgstr "Langaton sovitin"
+
+#: sensors.js:1701
+msgid "Processor 0"
+msgstr "Suoritin 0"
+
+#: sensors.js:1702
+msgid "Processor 1"
+msgstr "Suoritin 1"
+
+#: sensors.js:1760
+msgid "Transferred"
+msgstr "Siirretty"
+
+#: sensors.js:1857
+msgid "ZFS cache"
+msgstr "ZFS-välimuisti"
+
+#: sensors.js:1904
+msgid "Total power rate"
+msgstr "Kokonaisteho"
+
+#: sensors.js:1972
+msgid "Average"
+msgstr "Keskiarvo"
+
+#: sensors.js:1972
+msgid "Minimum"
+msgstr "Minimi"
+
+#: sensors.js:1972
+msgid "Maximum"
+msgstr "Maksimi"
+
+#: sensors.js:2005
+msgid "Temperature Limit"
+msgstr "Lämpötilaraja"
+
+#: sensors.js:2006
+msgid "Power Limit"
+msgstr "Tehoraja"
+
+#: sensors.js:2007
+msgid "Addressing Mode"
+msgstr "Osoitustila"
+
+#: sensors.js:2008
+msgid "Driver Version"
+msgstr "Ajuriversio"
+
+#: sensors.js:2009
+msgid "vBIOS Version"
+msgstr "vBIOS-versio"
+
+#: sensors.js:2010
+msgid "Serial Number"
+msgstr "Sarjanumero"
+
+#: sensors.js:2011
+msgid "Domain Number"
+msgstr "Toimialuenumero"
+
+#: sensors.js:2012
+msgid "Bus Number"
+msgstr "Väylänumero"
+
+#: sensors.js:2013
+msgid "Device Number"
+msgstr "Laitenumero"
+
+#: sensors.js:2014
+msgid "Device ID"
+msgstr "Laitetunnus"
+
+#: sensors.js:2015
+msgid "Sub Device ID"
+msgstr "Alilaitetunnus"
+
+#: sensors.js:2072
+msgid "Maximum Link Speed"
+msgstr "Yhteyden enimmäisnopeus"
+
+#: sensors.js:2080
+msgid "Fan"
+msgstr "Tuuletin"
+
+#: sensors.js:2081
+msgid "Temperature"
+msgstr "Lämpötila"
+
+#: sensors.js:2082
+msgid "Memory Temperature"
+msgstr "Muistin lämpötila"
+
+#: sensors.js:2083
+msgid "Memory Total"
+msgstr "Muistia yhteensä"
+
+#: sensors.js:2084
+msgid "Memory Used"
+msgstr "Muistia käytetty"
+
+#: sensors.js:2085
+msgid "Memory Reserved"
+msgstr "Muistia varattu"
+
+#: sensors.js:2086
+msgid "Memory Free"
+msgstr "Muistia vapaana"
+
+#: sensors.js:2087
+msgid "Memory Utilization"
+msgstr "Muistin aktiivisuus"
+
+#: sensors.js:2088
+msgid "Utilization"
+msgstr "Aktiivisuus"
+
+#: sensors.js:2089
+msgid "Encoder Utilization"
+msgstr "Enkooderin aktiivisuus"
+
+#: sensors.js:2090
+msgid "Decoder Utilization"
+msgstr "Dekooderin aktiivisuus"
+
+#: sensors.js:2092
+msgid "Memory Frequency"
+msgstr "Muistin taajuus"
+
+#: sensors.js:2093
+msgid "Encoder/Decoder Frequency"
+msgstr "Enkooderin/dekooderin taajuus"
+
+#: sensors.js:2094
+msgid "Power"
+msgstr "Teho"
+
+#: sensors.js:2095
+msgid "Average Power"
+msgstr "Keskimääräinen teho"
+
+#: sensors.js:2112
+msgid "Memory Usage"
+msgstr "Muistin käyttöaste"
+
+#: sensors.js:2121
+msgid "Link Speed"
+msgstr "Yhteysnopeus"
+
+#: helpers/categories.js:12
+msgid "Processor"
+msgstr "Suoritin"
+
+#: helpers/categories.js:13
+msgid "System"
+msgstr "Järjestelmä"
+
+#: helpers/categories.js:14
+msgid "Network"
+msgstr "Verkko"
+
+#: helpers/categories.js:15
+msgid "Storage"
+msgstr "Tallennustila"
+
+#: helpers/categories.js:16
+msgid "Battery"
+msgstr "Akku"
+
+#: helpers/categories.js:17
+msgid "GPU"
+msgstr "GPU"
+
+#: sensors.js:1802
+msgid "Ethernet"
+msgstr "Ethernet"
+
+#: sensors.js:317
+msgid "off"
+msgstr "pois"
+
+#~ msgid "Physical"
+#~ msgstr "Fyysinen"
+
+#~ msgid "Allocated"
+#~ msgstr "Varattu"
+
+#~ msgid "Format"
+#~ msgstr "Muoto"
+
+#~ msgid "Path"
+#~ msgstr "Polku"
+
 #, fuzzy
-msgid "storage"
-msgstr "Valvo tallennustilaa"
+#~ msgid "Sensors to show in panel"
+#~ msgstr "Sijainti paneelissa"
+
+#, fuzzy
+#~ msgid "Monitor battery health"
+#~ msgstr "Valvo lämpötilaa"
+
+#, fuzzy
+#~ msgid "Storage measurement"
+#~ msgstr "Tallennustilan Asetukset"
+
+#, fuzzy
+#~ msgid "memory"
+#~ msgstr "Muisti"
+
+#, fuzzy
+#~ msgid "processor"
+#~ msgstr "Suoritin"
+
+#~ msgid "Boost"
+#~ msgstr "Boost-taajuus"
+
+#, fuzzy
+#~ msgid "system"
+#~ msgstr "Järjestelmä"
+
+#, fuzzy
+#~ msgid "battery"
+#~ msgstr "Valvo muistia"
+
+#, fuzzy
+#~ msgid "storage"
+#~ msgstr "Valvo tallennustilaa"

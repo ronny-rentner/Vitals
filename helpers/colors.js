@@ -1,173 +1,51 @@
-/* Threshold color entry helpers shared by prefs and values. */
+/* Colour scales, shared by the preferences and the formatter. */
 
-// Default seed for a new single-breakpoint scale (Adwaita destructive red).
+// The colour of a new breakpoint (Adwaita's red).
 export const DEFAULT_THRESHOLD_RGBA = {
     red: 224 / 255,
     green: 27 / 255,
     blue: 36 / 255,
 };
 
-// Entries: "threshold r g b" or "threshold r g b sensor:<key>"
-// Trailing sensor tokens may contain spaces (legacy key quirk).
+// A breakpoint as it is saved in the `<category>-colors` setting: "threshold r g b target". The target says whose
+// scale the breakpoint belongs to: one sensor, "sensor:<category>/<key>", or all sensors of the category that show
+// one kind of value, "kind:<format>". A target may contain spaces, as device names do.
 export function parseColorEntry(colorEntry) {
-    if (typeof colorEntry !== 'string')
-        return null;
-
-    const parts = colorEntry.trim().split(' ');
-    if (parts.length < 4)
-        return null;
-
-    const threshold = Number(parts[0]);
-    const red = Number(parts[1]);
-    const green = Number(parts[2]);
-    const blue = Number(parts[3]);
-    if (![threshold, red, green, blue].every(Number.isFinite))
-        return null;
-
-    let sensorKey = null;
-    if (parts.length > 4) {
-        const rest = parts.slice(4).join(' ');
-        if (!rest.startsWith('sensor:') || rest.length <= 'sensor:'.length)
-            return null;
-        sensorKey = rest.slice('sensor:'.length);
-        if (!sensorKey)
-            return null;
-    }
-
-    return {threshold, red, green, blue, sensorKey};
+    let [threshold, red, green, blue, ...target] = colorEntry.split(' ');
+    return {threshold: Number(threshold), red: Number(red), green: Number(green), blue: Number(blue), target: target.join(' ')};
 }
 
-export function formatColorEntry({threshold, red, green, blue, sensorKey = null}) {
-    let entry = `${threshold} ${red} ${green} ${blue}`;
-    if (sensorKey)
-        entry += ` sensor:${sensorKey}`;
-    return entry;
+export function formatColorEntry({threshold, red, green, blue, target}) {
+    return `${threshold} ${red} ${green} ${blue} ${target}`;
 }
 
 export function compareColorEntries(a, b) {
-    if (a.threshold !== b.threshold)
-        return a.threshold - b.threshold;
-    let aKey = a.sensorKey || '';
-    let bKey = b.sensorKey || '';
-    return aKey < bKey ? -1 : aKey > bKey ? 1 : 0;
+    return a.threshold - b.threshold || (a.target < b.target ? -1 : a.target > b.target ? 1 : 0);
 }
 
+// The breakpoints of a setting, lowest first. A setting can be written by hand, and one saved before 2026-10-10
+// has breakpoints "for all sensors" that name no target; an entry that is not a breakpoint with a target is left out.
 export function sanitizeAndSortColorEntries(colorsArray) {
-    return (colorsArray || [])
-        .map(parseColorEntry)
-        .filter(Boolean)
+    return colorsArray.map(parseColorEntry)
+        .filter(({threshold, red, green, blue, target}) =>
+            [threshold, red, green, blue].every(Number.isFinite) && /^(sensor|kind):./.test(target))
         .sort(compareColorEntries);
 }
 
-function normalizeColorComponent(component) {
-    if (!Number.isFinite(component))
-        return null;
-
-    const scaled = component > 1 ? component : component * 255;
-    return Math.max(0, Math.min(255, Math.round(scaled)));
-}
-
-function styleForEntries(value, entries) {
-    const thresholds = entries
-        .map(entry => {
-            const red = normalizeColorComponent(entry.red);
-            const green = normalizeColorComponent(entry.green);
-            const blue = normalizeColorComponent(entry.blue);
-            if (red === null || green === null || blue === null)
-                return null;
-
-            return {
-                threshold: entry.threshold,
-                style: `color: rgb(${red}, ${green}, ${blue});`,
-            };
-        })
-        .filter(Boolean);
-
-    if (thresholds.length === 0)
+// The style that colours `number`, from the saved breakpoints of its category: the sensor's own scale when it has
+// one, otherwise the scale for its kind of value. A value has the colour of the highest breakpoint it has reached;
+// for a sensor whose low values are the bad ones, that of the lowest breakpoint it is still under. '' when no
+// breakpoint applies.
+export function colorStyle(number, colorsArray, sensorTarget, kindTarget, lowIsBad) {
+    let breakpoints = sanitizeAndSortColorEntries(colorsArray);
+    let scale = breakpoints.filter(breakpoint => breakpoint.target == sensorTarget);
+    if (scale.length == 0)
+        scale = breakpoints.filter(breakpoint => breakpoint.target == kindTarget);
+    let breakpoint = lowIsBad ? scale.find(({threshold}) => number <= threshold) : scale.findLast(({threshold}) => number >= threshold);
+    if (!breakpoint)
         return '';
-
-    for (let index = thresholds.length - 1; index >= 0; index--) {
-        if (value >= thresholds[index].threshold)
-            return thresholds[index].style;
-    }
-
-    return '';
-}
-
-// Prefer rules for sensorKey; otherwise group-wide rules (sensorKey == null).
-// Unknown / other sensor keys are ignored — never throws.
-export function getUsageColor(value, colors, sensorKey = null) {
-    if (!colors || colors.length === 0 || !Number.isFinite(value))
-        return '';
-
-    const entries = sanitizeAndSortColorEntries(colors);
-    if (entries.length === 0)
-        return '';
-
-    if (sensorKey) {
-        const specific = entries.filter(entry => entry.sensorKey === sensorKey);
-        if (specific.length > 0)
-            return styleForEntries(value, specific);
-    }
-
-    const groupWide = entries.filter(entry => !entry.sensorKey);
-    return styleForEntries(value, groupWide);
-}
-
-export function sensorKeyFromTypeLabel(type, label) {
-    let typeKey = (type || '').replace('-group', '');
-    if (/^network-(?!rx$|tx$)/.test(typeKey))
-        typeKey = 'network';
-    return '_' + typeKey + '_' + String(label).replaceAll(' ', '_').toLowerCase() + '_';
-}
-
-// Hot-sensor / color keys: _<type>_<label parts>_
-export function parseSensorKey(key) {
-    if (typeof key !== 'string' || !key.startsWith('_') || key.length < 3)
-        return null;
-
-    let inner = key.endsWith('_') ? key.slice(1, -1) : key.slice(1);
-    let parts = inner.split('_');
-    return {
-        typePart: parts[0] || '',
-        label: parts.slice(1).join(' ').trim(),
-    };
-}
-
-export function labelFromSensorKey(key) {
-    let parsed = parseSensorKey(key);
-    if (!parsed)
-        return key || '';
-
-    let {typePart, label} = parsed;
-    if (typePart.startsWith('gpu') && label)
-        return `${label} (${typePart})`;
-    return label || typePart;
-}
-
-// Keys that belong on a given threshold-colors prefs page.
-export function sensorKeyBelongsToColorPage(pageName, key) {
-    if (typeof key !== 'string' || !key.startsWith('_') || key.startsWith('__'))
-        return false;
-
-    let parsed = parseSensorKey(key);
-    if (!parsed)
-        return false;
-
-    let {typePart} = parsed;
-
-    if (pageName === 'temperature') {
-        if (typePart === 'temperature')
-            return true;
-        // GPU temps also use temperature-colors.
-        return typePart.startsWith('gpu') && /temp/i.test(key);
-    }
-
-    if (pageName === 'gpu') {
-        if (!typePart.startsWith('gpu'))
-            return false;
-        return !/temp/i.test(key);
-    }
-
-    return typePart === pageName || typePart.startsWith(pageName + '#');
+    // A colour component is saved as a share of 1 or, by hand, as a number up to 255.
+    let [red, green, blue] = [breakpoint.red, breakpoint.green, breakpoint.blue].map(component =>
+        Math.min(255, Math.round(component > 1 ? component : component * 255)));
+    return `color: rgb(${red}, ${green}, ${blue});`;
 }

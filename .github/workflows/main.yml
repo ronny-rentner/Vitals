@@ -1,91 +1,58 @@
-name: Build Release Asset
+name: Test and Release
 
 on:
   push:
-    # Sequence of patterns matched against refs/tags
-    branches:
-      - main
+    branches: ['**']
+    tags: ['v[0-9]*']
+  pull_request:
+
+permissions:
+  contents: read
 
 jobs:
-  build:
-    name: Upload Release Asset
+  test:
+    name: Unit tests
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
+      - uses: actions/checkout@v7
 
-      - name: Fetch tags
-        run: git fetch --tags
-
-      - name: Install msgfmt command
-        run: sudo apt-get install gettext
-
-      - name: Compile message catalogs
+      - name: Install test dependencies
         run: |
-          for i in locale/*/
-              do /usr/bin/msgfmt $i/LC_MESSAGES/vitals.po -o $i/LC_MESSAGES/vitals.mo
-          done
+          sudo apt-get update
+          sudo apt-get install -y gjs libglib2.0-bin make
 
-# at some point we either need to upload assets, or update arch batch script with above compile cmds
-#      - name: Push compiled assets
-#        run: git commit && git push
+      - name: Run unit tests
+        run: make test
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+  release:
+    name: Build and publish release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gettext libglib2.0-bin make zip
+
+      - name: Build extension package
+        run: make zip
+
+      - uses: actions/setup-python@v7
         with:
-          python-version: "3.x"
-
-      - name: Build project # This would actually build your project, using zip for an example artifact
-        run: zip vitals.zip -r * -x "README.md" -x "locale/*.po" -x "locale/vitals.pot" -x "howtouse.gif" -x "schemas/gschemas.compiled" -x "AGENTS.md"
+          python-version: '3.x'
 
       - name: Install shexli
-        run: pip install shexli "tree-sitter<0.26"
+        run: python -m pip install shexli
 
-      - name: Run shexli
+      - name: Check extension package
         run: shexli vitals.zip
 
-      - name: Grab version from meta data
-        run: echo "METATAG=$(jq .version metadata.json)" >> $GITHUB_ENV
-
-      - name: Get next available tag
-        run: |
-            # get latest tag, could also be empty
-            tag=$(git tag --sort=v:refname | grep "v$METATAG\." | tail -n 1)
-
-            # if there are none, start tags at INITIAL_VERSION which defaults to 0.0.0
-            if [ -z "$tag" ]; then
-                tag="v$METATAG.0.0"
-            else
-                array=($(echo "$tag" | tr . '\n'))
-                array[2]=$((array[2]+1))
-                tag=$(IFS=.; echo "${array[*]}")
-            fi
-
-            # export env var for subsequent steps
-            echo "TAG=$tag" >> $GITHUB_ENV
-
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
+      - name: Publish release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ env.TAG }}
-          release_name: Release ${{ env.TAG }}
-          draft: false
-          prerelease: false
-
-      - name: Upload Release Asset
-        id: upload-release-asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object,
-          # which include a `upload_url`. See this blog post for more info:
-          # https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./vitals.zip
-          asset_name: vitals.zip
-          asset_content_type: application/zip
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" vitals.zip --verify-tag --title "$GITHUB_REF_NAME" --generate-notes

@@ -1,15 +1,29 @@
-.vitals-panel-item{spacing: 0;}
-.vitals-panel-menu{spacing: 11px; padding: 3px; }
-.vitals-panel-icon-temperature { margin: 0 1px 0 0; padding: 0; }
-.vitals-panel-icon-voltage { margin: 0 0 0 0; padding: 0; }
-.vitals-panel-icon-fan { margin: 0 4px 0 0; padding: 0; }
-.vitals-panel-icon-memory { margin: 0 2px 0 0; padding: 0; }
-.vitals-panel-icon-processor { margin: 0 3px 0 0; padding: 0; }
-.vitals-panel-icon-system { margin: 0 3px 0 0; padding: 0; }
-.vitals-panel-icon-network { margin: 0 3px 0 0; padding: 0; }
-.vitals-panel-icon-storage { margin: 0 2px 0 0; padding: 0; }
-.vitals-panel-icon-battery { margin: 0 4px 0 0; padding: 0; }
-.vitals-button-action { -st-icon-style: symbolic; border-radius: 32px; margin: 0px; min-height: 22px; min-width: 22px; padding: 10px; font-size: 100%; border: 1px solid transparent; }
-.vitals-button-action:hover, .vitals-button-action:focus { border-color: #777; }
+/* Top bar: the distance between two sensors, and between an icon and its value. The Shell's theme gives a status
+   icon a margin and a padding, which would add to both. The padding is the room at both ends that the Shell's own
+   buttons have inside the button's padding. */
+.vitals-panel-sensors { spacing: 10px; padding: 0 3px; }
+.vitals-panel-item { spacing: 5px; }
+#panel .panel-button .vitals-panel-item > .system-status-icon { margin: 0; padding: 0; }
+/* "Emphasize values": the icon at 80 % of the Shell's size (1.091em). */
+#panel .panel-button .vitals-panel-item-emphasized > .system-status-icon { icon-size: 0.873em; }
+.vitals-panel-item-emphasized .vitals-panel-unit { font-size: 85%; font-weight: normal; }
+/* The theme's .button gives the round buttons their background and their hover and focus look. */
+.vitals-button-action { -st-icon-style: symbolic; border-radius: 32px; margin: 0px; min-height: 22px; min-width: 22px; padding: 10px; font-size: 100%; }
 .vitals-button-action > StIcon { icon-size: 16px; }
 .vitals-button-box { padding: 0px; spacing: 22px; }
+/* The dropdown menu has one width. A label that does not fit next to its value is shortened with "…". */
+.vitals-menu { width: 22em; }
+/* A row menu is as wide as the rows it stands between, and its head and its actions are rows of the same height, so
+   everything in it lines up with the list. It keeps a little room above and below. */
+.vitals-row-menu { border-radius: 12px; padding: 4px 0; margin: 2px 0 6px 0; border: none; }
+/* The highlight of an action follows the row menu's rounded corners; in a category it would be square. */
+.popup-sub-menu .vitals-row-menu .popup-menu-item { border-radius: 12px; }
+.vitals-sensor-name { font-weight: bold; }
+/* The field for a sensor's name, with a little less room around its text than a text field of the Shell has by
+   itself, and the two buttons after it: confirm, and back to the sensor's own name. */
+.vitals-rename-entry { padding: 0.4em 0.7em; }
+.vitals-rename-button { padding: 0.3em; border-radius: 99px; }
+.vitals-rename-button:hover { background-color: rgba(128, 128, 128, 0.35); }
+.vitals-rename-button StIcon { icon-size: 1em; }
+/* The marks after a sensor's name, for the category default and for a hidden sensor: smaller than the name. */
+.vitals-row-mark { icon-size: 0.9em; margin-left: 0.4em; }

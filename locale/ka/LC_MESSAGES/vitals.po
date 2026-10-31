@@ -6,7 +6,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: vitals\n"
-"POT-Creation-Date: 2023-10-22 21:04+0200\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-30 12:35+0100\n"
 "PO-Revision-Date: \n"
 "Last-Translator: Ekaterine Papava <papava.e@gtu.ge>\n"
 "Language-Team: Georgian <(nothing)>\n"
@@ -28,103 +29,67 @@ msgstr ""
 "org.gnome.shell.extensions.vitals.gschema.xml\n"
 "X-Poedit-SearchPath-6: prefs.ui\n"
 
-#: extension.js:109
-msgid "Batteries"
-msgstr "ელემენტები"
-
-#: extension.js:133
-msgid "No Data"
-msgstr "მონაცემების გარეშე"
-
-#: extension.js:159
+#: extension.js:213
 msgid "Refresh"
 msgstr "განახლება"
 
-#: extension.js:174
+#: extension.js:220
 msgid "System Monitor"
 msgstr "სისტემური მონიტორი"
 
-#: extension.js:182 prefs.js:106
+#: extension.js:228
 msgid "Preferences"
 msgstr "მორგება"
 
-#: prefs.ui:42 schemas/org.gnome.shell.extensions.vitals.gschema.xml:81
-msgid "Include public IP address"
-msgstr "საჯარო IP მისამართის ჩასმა"
+#: extension.js:237 extension.js:242
+msgid "Show hidden sensors"
+msgstr "დამალული სენსორების ჩვენება"
 
-#: prefs.ui:70
-msgid "Format"
-msgstr "ფორმატი"
+#: extension.js:242
+msgid "Leave out hidden sensors"
+msgstr "დამალული სენსორების გამოტოვება"
 
-#: prefs.ui:78
-msgid "Bytes"
-msgstr "ბაიტი"
+#: extension.js:825
+msgid "Pin to top bar"
+msgstr "ზედა ზოლზე მიმაგრება"
 
-#: prefs.ui:79
-msgid "Bits"
-msgstr "ბიტი"
+#: extension.js:832
+msgid "Pin to category"
+msgstr "კატეგორიაზე მიმაგრება"
 
-#: prefs.ui:121
+#: extension.js:834
+msgid "Rename"
+msgstr "სახელის გადარქმევა"
+
+#: extension.js:837
+msgid "Hide"
+msgstr "დამალვა"
+
+#: prefs.js:34 prefs.js:49
 msgid "General"
 msgstr "ზოგადი"
 
-#: prefs.ui:149 schemas/org.gnome.shell.extensions.vitals.gschema.xml:11
-msgid "Seconds between updates"
-msgstr "წამები განახლებებს შორის"
+#: prefs.js:38
+msgid "Vitals"
+msgstr "Vitals"
 
-#: prefs.ui:184 schemas/org.gnome.shell.extensions.vitals.gschema.xml:16
-msgid "Position in panel"
-msgstr "მდებარეობა პანელზე"
-
-#: prefs.ui:193
-msgid "Left"
-msgstr "მარცხენა"
-
-#: prefs.ui:194
-msgid "Center"
-msgstr "ცენტრი"
-
-#: prefs.ui:195
-msgid "Right"
-msgstr "მარჯვენა"
-
-#: prefs.ui:196
-msgid "Far Left"
-msgstr "შორეული მარცხენა"
-
-#: prefs.ui:197
-msgid "Far Right"
-msgstr "შორებული მარჯვენა"
-
-#: prefs.ui:220 schemas/org.gnome.shell.extensions.vitals.gschema.xml:21
+#: prefs.js:52
 msgid "Use higher precision"
 msgstr "უფრო მაღალი სიზუსტის გამოყენება"
 
-#: prefs.ui:247 schemas/org.gnome.shell.extensions.vitals.gschema.xml:26
-msgid "Alphabetize sensors"
-msgstr "სენსორების ანბანით დალაგება"
+#: prefs.js:52
+msgid "One more decimal place, and seconds in uptimes."
+msgstr "კიდევ ერთი ათწილადი ციფრი და წამები ჩართულობის დროში."
 
-#: prefs.ui:274 schemas/org.gnome.shell.extensions.vitals.gschema.xml:31
-msgid "Hide zero values"
-msgstr "ნულოვანი მნიშვნელობების დამალვა"
+#: prefs.js:53
+msgid "Icon Style"
+msgstr "ხატულების სტილი"
 
-#: prefs.ui:301
-msgid "Use fixed widths"
-msgstr "ფიქსირებული სიგანეების გამოყენება"
-
-#: prefs.ui:328 schemas/org.gnome.shell.extensions.vitals.gschema.xml:171
-msgid "Hide icons in top bar"
-msgstr "ხატულების დამალვა ზედა ზოლში"
-
-#: prefs.ui:355
-msgid "Menu always centered"
-msgstr "მენიუ ყოველთვის ცენტრში"
-
-#: prefs.ui:379
+#: prefs.js:55
 msgid "About"
 msgstr "შესახებ"
 
-#: prefs.ui:394
+#: prefs.js:56
 msgid ""
 "Feature requests or bugs? Please visit <a href=\"https://github.com/"
 "corecoding/Vitals/issues\">GitHub</a>. No warranty, expressed or implied. <a "
@@ -136,605 +101,1265 @@ msgstr ""
 "გარანტიის გარეშე. <a href=\"https://corecoding.com/donate.php\">შემოგვწირეთ</"
 "a>, თუ ეს პროგრამა მოგეწონათ."
 
-#: prefs.ui:421
+#: prefs.js:59
+msgid "Top Bar"
+msgstr "ზედა ზოლი"
+
+#: prefs.js:60
+msgid "Placement"
+msgstr "განლაგება"
+
+#: prefs.js:61
+msgid "Position"
+msgstr "მდებარეობა"
+
+#: prefs.js:61
+msgid "Far left and far right are the outer ends of the bar."
+msgstr "უკიდურესად მარცხენა და მარჯვენა ზოლის გარე ბოლოებია."
+
+#: prefs.js:62
+msgid "Far left"
+msgstr "უკიდურესად მარცხნივ"
+
+#: prefs.js:62
+msgid "Left"
+msgstr "მარცხენა"
+
+#: prefs.js:62
+msgid "Center"
+msgstr "ცენტრი"
+
+#: prefs.js:62
+msgid "Right"
+msgstr "მარჯვენა"
+
+#: prefs.js:62
+msgid "Far right"
+msgstr "უკიდურესად მარჯვნივ"
+
+#: prefs.js:63
+msgid "Reorder sensors by drag and drop"
+msgstr "სენსორების გადალაგება გადათრევით"
+
+#: prefs.js:64
+msgid "Appearance"
+msgstr "გარეგნობა"
+
+#: prefs.js:65
+msgid "Steady widths"
+msgstr "სტაბილური სიგანეები"
+
+#: prefs.js:66
+msgid ""
+"Keep room for a value’s widest text, so its neighbours do not jump. The room "
+"is given back after a minute."
+msgstr "მნიშვნელობის ყველაზე განიერი ტექსტისთვის ადგილის დატოვება, რათა მეზობელი ელემენტები არ გადახტეს. ადგილი ერთი წუთის შემდეგ თავისუფლდება."
+
+#: prefs.js:67
+msgid "Remember widths"
+msgstr "სიგანეების დამახსოვრება"
+
+#: prefs.js:68
+msgid ""
+"With steady widths, each value starts with the room it had when Vitals was "
+"last switched off."
+msgstr "სტაბილური სიგანეებისას თითოეული მნიშვნელობა იმ ადგილით იწყებს, რომელიც Vitals-ის ბოლო გამორთვისას ეკავა."
+
+#: prefs.js:69
+msgid "Emphasize values"
+msgstr "მნიშვნელობების გამოკვეთა"
+
+#: prefs.js:69
+msgid "Draw icons and units lighter and smaller than the numbers."
+msgstr "ხატულებისა და ერთეულების რიცხვებზე უფრო მკრთალად და პატარად ჩვენება."
+
+#: prefs.js:70
+msgid "Crop icons"
+msgstr "ხატულების მოჭრა"
+
+#: prefs.js:70
+msgid "Remove transparent borders while preserving each icon’s aspect ratio."
+msgstr "გამჭვირვალე კიდეების მოცილება თითოეული ხატულის პროპორციების შენარჩუნებით."
+
+#: prefs.js:71
+msgid "Hide icons"
+msgstr "ხატულების დამალვა"
+
+#: prefs.js:71
+msgid "The icons in the menu stay."
+msgstr "მენიუში ხატულები რჩება."
+
+#: prefs.js:73
+msgid "Menu"
+msgstr "მენიუ"
+
+#: prefs.js:75
+msgid "Open centered under the sensors"
+msgstr "სენსორების ქვემოთ ცენტრში გახსნა"
+
+#: prefs.js:75
+msgid "Otherwise the menu opens centered under the pointer."
+msgstr "სხვა შემთხვევაში მენიუ მაჩვენებლის ქვემოთ ცენტრში იხსნება."
+
+#: prefs.js:76
+msgid "System monitor command"
+msgstr "სისტემური მონიტორის ბრძანება"
+
+#: prefs.js:77
+msgid ""
+"The program that the System Monitor button at the bottom of the menu starts."
+msgstr "პროგრამა, რომელსაც მენიუს ბოლოში სისტემური მონიტორის ღილაკი უშვებს."
+
+#: prefs.js:78
+msgid "Categories"
+msgstr "კატეგორიები"
+
+#: prefs.js:79
+msgid "Order"
+msgstr "მიმდევრობა"
+
+#: prefs.js:79
+msgid "Manual is the order given by dragging categories in the menu."
+msgstr "ხელით მიმდევრობა მენიუში კატეგორიების გადათრევით განისაზღვრება."
+
+#: prefs.js:80
+msgid "Alphabetical"
+msgstr "ანბანური"
+
+#: prefs.js:80
+msgid "Manual"
+msgstr "ხელით"
+
+#: prefs.js:82
+msgid "Reorder by drag and drop"
+msgstr "გადალაგება გადათრევით"
+
+#: prefs.js:82
+msgid "Only in the manual order."
+msgstr "მხოლოდ ხელით დალაგებისას."
+
+#: prefs.js:83
+msgid "Slide open and shut"
+msgstr "გახსნა და დახურვა სრიალით"
+
+#: prefs.js:84 prefs.js:439
 msgid "Sensors"
 msgstr "სენსორები"
 
-#: prefs.ui:449 schemas/org.gnome.shell.extensions.vitals.gschema.xml:36
+#: prefs.js:85
+msgid "Show average, minimum and maximum"
+msgstr "საშუალოს, მინიმუმისა და მაქსიმუმის ჩვენება"
+
+#: prefs.js:86
+msgid "In the temperature and fan categories, below the sensors."
+msgstr "ტემპერატურისა და ვენტილატორის კატეგორიებში, სენსორების ქვემოთ."
+
+#: prefs.js:88
 msgid "Monitor temperature"
 msgstr "ტემპერატურის მონიტორი"
 
-#: prefs.ui:500 schemas/org.gnome.shell.extensions.vitals.gschema.xml:46
-msgid "Monitor voltage"
-msgstr "ძაბვის მონიტორი"
-
-#: prefs.ui:528 schemas/org.gnome.shell.extensions.vitals.gschema.xml:51
-msgid "Monitor fan"
-msgstr "ვენტილატორის მონიტორი"
-
-#: prefs.ui:556 schemas/org.gnome.shell.extensions.vitals.gschema.xml:56
-msgid "Monitor memory"
-msgstr "მეხსიერების მონიტორი"
-
-#: prefs.ui:607 schemas/org.gnome.shell.extensions.vitals.gschema.xml:61
-msgid "Monitor processor"
-msgstr "პროცესორის მონიტორი"
-
-#: prefs.ui:658 schemas/org.gnome.shell.extensions.vitals.gschema.xml:66
-msgid "Monitor system"
-msgstr "სისტემის მონიტორი"
-
-#: prefs.ui:709 schemas/org.gnome.shell.extensions.vitals.gschema.xml:76
-msgid "Monitor network"
-msgstr "ქსელის მონიტორი"
-
-#: prefs.ui:760 schemas/org.gnome.shell.extensions.vitals.gschema.xml:71
-msgid "Monitor storage"
-msgstr "საცავის მონიტორი"
-
-#: prefs.ui:811 schemas/org.gnome.shell.extensions.vitals.gschema.xml:96
-msgid "Monitor battery"
-msgstr "ეკრანის ელემენტი"
-
-#: prefs.ui:890
-msgid "Path"
-msgstr "ბილიკი"
-
-#: prefs.ui:922 prefs.ui:1031
-msgid "Measurement"
-msgstr "საზომი ერთეული"
-
-#: prefs.ui:930 prefs.ui:1039
-msgid "Binary"
-msgstr "ორობითი"
-
-#: prefs.ui:931 prefs.ui:1040
-msgid "Decimal"
-msgstr "ათობითი"
-
-#: prefs.ui:976
+#: prefs.js:89 prefs.js:500
 msgid "Unit"
 msgstr "ერთეული"
 
-#: prefs.ui:985
+#: prefs.js:89
 msgid "°C"
 msgstr "°C"
 
-#: prefs.ui:986
+#: prefs.js:89
 msgid "°F"
 msgstr "°F"
 
-#: prefs.ui:1086
-msgid "Monitor BAT0"
-msgstr "BAT0-ის მონიტორი"
+#: prefs.js:90
+msgid "Skip sensors that read zero"
+msgstr "ნულოვანი ჩვენების მქონე სენსორების გამოტოვება"
 
-#: prefs.ui:1116
-msgid "Monitor BAT1"
-msgstr "BAT1-ის მონიტორი"
-
-#: prefs.ui:1146
-msgid "Monitor BAT2"
-msgstr "BAT2-ის მონიტორი"
-
-#: prefs.ui:1176
-msgid "Monitor CMB0"
-msgstr "CMB0-ის მონიტორი"
-
-#: prefs.ui:1206
-msgid "Monitor macsmc-battery"
-msgstr "macsmc-battery-ის მონიტორი"
-
-#: prefs.ui:1247
-msgid "Calculate Combined Values"
-msgstr "კომბინირებული მნიშვნელობების გამოთვლა"
-
-#: prefs.ui:1277 schemas/org.gnome.shell.extensions.vitals.gschema.xml:141
-msgid "Include BAT0"
-msgstr "BAT0-ის ჩასმა"
-
-#: prefs.ui:1307 schemas/org.gnome.shell.extensions.vitals.gschema.xml:146
-msgid "Include BAT1"
-msgstr "BAT1-ის ჩასმა"
-
-#: prefs.ui:1337 schemas/org.gnome.shell.extensions.vitals.gschema.xml:151
-msgid "Include BAT2"
-msgstr "BAT2-ის ჩასმა"
-
-#: prefs.ui:1367 schemas/org.gnome.shell.extensions.vitals.gschema.xml:156
-msgid "Include CMB0"
-msgstr "CMB0-ის ჩასმა"
-
-#: prefs.ui:1397 schemas/org.gnome.shell.extensions.vitals.gschema.xml:161
-msgid "Include macsmc-battery"
-msgstr "macsmc-battery-ის ჩასმა"
-
-#: prefs.ui:1446
-msgid "Monitor command"
-msgstr "ბრძანების მონიტორი"
-
-#: prefs.ui:1498
-msgid "Include static info"
-msgstr "სტატიკური ინფორმაციის ჩასმა"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:6
-msgid "Sensors to show in panel"
-msgstr "პანელზე საჩვენებელი სენსორები"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:7
-msgid "List of sensors to be shown in the panel"
-msgstr "პანელზე საჩვენებელი სენსორების სია"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:12
-msgid "Delay between sensor polling"
-msgstr "დაყოვნება სენსორებიდან მონაცემების გამოთხოვას შორის"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:17
-msgid "Position in Panel ('left', 'center', 'right')"
-msgstr "პოზიცია პანელზე ('მარცხნივ', 'ცენტრი', 'მარჯვნივ')"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:22
-msgid "Show one extra digit after decimal"
-msgstr "ერთი ციფრის ჩვენება წილადის შემდეგ"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:27
-msgid "Display sensors in alphabetical order"
-msgstr "სენსორების ჩვენება ანბანის მიმდევრობით"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:32
-msgid "Hide data from sensors that are invalid"
-msgstr "არასწორი მონაცემების მქონე სენსორების დამალვა"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:37
-msgid "Display temperature of various components"
-msgstr "სხვადასხვა კომპონენტების ტემპერატურის ჩვენება"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:41
-msgid "Temperature unit"
-msgstr "ტემპერატურის ერთეული"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:42
+#: prefs.js:91
 msgid ""
-"The unit ('centigrade' or 'fahrenheit') the extension should display the "
-"temperature in"
-msgstr ""
-"ერთეული ('ცელსიუსი', ან 'ფარენჰეიტი'), რომლითაც გაფართოებამ ტემპერატურა უნდა "
-"აჩვენოს"
+"A sensor that reads zero when it is found is left out. One that reads zero "
+"later stays."
+msgstr "აღმოჩენისას ნულოვანი ჩვენების მქონე სენსორი გამოიტოვება. თუ ჩვენება მოგვიანებით გახდება ნული, სენსორი რჩება."
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:47
-msgid "Display voltage of various components"
-msgstr "სხვადასხვა კომპონენტების ძაბვის ჩვენება"
+#: prefs.js:93
+msgid "Monitor voltage"
+msgstr "ძაბვის მონიტორი"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:52
-msgid "Display fan rotation per minute"
-msgstr "ბრუნვის სიჩქარის ჩვენება (წუთში)"
+#: prefs.js:95
+msgid "Monitor fan"
+msgstr "ვენტილატორის მონიტორი"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:57
-msgid "Display memory information"
-msgstr "მეხსიერების ინფორმაციის გამოტანა"
+#: prefs.js:97
+msgid "Monitor power"
+msgstr "სიმძლავრის მონიტორი"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:62
-msgid "Display processor information"
-msgstr "პროცესორის ინფორმაციის ჩვენება"
+#: prefs.js:98
+msgid "Read powercap"
+msgstr "powercap-ის წაკითხვა"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:67
-msgid "Display system information"
-msgstr "სისტემის ინფორმაციის ჩვენება"
+#: prefs.js:99
+msgid ""
+"The power draw of the processor, such as Intel RAPL. Most systems let only "
+"root read it."
+msgstr "პროცესორის მოხმარებული სიმძლავრე, მაგალითად Intel RAPL. სისტემების უმეტესობაში ამის წაკითხვა მხოლოდ root-ს შეუძლია."
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:72
-msgid "Display storage information"
-msgstr "საცავის ინფორმაციის ჩვენება"
+#: prefs.js:101
+msgid "Monitor memory"
+msgstr "მეხსიერების მონიტორი"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:77
-msgid "Display network information"
-msgstr "ქსელის ინფორმაციის ჩვენება"
+#: prefs.js:102
+msgid "Show details"
+msgstr "დეტალების ჩვენება"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:82
-msgid "Display public IP address of internet connection"
-msgstr "ინტერნეტკავშირის საჯარო IP მისამართის ჩვენება"
+#: prefs.js:103
+msgid "Additional readings in the menu; pinned readings stay in the top bar."
+msgstr "დამატებითი მაჩვენებლები მენიუში; მიმაგრებული მაჩვენებლები ზედა ზოლზე რჩება."
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:86
-msgid "Network speed format"
-msgstr "ქსელის სიჩქარის ფორმატი"
+#: prefs.js:104 prefs.js:128
+msgid "Units"
+msgstr "ერთეულები"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:87
-msgid "Should speed display in bits or bytes?"
-msgstr "სიჩქარე უნდა იყოს ნაჩვენები ბიტებში, თუ ბაიტებში?"
+#: prefs.js:106 prefs.js:130
+msgid "Binary"
+msgstr "ორობითი"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:91
-msgid "Storage path"
-msgstr "საცავის ბილიკი"
+#: prefs.js:106 prefs.js:130
+msgid "KiB, MiB, GiB"
+msgstr "KiB, MiB, GiB"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:92
-msgid "Storage path for monitoring"
-msgstr "საცავის ბილიკი მონიტორინგისთვის"
+#: prefs.js:106
+msgid "15.5 GiB"
+msgstr "15,5 GiB"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:97
-msgid "Monitor battery health"
-msgstr "ელემენტის ჯანმრთელობის მონიტორინგი"
+#: prefs.js:107 prefs.js:131
+msgid "Decimal"
+msgstr "ათობითი"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:101
-msgid "Memory measurement"
-msgstr "მეხსიერების გაზომვა"
+#: prefs.js:107 prefs.js:131
+msgid "kB, MB, GB"
+msgstr "kB, MB, GB"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:102
-msgid "Can use gigabyte or gibibyte for memory"
-msgstr "მეხსიერებისთვის შეიძლება გიგაბაიტების გამოყენება, თუ გიბიბაიტების"
+#: prefs.js:107
+msgid "16.6 GB"
+msgstr "16,6 GB"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:106
-msgid "Storage measurement"
-msgstr "საცავის გაზომვა"
+#: prefs.js:109
+msgid "Monitor processor"
+msgstr "პროცესორის მონიტორი"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:107
-msgid "Can use gigabyte or gibibyte for storage"
-msgstr "საცავისთვის შეიძლება გიგაბაიტების გამოყენება, თუ გიბიბაიტების"
+#: prefs.js:110 prefs.js:140
+msgid "Include static information"
+msgstr "სტატიკური ინფორმაციის ჩართვა"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:111
-msgid "Display battery BAT0"
-msgstr "ელემენტის BAT0 ჩვენება"
+#: prefs.js:110
+msgid "Values that never change, such as vendor and cache size."
+msgstr "მნიშვნელობები, რომლებიც არ იცვლება, მაგალითად მომწოდებელი და კეშის ზომა."
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:112
-msgid "Should battery 'BAT0' be displayed?"
-msgstr "უნდა იყოს თუ არა ნაჩვენები ელემენტი 'BAT0'?"
+#: prefs.js:111
+msgid "Show individual cores"
+msgstr "ცალკეული ბირთვების ჩვენება"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:116
-msgid "Display battery BAT1"
-msgstr "ელემენტის BAT1 ჩვენება"
+#: prefs.js:111
+msgid "The usage of each core."
+msgstr "თითოეული ბირთვის გამოყენება."
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:117
-msgid "Should battery 'BAT1' be displayed?"
-msgstr "უნდა იყოს თუ არა ნაჩვენები ელემენტი 'BAT1'?"
+#: prefs.js:112
+msgid "Read live frequency from cpufreq"
+msgstr "მიმდინარე სიხშირის cpufreq-დან წაკითხვა"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:121
-msgid "Display battery BAT2"
-msgstr "ელემენტის BAT2 ჩვენება"
+#: prefs.js:113
+msgid ""
+"Reads each core instead of /proc/cpuinfo, which some machines report late. "
+"Without cpufreq, /proc/cpuinfo is used."
+msgstr "კითხულობს თითოეულ ბირთვს /proc/cpuinfo-ს ნაცვლად, რომელიც ზოგ მანქანაზე დაგვიანებით ახლდება. cpufreq-ის გარეშე გამოიყენება /proc/cpuinfo."
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:122
-msgid "Should battery 'BAT2' be displayed?"
-msgstr "უნდა იყოს თუ არა ნაჩვენები ელემენტი 'BAT2'?"
+#: prefs.js:115
+msgid "Monitor system"
+msgstr "სისტემის მონიტორი"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:126
-msgid "Display battery CMB0"
-msgstr "ელემენტის CMB0 ჩვენება"
+#: prefs.js:117
+msgid "Monitor network"
+msgstr "ქსელის მონიტორი"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:127
-msgid "Should battery 'CMB0' be displayed?"
-msgstr "უნდა იყოს თუ არა ნაჩვენები ელემენტი 'CMB0'?"
+#: prefs.js:118
+msgid "Only show hardware interfaces"
+msgstr "მხოლოდ აპარატურული ინტერფეისების ჩვენება"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:131
-msgid "Display battery macsmc-battery"
-msgstr "ელემენტის macsmc-battery ჩვენება"
+#: prefs.js:118
+msgid "Hide bridges, container, VPN and loopback interfaces."
+msgstr "ხიდების, კონტეინერების, VPN-ისა და უკუმარყუჟის ინტერფეისების დამალვა."
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:132
-msgid "Should battery 'macsmc-battery' be displayed?"
-msgstr "უნდა იყოს თუ არა ნაჩვენები ელემენტი 'macsmc-battery'?"
+#: prefs.js:119
+msgid "Speeds"
+msgstr "სიჩქარეები"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:136
-msgid "Display combined battery data"
-msgstr "ელემენტის კომბინირებული მონაცემების ჩვენება"
+#: prefs.js:120
+msgid "Measure in"
+msgstr "საზომი ერთეული"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:137
-msgid "Display combined values for selected batteries"
-msgstr "კომბინირებული მნიშვნელობების ჩვენება მონიშნული ელემენტებისთვის"
+#: prefs.js:120
+msgid "Bytes"
+msgstr "ბაიტი"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:142
-msgid "Include 'BAT0' when calculating combined Battery"
-msgstr "'BAT0'-ის ჩასმა კომბინირებული ელემენტის გამოთვლისას"
+#: prefs.js:120
+msgid "Bits"
+msgstr "ბიტი"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:147
-msgid "Include 'BAT1' when calculating combined Battery"
-msgstr "'BAT1'-ის ჩასმა კომბინირებული ელემენტის გამოთვლისას"
+#: prefs.js:122
+msgid "Public IP Address"
+msgstr "გარე IP მისამართი"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:152
-msgid "Include 'BAT2' when calculating combined Battery"
-msgstr "'BAT2'-ის ჩასმა კომბინირებული ელემენტის გამოთვლისას"
+#: prefs.js:123
+msgid "Show public IP address"
+msgstr "გარე IP მისამართის ჩვენება"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:157
-msgid "Include 'CMB0' when calculating combined Battery"
-msgstr "'CMB0'-ის ჩასმა კომბინირებული ელემენტის გამოთვლისას"
+#: prefs.js:123
+msgid "Looked up over the internet."
+msgstr "მოწმდება ინტერნეტით."
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:162
-msgid "Include 'macsmc-battery' when calculating combined Battery"
-msgstr "'macsmc-battery'-ის ჩასმა კომბინირებული ელემენტის გამოთვლისას"
+#: prefs.js:124
+msgid "Minutes between lookups"
+msgstr "წუთები შემოწმებებს შორის"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:166
-msgid "Use fixed widths in top bar"
-msgstr "ფიქსირებული სიგანეების გამოყენება ზედა პანელში"
+#: prefs.js:125
+msgid "Refresh in the menu looks it up at once."
+msgstr "მენიუში განახლება მას დაუყოვნებლივ ამოწმებს."
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:167
-msgid "Keep sensors in top bar from jumping around"
-msgstr "ზედა პანელში არსებული სენსორების გადალაგების გამორთვა"
+#: prefs.js:127
+msgid "Monitor storage"
+msgstr "საცავის მონიტორი"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:172
-msgid "Keep top bar clean by only showing sensor values"
-msgstr ""
-"ზედა პანელის სუფთად შენარჩუნება, მხოლოდ, სენსორის მნიშვნელობების ჩვენებით"
+#: prefs.js:130
+msgid "100.5 GiB"
+msgstr "100,5 GiB"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:176
-msgid "Make the menu centered"
-msgstr "მენიუ ყოველთვის ცენტრში"
+#: prefs.js:131
+msgid "107.9 GB"
+msgstr "107,9 GB"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:177
-msgid "Center the menu to the icon regardless of the position in the panel"
-msgstr "მენიუს ცენტრში ჩვენება მისი პანელზე მდებარეობის მიუხედავად"
+#: prefs.js:133
+msgid "Network Storage Locations"
+msgstr "ქსელური საცავის მდებარეობები"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:181
-msgid "System Monitor command"
-msgstr "სისტემური მონიტორის ბრძანება"
+#: prefs.js:134
+msgid "Minutes between updates"
+msgstr "წუთები განახლებებს შორის"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:182
-msgid "The command run when system monitor button is clicked"
-msgstr ""
-"ბრძანება, რომელიც გაეშვება, როცა სისტემური მონიტორის ღილაკზე დააწკაპუნებთ"
+#: prefs.js:135
+msgid "A share is asked over the network, so less often than a disk."
+msgstr "გაზიარებული რესურსი ქსელით მოწმდება, ამიტომ დისკზე უფრო იშვიათად."
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:186
-msgid "Include processor static information"
-msgstr "პროცესორის სტატიკური ინფორმაციის ჩასმა"
+#: prefs.js:137
+msgid "Monitor battery"
+msgstr "ელემენტის მონიტორი"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:187
-msgid "Display processor static information that doesn't change"
-msgstr "პროცესორის უცვლელი, სტატიკური ინფორმაციის ჩვენება"
+#: prefs.js:139
+msgid "Monitor GPU"
+msgstr "GPU-ის მონიტორი"
 
-#: sensors.js:65
-msgid "Public IP"
-msgstr "გარე IP"
+#: prefs.js:139
+msgid "NVIDIA cards are read with the nvidia-smi tool."
+msgstr "NVIDIA-ის ბარათები nvidia-smi ხელსაწყოთი იკითხება."
 
-#: sensors.js:133 sensors.js:181
-msgid "Usage"
-msgstr "გამოყენება"
+#: prefs.js:141
+msgid "Values that never change, such as driver version and power limit."
+msgstr "მნიშვნელობები, რომლებიც არ იცვლება, მაგალითად დრაივერის ვერსია და სიმძლავრის ზღვარი."
 
-#: sensors.js:134
-msgid "memory"
-msgstr "მეხსიერება"
+#: prefs.js:166
+msgid "Classic"
+msgstr "კლასიკური"
 
-#: sensors.js:135
-msgid "Physical"
-msgstr "ფიზიკური"
+#: prefs.js:166
+msgid "Filled and detailed"
+msgstr "შევსებული და დეტალური"
 
-#: sensors.js:136
-msgid "Available"
-msgstr "ხელმისაწვდომია"
+#: prefs.js:167
+msgid "Adwaita"
+msgstr "Adwaita"
 
-#: sensors.js:137
-msgid "Allocated"
-msgstr "გამოყოფილი"
+#: prefs.js:167
+msgid "Rounded outlines"
+msgstr "მომრგვალებული კონტურები"
 
-#: sensors.js:138
-msgid "Cached"
-msgstr "დაქეშილი"
+#: prefs.js:252
+#, javascript-format
+msgid "%s (unavailable)"
+msgstr "%s (მიუწვდომელია)"
 
-#: sensors.js:139 sensors.js:355
-msgid "Free"
-msgstr "უფასო"
+#: prefs.js:271
+msgid "Up to"
+msgstr "ზედა ზღვარი"
 
-#: sensors.js:140
-msgid "Swap"
-msgstr "სვაპი"
+#: prefs.js:271
+msgid "From"
+msgstr "ქვედა ზღვარი"
 
-#: sensors.js:248
-msgid "Average"
-msgstr "საშუალო"
+#: prefs.js:275
+msgid "Remove breakpoint"
+msgstr "ზღვრული წერტილის წაშლა"
 
-#: sensors.js:180
-msgid "processor"
-msgstr "პროცესორი"
+#: prefs.js:279
+msgid "Add breakpoint"
+msgstr "ზღვრული წერტილის დამატება"
 
-#: sensors.js:183
+#: prefs.js:284
+msgid "Remove color scale"
+msgstr "ფერთა სკალის წაშლა"
+
+#: prefs.js:294
+msgid "Add"
+msgstr "დამატება"
+
+#: prefs.js:297
+msgid "Add color scale"
+msgstr "ფერთა სკალის დამატება"
+
+#: prefs.js:300
+msgid "Threshold Colors"
+msgstr "ზღვრების ფერები"
+
+#: prefs.js:341
+#, javascript-format
+msgid "All values in %s"
+msgstr "ყველა მნიშვნელობა ერთეულით %s"
+
+#: prefs.js:341
+msgid "All values without a unit"
+msgstr "ყველა მნიშვნელობა ერთეულის გარეშე"
+
+#: prefs.js:353
+msgid "Storage Locations"
+msgstr "საცავის მდებარეობები"
+
+#: prefs.js:354
+msgid "Add storage location"
+msgstr "საცავის მდებარეობის დამატება"
+
+#: prefs.js:355
+msgid "Monitor drives mounted by GNOME"
+msgstr "GNOME-ის მიერ მიმაგრებული დისკების მონიტორინგი"
+
+#: prefs.js:367
+#, javascript-format
+msgid "Now: %s"
+msgstr "ახლა: %s"
+
+#: prefs.js:367
+msgid "None at the moment"
+msgstr "ამჟამად არცერთი"
+
+#: prefs.js:369
+msgid "Not mounted"
+msgstr "არ არის მიმაგრებული"
+
+#: prefs.js:370
+msgid "Remove storage location"
+msgstr "საცავის მდებარეობის წაშლა"
+
+#: prefs.js:399
+msgid "Add Storage Location"
+msgstr "საცავის მდებარეობის დამატება"
+
+#: prefs.js:401
+msgid "Other mount points"
+msgstr "სხვა მიმაგრების წერტილები"
+
+#: prefs.js:497
+msgid "Automatic"
+msgstr "ავტომატური"
+
+#: prefs.js:497
+msgid "kbit/s"
+msgstr "kbit/s"
+
+#: prefs.js:497
+msgid "Mbit/s"
+msgstr "Mbit/s"
+
+#: prefs.js:497
+msgid "kB/s"
+msgstr "kB/s"
+
+#: prefs.js:497
+msgid "MB/s"
+msgstr "MB/s"
+
+#: prefs.js:516
+msgid "1 second"
+msgstr "1 წამი"
+
+#: prefs.js:516
+msgid "2 seconds"
+msgstr "2 წამი"
+
+#: prefs.js:516
+msgid "3 seconds"
+msgstr "3 წამი"
+
+#: prefs.js:516
+msgid "5 seconds"
+msgstr "5 წამი"
+
+#: prefs.js:516
+msgid "10 seconds"
+msgstr "10 წამი"
+
+#: prefs.js:517
+msgid "15 seconds"
+msgstr "15 წამი"
+
+#: prefs.js:517
+msgid "30 seconds"
+msgstr "30 წამი"
+
+#: prefs.js:517
+msgid "60 seconds"
+msgstr "60 წამი"
+
+#: prefs.js:519
+msgid "Update every"
+msgstr "განახლების ინტერვალი"
+
+#: prefs.js:520
+msgid ""
+"Only sensors on screen are read: those in the top bar and in the open menu."
+msgstr "იკითხება მხოლოდ ეკრანზე ნაჩვენები სენსორები: ზედა ზოლზე და გახსნილ მენიუში."
+
+#: sensors.js:317
+msgid "on"
+msgstr "ჩართულია"
+
+#: sensors.js:1595
 #, javascript-format
 msgid "Core %d"
 msgstr "ბირთვი %d"
 
-#: sensors.js:213 sensors.js:222
-msgid "Frequency"
-msgstr "სიხშირე"
+#: sensors.js:2041
+#, javascript-format
+msgid "GPU %d"
+msgstr "GPU %d"
 
-#: sensors.js:231
-msgid "Open Files"
-msgstr "ფაილების გახსნა"
-
-#: sensors.js:238
-msgid "Load 1m"
-msgstr "დატვირთვა 1წთ"
-
-#: sensors.js:239
-msgid "system"
-msgstr "სისტემა"
-
-#: sensors.js:240
-msgid "Load 5m"
-msgstr "დატვირთვა 5წთ"
-
-#: sensors.js:241
-msgid "Load 15m"
-msgstr "დატვირთვა 15წთ"
-
-#: sensors.js:242
-msgid "Threads Active"
-msgstr "აქტიური ნაკადები"
-
-#: sensors.js:243
-msgid "Threads Total"
-msgstr "სულ ნაკადები"
-
-#: sensors.js:248
-msgid "Uptime"
-msgstr "ჩართულობის დრო"
-
-#: sensors.js:252
-msgid "Process Time"
-msgstr "პროცესის დრო"
-
-#: sensors.js:302
-msgid "WiFi Link Quality"
-msgstr "WiFi კავშირის ხარისხი"
-
-#: sensors.js:303
-msgid "WiFi Signal Level"
-msgstr "WiFi-ის სიგნალის დონე"
-
-#: sensors.js:318
-msgid "ARC Target"
-msgstr "ARC სამიზნე"
-
-#: sensors.js:319
-msgid "ARC Maximum"
-msgstr "ARC მაქსიმუმი"
-
-#: sensors.js:320
-msgid "ARC Current"
-msgstr "ARC მიმდინარე"
-
-#: sensors.js:330
-msgid "Read total"
-msgstr "წაკითხული სულ"
-
-#: sensors.js:331
-msgid "Write total"
-msgstr "ჩაწერილი სულ"
-
-#: sensors.js:332
-msgid "Read rate"
-msgstr "კითხვის სიჩქარე"
-
-#: sensors.js:333
-msgid "Write rate"
-msgstr "ჩაწერის სიჩქარე"
-
-#: sensors.js:352
+#: sensors.js:84
 msgid "Total"
 msgstr "სულ"
 
-#: sensors.js:353
+#: sensors.js:85
+msgid "Available"
+msgstr "ხელმისაწვდომია"
+
+#: sensors.js:87
+msgid "File cache"
+msgstr "ფაილების კეში"
+
+#: sensors.js:87
+msgid "Memory details"
+msgstr "მეხსიერების დეტალები"
+
+#: sensors.js:88
+msgid "Shared"
+msgstr "გაზიარებული"
+
+#: sensors.js:89
+msgid "Kernel cache"
+msgstr "ბირთვის კეში"
+
+#: sensors.js:90
+msgid "Buffers"
+msgstr "ბუფერები"
+
+#: sensors.js:91
+msgid "Reclaimable"
+msgstr "დაბრუნებადი"
+
+#: sensors.js:93
+msgid "Free"
+msgstr "თავისუფალი"
+
+#: sensors.js:94
+msgid "Swap Total"
+msgstr "სულ სვოპი"
+
+#: sensors.js:94
+msgid "Swap"
+msgstr "სვოპი"
+
+#: sensors.js:96
+msgid "Swap Free"
+msgstr "თავისუფალი სვოპი"
+
+#: sensors.js:106
 msgid "Used"
 msgstr "გამოყენებულია"
 
-#: sensors.js:354
-msgid "Reserved"
-msgstr "რეზერვირებული"
+#: sensors.js:112
+msgid "Usage"
+msgstr "გამოყენება"
 
-#: sensors.js:356
-msgid "storage"
-msgstr "საცავი"
+#: sensors.js:120
+msgid "Swap Used"
+msgstr "გამოყენებული სვოპი"
 
-#: sensors.js:393
-msgid "Label"
-msgstr "ჭდე"
+#: sensors.js:129
+msgid "Swap Usage"
+msgstr "სვოპის გამოყენება"
 
-#: sensors.js:404 sensors.js:529
-msgid "State"
-msgstr "მდგომარეობა"
-
-#: sensors.js:409 sensors.js:519
-msgid "Cycles"
-msgstr "ციკლები"
-
-#: sensors.js:414
-msgid "Voltage"
-msgstr "ძაბვა"
-
-#: sensors.js:418
-msgid "Level"
-msgstr "დონე"
-
-#: sensors.js:422 sensors.js:553
-msgid "Percentage"
-msgstr "პროცენტი"
-
-#: sensors.js:432 sensors.js:527
-msgid "Rate"
-msgstr "ტარიფი"
-
-#: sensors.js:442 sensors.js:535
-msgid "Energy (full)"
-msgstr "ენერგია (სრული)"
-
-#: sensors.js:451 sensors.js:541
-msgid "Energy (design)"
-msgstr "ენერგია (დიზაინი)"
-
-#: sensors.js:455
-msgid "Capacity"
-msgstr "ტევადობა"
-
-#: sensors.js:464 sensors.js:547
-msgid "Energy (now)"
-msgstr "ენერგია (ახლა)"
-
-#: sensors.js:501 sensors.js:504 sensors.js:588 sensors.js:591
-msgid "Time left"
-msgstr "დარჩენილი დრო"
-
-#: sensors.js:677
+#: sensors.js:178
 msgid "Vendor"
 msgstr "მომწოდებელი"
 
-#: sensors.js:678
+#: sensors.js:179
 msgid "Bogomips"
 msgstr "Bogomips"
 
-#: sensors.js:679
+#: sensors.js:180
 msgid "Sockets"
 msgstr "სოკეტები"
 
-#: sensors.js:680
+#: sensors.js:182
 msgid "Cache"
 msgstr "კეში"
 
-#: sensors.js:685
+#: sensors.js:194
+msgid "Frequency"
+msgstr "სიხშირე"
+
+#: sensors.js:200
+msgid "Min frequency"
+msgstr "მინ. სიხშირე"
+
+#: sensors.js:206
+msgid "Max frequency"
+msgstr "მაქს. სიხშირე"
+
+#: sensors.js:220
 msgid "Kernel"
 msgstr "ბირთვი"
 
-#: prefs.js:98
-msgid "Temperature"
-msgstr "ტემპერატურა"
+#: sensors.js:243
+msgid "Process Time"
+msgstr "პროცესის დრო"
 
-#: prefs.js:98
-msgid "Network"
-msgstr "ქსელი"
+#: sensors.js:247
+msgid "Uptime"
+msgstr "ჩართულობის დრო"
 
-#: prefs.js:98
-msgid "Storage"
-msgstr "საცავი"
+#: sensors.js:256
+msgid "Load 1m"
+msgstr "დატვირთვა 1წთ"
 
-#: prefs.js:98
+#: sensors.js:257
+msgid "Load 5m"
+msgstr "დატვირთვა 5წთ"
+
+#: sensors.js:258
+msgid "Load 15m"
+msgstr "დატვირთვა 15წთ"
+
+#: sensors.js:261
+msgid "Threads Active"
+msgstr "აქტიური ნაკადები"
+
+#: sensors.js:266
+msgid "Threads Total"
+msgstr "სულ ნაკადები"
+
+#: sensors.js:279
+msgid "Open Files"
+msgstr "ღია ფაილები"
+
+#: sensors.js:288
+msgid "Powercap"
+msgstr "Powercap"
+
+#: sensors.js:302
+msgid "Cores"
+msgstr "ბირთვები"
+
+#: sensors.js:302
+msgid "Uncore"
+msgstr "ბირთვებს გარეთ"
+
+#: sensors.js:302
 msgid "Memory"
 msgstr "მეხსიერება"
 
-#: prefs.js:98
-msgid "Battery"
-msgstr "ელემენტი"
+#: sensors.js:302
+msgid "Platform"
+msgstr "პლატფორმა"
 
-#: extension.js:112
-msgid "Battery 1"
-msgstr "ელემენტი 1"
+#: sensors.js:315
+msgid "Lap mode"
+msgstr "კალთაზე მუშაობა"
 
-#: extension.js:112
-msgid "Battery 2"
-msgstr "ელემენტი 2"
+#: sensors.js:326
+msgid "WiFi"
+msgstr "WiFi"
 
-#: extension.js:112
-msgid "Battery 3"
-msgstr "ელემენტი 3"
+#: sensors.js:326
+msgid "Mobile"
+msgstr "მობილური"
 
-#: extension.js:112
-msgid "Battery 4"
-msgstr "ელემენტი 4"
+#: sensors.js:398
+msgid "Download speed"
+msgstr "ჩამოტვირთვის სიჩქარე"
 
-#: extension.js:112
-msgid "Battery 5"
-msgstr "ელემენტი 5"
+#: sensors.js:406
+msgid "Downloaded since boot"
+msgstr "ჩამოტვირთული ჩართვიდან"
 
-#: extension.js:115
-msgid "Battery (hidden)"
-msgstr "ელემენტი (დამალული)"
+#: sensors.js:414
+msgid "Downloaded this session"
+msgstr "ჩამოტვირთული ამ სესიაში"
 
-#: prefs.js:98
-msgid "System"
-msgstr "სისტემა"
+#: sensors.js:422
+msgid "Upload speed"
+msgstr "ატვირთვის სიჩქარე"
 
-#: prefs.js:98
+#: sensors.js:430
+msgid "Uploaded since boot"
+msgstr "ატვირთული ჩართვიდან"
+
+#: sensors.js:438
+msgid "Uploaded this session"
+msgstr "ატვირთული ამ სესიაში"
+
+#: sensors.js:446
+msgid "Total speed"
+msgstr "ჯამური სიჩქარე"
+
+#: sensors.js:479
+msgid "WiFi Link Quality"
+msgstr "WiFi კავშირის ხარისხი"
+
+#: sensors.js:486
+msgid "WiFi Signal Level"
+msgstr "WiFi-ის სიგნალის დონე"
+
+#: sensors.js:534
+msgid "Public IP"
+msgstr "გარე IP"
+
+#: sensors.js:582
+msgid "Reserved"
+msgstr "რეზერვირებული"
+
+#: sensors.js:586
+msgid "Used %"
+msgstr "გამოყენებული %"
+
+#: sensors.js:588
+msgid "Free %"
+msgstr "თავისუფალი %"
+
+#: sensors.js:609
+msgid "Read total"
+msgstr "წაკითხული სულ"
+
+#: sensors.js:615
+msgid "Read rate"
+msgstr "კითხვის სიჩქარე"
+
+#: sensors.js:621
+msgid "Write total"
+msgstr "ჩაწერილი სულ"
+
+#: sensors.js:627
+msgid "Write rate"
+msgstr "ჩაწერის სიჩქარე"
+
+#: sensors.js:649
+msgid "ARC Target"
+msgstr "ARC სამიზნე"
+
+#: sensors.js:650
+msgid "ARC Maximum"
+msgstr "ARC მაქსიმუმი"
+
+#: sensors.js:651
+msgid "ARC Current"
+msgstr "ARC მიმდინარე"
+
+#: sensors.js:685
+msgid "State"
+msgstr "მდგომარეობა"
+
+#: sensors.js:686
+msgid "Cycles"
+msgstr "ციკლები"
+
+#: sensors.js:687
+msgid "Voltage"
+msgstr "ძაბვა"
+
+#: sensors.js:688
+msgid "Level"
+msgstr "დონე"
+
+#: sensors.js:689
+msgid "Percentage"
+msgstr "პროცენტი"
+
+#: sensors.js:690
+msgid "Power Rate"
+msgstr "მოხმარებული სიმძლავრე"
+
+#: sensors.js:691
+msgid "Energy (full)"
+msgstr "ენერგია (სრული)"
+
+#: sensors.js:692
+msgid "Energy (design)"
+msgstr "ენერგია (დიზაინი)"
+
+#: sensors.js:693
+msgid "Energy (now)"
+msgstr "ენერგია (ახლა)"
+
+#: sensors.js:695
+msgid "Capacity"
+msgstr "ტევადობა"
+
+#: sensors.js:701
+msgid "Time left"
+msgstr "დარჩენილი დრო"
+
+#: sensors.js:915
+msgid "Screen Redraws"
+msgstr "ეკრანის გადახატვები"
+
+#: sensors.js:1698
+msgid "ACPI Thermal Zone"
+msgstr "ACPI-ის თერმული ზონა"
+
+#: sensors.js:1699
+msgid "Platform Controller Hub"
+msgstr "პლატფორმის კონტროლერის ჰაბი"
+
+#: sensors.js:1700
+msgid "Wireless Adapter"
+msgstr "უსადენო ადაპტერი"
+
+#: sensors.js:1701
+msgid "Processor 0"
+msgstr "პროცესორი 0"
+
+#: sensors.js:1702
+msgid "Processor 1"
+msgstr "პროცესორი 1"
+
+#: sensors.js:1760
+msgid "Transferred"
+msgstr "გადაცემული"
+
+#: sensors.js:1857
+msgid "ZFS cache"
+msgstr "ZFS-ის კეში"
+
+#: sensors.js:1904
+msgid "Total power rate"
+msgstr "ჯამური მოხმარებული სიმძლავრე"
+
+#: sensors.js:1972
+msgid "Average"
+msgstr "საშუალო"
+
+#: sensors.js:1972
+msgid "Minimum"
+msgstr "მინიმუმი"
+
+#: sensors.js:1972
+msgid "Maximum"
+msgstr "მაქსიმუმი"
+
+#: sensors.js:2005
+msgid "Temperature Limit"
+msgstr "ტემპერატურის ზღვარი"
+
+#: sensors.js:2006
+msgid "Power Limit"
+msgstr "სიმძლავრის ზღვარი"
+
+#: sensors.js:2007
+msgid "Addressing Mode"
+msgstr "მისამართაციის რეჟიმი"
+
+#: sensors.js:2008
+msgid "Driver Version"
+msgstr "დრაივერის ვერსია"
+
+#: sensors.js:2009
+msgid "vBIOS Version"
+msgstr "vBIOS-ის ვერსია"
+
+#: sensors.js:2010
+msgid "Serial Number"
+msgstr "სერიული ნომერი"
+
+#: sensors.js:2011
+msgid "Domain Number"
+msgstr "დომენის ნომერი"
+
+#: sensors.js:2012
+msgid "Bus Number"
+msgstr "სალტის ნომერი"
+
+#: sensors.js:2013
+msgid "Device Number"
+msgstr "მოწყობილობის ნომერი"
+
+#: sensors.js:2014
+msgid "Device ID"
+msgstr "მოწყობილობის ID"
+
+#: sensors.js:2015
+msgid "Sub Device ID"
+msgstr "ქვემოწყობილობის ID"
+
+#: sensors.js:2072
+msgid "Maximum Link Speed"
+msgstr "კავშირის მაქს. სიჩქარე"
+
+#: sensors.js:2080
+msgid "Fan"
+msgstr "ვენტილატორი"
+
+#: sensors.js:2081
+msgid "Temperature"
+msgstr "ტემპერატურა"
+
+#: sensors.js:2082
+msgid "Memory Temperature"
+msgstr "მეხსიერების ტემპერატურა"
+
+#: sensors.js:2083
+msgid "Memory Total"
+msgstr "მეხსიერება სულ"
+
+#: sensors.js:2084
+msgid "Memory Used"
+msgstr "გამოყენებული მეხსიერება"
+
+#: sensors.js:2085
+msgid "Memory Reserved"
+msgstr "რეზერვირებული მეხსიერება"
+
+#: sensors.js:2086
+msgid "Memory Free"
+msgstr "თავისუფალი მეხსიერება"
+
+#: sensors.js:2087
+msgid "Memory Utilization"
+msgstr "მეხსიერების აქტივობა"
+
+#: sensors.js:2088
+msgid "Utilization"
+msgstr "აქტივობა"
+
+#: sensors.js:2089
+msgid "Encoder Utilization"
+msgstr "კოდერის აქტივობა"
+
+#: sensors.js:2090
+msgid "Decoder Utilization"
+msgstr "დეკოდერის აქტივობა"
+
+#: sensors.js:2092
+msgid "Memory Frequency"
+msgstr "მეხსიერების სიხშირე"
+
+#: sensors.js:2093
+msgid "Encoder/Decoder Frequency"
+msgstr "კოდერის/დეკოდერის სიხშირე"
+
+#: sensors.js:2094
+msgid "Power"
+msgstr "სიმძლავრე"
+
+#: sensors.js:2095
+msgid "Average Power"
+msgstr "საშუალო სიმძლავრე"
+
+#: sensors.js:2112
+msgid "Memory Usage"
+msgstr "მეხსიერების გამოყენება"
+
+#: sensors.js:2121
+msgid "Link Speed"
+msgstr "კავშირის სიჩქარე"
+
+#: helpers/categories.js:12
 msgid "Processor"
 msgstr "პროცესორი"
 
-#: sensors.js:759
-msgid "Fan"
-msgstr "ვენტილატორი"
+#: helpers/categories.js:13
+msgid "System"
+msgstr "სისტემა"
+
+#: helpers/categories.js:14
+msgid "Network"
+msgstr "ქსელი"
+
+#: helpers/categories.js:15
+msgid "Storage"
+msgstr "საცავი"
+
+#: helpers/categories.js:16
+msgid "Battery"
+msgstr "ელემენტი"
+
+#: helpers/categories.js:17
+msgid "GPU"
+msgstr "GPU"
+
+#: sensors.js:1802
+msgid "Ethernet"
+msgstr "Ethernet"
+
+#: sensors.js:317
+msgid "off"
+msgstr "გამორთულია"
+
+#~ msgid "Physical"
+#~ msgstr "ფიზიკური"
+
+#~ msgid "Cached"
+#~ msgstr "დაქეშილი"
+
+#~ msgid "Allocated"
+#~ msgstr "გამოყოფილი"
+
+#~ msgid "No Data"
+#~ msgstr "მონაცემების გარეშე"
+
+#~ msgid "Format"
+#~ msgstr "ფორმატი"
+
+#~ msgid "Menu always centered"
+#~ msgstr "მენიუ ყოველთვის ცენტრში"
+
+#~ msgid "Path"
+#~ msgstr "ბილიკი"
+
+#~ msgid "Monitor BAT0"
+#~ msgstr "BAT0-ის მონიტორი"
+
+#~ msgid "Monitor BAT1"
+#~ msgstr "BAT1-ის მონიტორი"
+
+#~ msgid "Monitor BAT2"
+#~ msgstr "BAT2-ის მონიტორი"
+
+#~ msgid "Monitor CMB0"
+#~ msgstr "CMB0-ის მონიტორი"
+
+#~ msgid "Monitor macsmc-battery"
+#~ msgstr "macsmc-battery-ის მონიტორი"
+
+#~ msgid "Calculate Combined Values"
+#~ msgstr "კომბინირებული მნიშვნელობების გამოთვლა"
+
+#~ msgid "Include BAT0"
+#~ msgstr "BAT0-ის ჩასმა"
+
+#~ msgid "Include BAT1"
+#~ msgstr "BAT1-ის ჩასმა"
+
+#~ msgid "Include BAT2"
+#~ msgstr "BAT2-ის ჩასმა"
+
+#~ msgid "Include CMB0"
+#~ msgstr "CMB0-ის ჩასმა"
+
+#~ msgid "Include macsmc-battery"
+#~ msgstr "macsmc-battery-ის ჩასმა"
+
+#~ msgid "Monitor command"
+#~ msgstr "ბრძანების მონიტორი"
+
+#~ msgid "Sensors to show in panel"
+#~ msgstr "პანელზე საჩვენებელი სენსორები"
+
+#~ msgid "List of sensors to be shown in the panel"
+#~ msgstr "პანელზე საჩვენებელი სენსორების სია"
+
+#~ msgid "Delay between sensor polling"
+#~ msgstr "დაყოვნება სენსორებიდან მონაცემების გამოთხოვას შორის"
+
+#~ msgid "Position in Panel ('left', 'center', 'right')"
+#~ msgstr "პოზიცია პანელზე ('მარცხნივ', 'ცენტრი', 'მარჯვნივ')"
+
+#~ msgid "Show one extra digit after decimal"
+#~ msgstr "ერთი ციფრის ჩვენება წილადის შემდეგ"
+
+#~ msgid "Display sensors in alphabetical order"
+#~ msgstr "სენსორების ჩვენება ანბანის მიმდევრობით"
+
+#~ msgid "Hide data from sensors that are invalid"
+#~ msgstr "არასწორი მონაცემების მქონე სენსორების დამალვა"
+
+#~ msgid "Display temperature of various components"
+#~ msgstr "სხვადასხვა კომპონენტების ტემპერატურის ჩვენება"
+
+#~ msgid ""
+#~ "The unit ('centigrade' or 'fahrenheit') the extension should display the "
+#~ "temperature in"
+#~ msgstr ""
+#~ "ერთეული ('ცელსიუსი', ან 'ფარენჰეიტი'), რომლითაც გაფართოებამ ტემპერატურა "
+#~ "უნდა აჩვენოს"
+
+#~ msgid "Display voltage of various components"
+#~ msgstr "სხვადასხვა კომპონენტების ძაბვის ჩვენება"
+
+#~ msgid "Display fan rotation per minute"
+#~ msgstr "ბრუნვის სიჩქარის ჩვენება (წუთში)"
+
+#~ msgid "Display memory information"
+#~ msgstr "მეხსიერების ინფორმაციის გამოტანა"
+
+#~ msgid "Display processor information"
+#~ msgstr "პროცესორის ინფორმაციის ჩვენება"
+
+#~ msgid "Display system information"
+#~ msgstr "სისტემის ინფორმაციის ჩვენება"
+
+#~ msgid "Display network information"
+#~ msgstr "ქსელის ინფორმაციის ჩვენება"
+
+#~ msgid "Display public IP address of internet connection"
+#~ msgstr "ინტერნეტკავშირის საჯარო IP მისამართის ჩვენება"
+
+#~ msgid "Network speed format"
+#~ msgstr "ქსელის სიჩქარის ფორმატი"
+
+#~ msgid "Should speed display in bits or bytes?"
+#~ msgstr "სიჩქარე უნდა იყოს ნაჩვენები ბიტებში, თუ ბაიტებში?"
+
+#~ msgid "Storage path for monitoring"
+#~ msgstr "საცავის ბილიკი მონიტორინგისთვის"
+
+#~ msgid "Monitor battery health"
+#~ msgstr "ელემენტის ჯანმრთელობის მონიტორინგი"
+
+#~ msgid "Memory measurement"
+#~ msgstr "მეხსიერების გაზომვა"
+
+#~ msgid "Can use gigabyte or gibibyte for memory"
+#~ msgstr "მეხსიერებისთვის შეიძლება გიგაბაიტების გამოყენება, თუ გიბიბაიტების"
+
+#~ msgid "Storage measurement"
+#~ msgstr "საცავის გაზომვა"
+
+#~ msgid "Can use gigabyte or gibibyte for storage"
+#~ msgstr "საცავისთვის შეიძლება გიგაბაიტების გამოყენება, თუ გიბიბაიტების"
+
+#~ msgid "Display battery BAT0"
+#~ msgstr "ელემენტის BAT0 ჩვენება"
+
+#~ msgid "Should battery 'BAT0' be displayed?"
+#~ msgstr "უნდა იყოს თუ არა ნაჩვენები ელემენტი 'BAT0'?"
+
+#~ msgid "Display battery BAT1"
+#~ msgstr "ელემენტის BAT1 ჩვენება"
+
+#~ msgid "Should battery 'BAT1' be displayed?"
+#~ msgstr "უნდა იყოს თუ არა ნაჩვენები ელემენტი 'BAT1'?"
+
+#~ msgid "Display battery BAT2"
+#~ msgstr "ელემენტის BAT2 ჩვენება"
+
+#~ msgid "Should battery 'BAT2' be displayed?"
+#~ msgstr "უნდა იყოს თუ არა ნაჩვენები ელემენტი 'BAT2'?"
+
+#~ msgid "Display battery CMB0"
+#~ msgstr "ელემენტის CMB0 ჩვენება"
+
+#~ msgid "Should battery 'CMB0' be displayed?"
+#~ msgstr "უნდა იყოს თუ არა ნაჩვენები ელემენტი 'CMB0'?"
+
+#~ msgid "Display battery macsmc-battery"
+#~ msgstr "ელემენტის macsmc-battery ჩვენება"
+
+#~ msgid "Should battery 'macsmc-battery' be displayed?"
+#~ msgstr "უნდა იყოს თუ არა ნაჩვენები ელემენტი 'macsmc-battery'?"
+
+#~ msgid "Display combined battery data"
+#~ msgstr "ელემენტის კომბინირებული მონაცემების ჩვენება"
+
+#~ msgid "Display combined values for selected batteries"
+#~ msgstr "კომბინირებული მნიშვნელობების ჩვენება მონიშნული ელემენტებისთვის"
+
+#~ msgid "Include 'BAT0' when calculating combined Battery"
+#~ msgstr "'BAT0'-ის ჩასმა კომბინირებული ელემენტის გამოთვლისას"
+
+#~ msgid "Include 'BAT1' when calculating combined Battery"
+#~ msgstr "'BAT1'-ის ჩასმა კომბინირებული ელემენტის გამოთვლისას"
+
+#~ msgid "Include 'BAT2' when calculating combined Battery"
+#~ msgstr "'BAT2'-ის ჩასმა კომბინირებული ელემენტის გამოთვლისას"
+
+#~ msgid "Include 'CMB0' when calculating combined Battery"
+#~ msgstr "'CMB0'-ის ჩასმა კომბინირებული ელემენტის გამოთვლისას"
+
+#~ msgid "Include 'macsmc-battery' when calculating combined Battery"
+#~ msgstr "'macsmc-battery'-ის ჩასმა კომბინირებული ელემენტის გამოთვლისას"
+
+#~ msgid "Use fixed widths in top bar"
+#~ msgstr "ფიქსირებული სიგანეების გამოყენება ზედა პანელში"
+
+#~ msgid "Keep sensors in top bar from jumping around"
+#~ msgstr "ზედა პანელში არსებული სენსორების გადალაგების გამორთვა"
+
+#~ msgid "Keep top bar clean by only showing sensor values"
+#~ msgstr ""
+#~ "ზედა პანელის სუფთად შენარჩუნება, მხოლოდ, სენსორის მნიშვნელობების ჩვენებით"
+
+#~ msgid "Make the menu centered"
+#~ msgstr "მენიუ ყოველთვის ცენტრში"
+
+#~ msgid "Center the menu to the icon regardless of the position in the panel"
+#~ msgstr "მენიუს ცენტრში ჩვენება მისი პანელზე მდებარეობის მიუხედავად"
+
+#~ msgid "The command run when system monitor button is clicked"
+#~ msgstr ""
+#~ "ბრძანება, რომელიც გაეშვება, როცა სისტემური მონიტორის ღილაკზე დააწკაპუნებთ"
+
+#~ msgid "Include processor static information"
+#~ msgstr "პროცესორის სტატიკური ინფორმაციის ჩასმა"
+
+#~ msgid "Display processor static information that doesn't change"
+#~ msgstr "პროცესორის უცვლელი, სტატიკური ინფორმაციის ჩვენება"
+
+#~ msgid "memory"
+#~ msgstr "მეხსიერება"
+
+#~ msgid "processor"
+#~ msgstr "პროცესორი"
+
+#~ msgid "system"
+#~ msgstr "სისტემა"
+
+#~ msgid "storage"
+#~ msgstr "საცავი"
+
+#~ msgid "Label"
+#~ msgstr "ჭდე"
+
+#~ msgid "Rate"
+#~ msgstr "ტარიფი"
+
+#~ msgid "Battery 1"
+#~ msgstr "ელემენტი 1"
+
+#~ msgid "Battery 2"
+#~ msgstr "ელემენტი 2"
+
+#~ msgid "Battery 3"
+#~ msgstr "ელემენტი 3"
+
+#~ msgid "Battery 4"
+#~ msgstr "ელემენტი 4"
+
+#~ msgid "Battery 5"
+#~ msgstr "ელემენტი 5"
+
+#~ msgid "Battery (hidden)"
+#~ msgstr "ელემენტი (დამალული)"

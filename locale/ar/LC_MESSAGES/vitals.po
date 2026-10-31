@@ -2,7 +2,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: \n"
-"POT-Creation-Date: 2023-10-22 21:04+0200\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-30 12:35+0100\n"
 "PO-Revision-Date: 2024-06-12 12:15+0300\n"
 "Last-Translator: Abdalrahim G. Fakhouri <abdilra7eem@yahoo.com>\n"
 "Language-Team: ar\n"
@@ -10,8 +11,8 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Plural-Forms: nplurals=6; plural= n==0 ? 0 : n==1 ? 1 : n==2 ? 2 : n%100>=3 &"
-"& n%100<=10 ? 3 : n%100>=11 && n%100<=99 ? 4 : 5;\n"
+"Plural-Forms: nplurals=6; plural= n==0 ? 0 : n==1 ? 1 : n==2 ? 2 : n%100>=3 "
+"&& n%100<=10 ? 3 : n%100>=11 && n%100<=99 ? 4 : 5;\n"
 "POT-Revision-Date: 2018-12-29 10:26+0100\n"
 "X-Generator: Lokalize 24.05.0\n"
 "X-Poedit-Basepath: ..\n"
@@ -21,738 +22,1326 @@ msgstr ""
 "X-Poedit-SearchPath-2: prefs.js\n"
 "X-Poedit-SearchPath-3: menuItem.js\n"
 "X-Poedit-SearchPath-4: extension.js\n"
-"X-Poedit-SearchPath-5: schemas/org.gnome.shell.extensions.vitals.gschema.xml\n"
+"X-Poedit-SearchPath-5: schemas/"
+"org.gnome.shell.extensions.vitals.gschema.xml\n"
 "X-Poedit-SearchPath-6: prefs.ui\n"
 
-#: extension.js:109
-msgid "Batteries"
-msgstr "البطاريات"
-
-#: extension.js:133
-msgid "No Data"
-msgstr "لا توجد بيانات"
-
-#: extension.js:159
+#: extension.js:213
 msgid "Refresh"
 msgstr "تحديث"
 
-#: extension.js:174
+#: extension.js:220
 msgid "System Monitor"
 msgstr "مراقب النظام"
 
-#: extension.js:182 prefs.js:106
+#: extension.js:228
 msgid "Preferences"
 msgstr "التفضيلات"
 
-#: prefs.ui:42
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:81
-msgid "Include public IP address"
-msgstr "ضمِّن عنوان IP الخارجي"
+#: extension.js:237 extension.js:242
+msgid "Show hidden sensors"
+msgstr "أظهر الحساسات المخفية"
 
-#: prefs.ui:70
-msgid "Format"
-msgstr "الصيغة"
+#: extension.js:242
+msgid "Leave out hidden sensors"
+msgstr "استبعد الحساسات المخفية"
 
-#: prefs.ui:78
-msgid "Bytes"
-msgstr "بايت"
+#: extension.js:825
+msgid "Pin to top bar"
+msgstr "ثبّت في الشريط العلوي"
 
-#: prefs.ui:79
-msgid "Bits"
-msgstr "بِت"
+#: extension.js:832
+msgid "Pin to category"
+msgstr "ثبّت في الفئة"
 
-#: prefs.ui:121
+#: extension.js:834
+msgid "Rename"
+msgstr "أعد التسمية"
+
+#: extension.js:837
+msgid "Hide"
+msgstr "أخفِ"
+
+#: prefs.js:34 prefs.js:49
 msgid "General"
 msgstr "عامّ"
 
-#: prefs.ui:149
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:11
-msgid "Seconds between updates"
-msgstr "الثواني بين التحديثات"
+#: prefs.js:38
+msgid "Vitals"
+msgstr "Vitals"
 
-#: prefs.ui:184
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:16
-msgid "Position in panel"
-msgstr "المكان في الشريط العلوي"
-
-#: prefs.ui:193
-msgid "Left"
-msgstr "اليسار"
-
-#: prefs.ui:194
-msgid "Center"
-msgstr "الوسط"
-
-#: prefs.ui:195
-msgid "Right"
-msgstr "اليمين"
-
-#: prefs.ui:196
-msgid "Far Left"
-msgstr "أقصى اليسار"
-
-#: prefs.ui:197
-msgid "Far Right"
-msgstr "أقصى اليمين"
-
-#: prefs.ui:220
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:21
+#: prefs.js:52
 msgid "Use higher precision"
 msgstr "استخدم دقّة أعلى"
 
-#: prefs.ui:247
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:26
-msgid "Alphabetize sensors"
-msgstr "رتب الحساسات أبجديًّا"
+#: prefs.js:52
+msgid "One more decimal place, and seconds in uptimes."
+msgstr "منزلة عشرية إضافية، وإظهار الثواني في أزمنة التشغيل."
 
-#: prefs.ui:274
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:31
-msgid "Hide zero values"
-msgstr "اخفِ القيم الصفرية"
+#: prefs.js:53
+msgid "Icon Style"
+msgstr "نمط الأيقونات"
 
-#: prefs.ui:301
-msgid "Use fixed widths"
-msgstr "استخدم مقاسات ثابتة"
-
-#: prefs.ui:328
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:171
-msgid "Hide icons in top bar"
-msgstr "اخفِ الأيقونات في الشريط العلوي"
-
-#: prefs.ui:355
-msgid "Menu always centered"
-msgstr "القائمة متوسطة دائمًا"
-
-#: prefs.ui:379
+#: prefs.js:55
 msgid "About"
 msgstr "عَن التطبيق"
 
-#: prefs.ui:394
+#: prefs.js:56
 msgid ""
-"Feature requests or bugs? Please visit <a href=\"https://github."
-"com/corecoding/Vitals/issues\">GitHub</a>. No warranty, "
-"expressed or implied. <a href=\"https://corecoding.com/donate."
-"php\">Donate</a> if you found this useful."
+"Feature requests or bugs? Please visit <a href=\"https://github.com/"
+"corecoding/Vitals/issues\">GitHub</a>. No warranty, expressed or implied. <a "
+"href=\"https://corecoding.com/donate.php\">Donate</a> if you found this "
+"useful."
 msgstr ""
-"أترغب بطلب ميزة أو الإبلاغ عن عِلَّة؟ نرجو زيارة <a href=\"https://github."
-"com/corecoding/Vitals/issues\">GitHub</a>. لا ضمانات صريحة أوضمنيّة. <a"
-" href=\"https://corecoding.com/donate."
-"php\">تبرّع</a> إذا وجدت هذا التطبيق مفيدًا."
+"أترغب بطلب ميزة أو الإبلاغ عن عِلَّة؟ نرجو زيارة <a href=\"https://github.com/"
+"corecoding/Vitals/issues\">GitHub</a>. لا ضمانات صريحة أوضمنيّة. <a "
+"href=\"https://corecoding.com/donate.php\">تبرّع</a> إذا وجدت هذا التطبيق "
+"مفيدًا."
 
-#: prefs.ui:421
+#: prefs.js:59
+msgid "Top Bar"
+msgstr "الشريط العلوي"
+
+#: prefs.js:60
+msgid "Placement"
+msgstr "الموضع"
+
+#: prefs.js:61
+msgid "Position"
+msgstr "الموقع"
+
+#: prefs.js:61
+msgid "Far left and far right are the outer ends of the bar."
+msgstr "أقصى اليسار وأقصى اليمين هما طرفا الشريط."
+
+#: prefs.js:62
+msgid "Far left"
+msgstr "أقصى اليسار"
+
+#: prefs.js:62
+msgid "Left"
+msgstr "اليسار"
+
+#: prefs.js:62
+msgid "Center"
+msgstr "الوسط"
+
+#: prefs.js:62
+msgid "Right"
+msgstr "اليمين"
+
+#: prefs.js:62
+msgid "Far right"
+msgstr "أقصى اليمين"
+
+#: prefs.js:63
+msgid "Reorder sensors by drag and drop"
+msgstr "أعد ترتيب الحساسات بالسحب والإفلات"
+
+#: prefs.js:64
+msgid "Appearance"
+msgstr "المظهر"
+
+#: prefs.js:65
+msgid "Steady widths"
+msgstr "ثبات العرض"
+
+#: prefs.js:66
+msgid ""
+"Keep room for a value’s widest text, so its neighbours do not jump. The room "
+"is given back after a minute."
+msgstr "احجز مساحة لأعرض نص للقيمة حتى لا تتحرك العناصر المجاورة. تُحرَّر المساحة بعد دقيقة."
+
+#: prefs.js:67
+msgid "Remember widths"
+msgstr "تذكّر العرض"
+
+#: prefs.js:68
+msgid ""
+"With steady widths, each value starts with the room it had when Vitals was "
+"last switched off."
+msgstr "عند ثبات العرض، تبدأ كل قيمة بالمساحة التي كانت تشغلها عند آخر تعطيل لـ Vitals."
+
+#: prefs.js:69
+msgid "Emphasize values"
+msgstr "أبرز القيم"
+
+#: prefs.js:69
+msgid "Draw icons and units lighter and smaller than the numbers."
+msgstr "اعرض الأيقونات والوحدات بلون أخف وحجم أصغر من الأرقام."
+
+#: prefs.js:70
+msgid "Crop icons"
+msgstr "اقتصّ الأيقونات"
+
+#: prefs.js:70
+msgid "Remove transparent borders while preserving each icon’s aspect ratio."
+msgstr "أزل الحواف الشفافة مع الحفاظ على نسبة أبعاد كل أيقونة."
+
+#: prefs.js:71
+msgid "Hide icons"
+msgstr "أخفِ الأيقونات"
+
+#: prefs.js:71
+msgid "The icons in the menu stay."
+msgstr "تبقى الأيقونات في القائمة."
+
+#: prefs.js:73
+msgid "Menu"
+msgstr "القائمة"
+
+#: prefs.js:75
+msgid "Open centered under the sensors"
+msgstr "افتح في الوسط أسفل الحساسات"
+
+#: prefs.js:75
+msgid "Otherwise the menu opens centered under the pointer."
+msgstr "وإلا تُفتح القائمة في الوسط أسفل المؤشر."
+
+#: prefs.js:76
+msgid "System monitor command"
+msgstr "أمر مراقب النظام"
+
+#: prefs.js:77
+msgid ""
+"The program that the System Monitor button at the bottom of the menu starts."
+msgstr "البرنامج الذي يشغّله زر مراقب النظام أسفل القائمة."
+
+#: prefs.js:78
+msgid "Categories"
+msgstr "الفئات"
+
+#: prefs.js:79
+msgid "Order"
+msgstr "الترتيب"
+
+#: prefs.js:79
+msgid "Manual is the order given by dragging categories in the menu."
+msgstr "الترتيب اليدوي هو الترتيب المحدد بسحب الفئات في القائمة."
+
+#: prefs.js:80
+msgid "Alphabetical"
+msgstr "أبجدي"
+
+#: prefs.js:80
+msgid "Manual"
+msgstr "يدوي"
+
+#: prefs.js:82
+msgid "Reorder by drag and drop"
+msgstr "أعد الترتيب بالسحب والإفلات"
+
+#: prefs.js:82
+msgid "Only in the manual order."
+msgstr "في الترتيب اليدوي فقط."
+
+#: prefs.js:83
+msgid "Slide open and shut"
+msgstr "افتح وأغلق بحركة انزلاقية"
+
+#: prefs.js:84 prefs.js:439
 msgid "Sensors"
 msgstr "الحساسات"
 
-#: prefs.ui:449
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:36
+#: prefs.js:85
+msgid "Show average, minimum and maximum"
+msgstr "أظهر المتوسط والحدين الأدنى والأقصى"
+
+#: prefs.js:86
+msgid "In the temperature and fan categories, below the sensors."
+msgstr "أسفل الحساسات في فئتَي الحرارة والمراوح."
+
+#: prefs.js:88
 msgid "Monitor temperature"
 msgstr "راقب الحرارة"
 
-#: prefs.ui:500
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:46
-msgid "Monitor voltage"
-msgstr "راقب الجهد الكهربائيّ"
-
-#: prefs.ui:528
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:51
-msgid "Monitor fan"
-msgstr "راقب المراوح"
-
-#: prefs.ui:556
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:56
-msgid "Monitor memory"
-msgstr "راقب حالة الذاكرة"
-
-#: prefs.ui:607
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:61
-msgid "Monitor processor"
-msgstr "راقب حالة المعالج"
-
-#: prefs.ui:658
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:66
-msgid "Monitor system"
-msgstr "راقب حالة النظام"
-
-#: prefs.ui:709
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:76
-msgid "Monitor network"
-msgstr "راقب حالة الشبكة"
-
-#: prefs.ui:760
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:71
-msgid "Monitor storage"
-msgstr "راقب حالة التخزين"
-
-#: prefs.ui:811
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:96
-msgid "Monitor battery"
-msgstr "راقب حالة البطارية"
-
-#: prefs.ui:890
-msgid "Path"
-msgstr "المسار"
-
-#: prefs.ui:922 prefs.ui:1031
-msgid "Measurement"
-msgstr "وحدة القياس"
-
-#: prefs.ui:930 prefs.ui:1039
-msgid "Binary"
-msgstr "ثنائيّ"
-
-#: prefs.ui:931 prefs.ui:1040
-msgid "Decimal"
-msgstr "عشريّ"
-
-#: prefs.ui:976
+#: prefs.js:89 prefs.js:500
 msgid "Unit"
 msgstr "الوِحدة"
 
-#: prefs.ui:985
+#: prefs.js:89
 msgid "°C"
-msgstr "ْم "
+msgstr "°C"
 
-#: prefs.ui:986
+#: prefs.js:89
 msgid "°F"
-msgstr "ْف"
+msgstr "°F"
 
-#: prefs.ui:1086
-msgid "Monitor BAT0"
-msgstr "راقب البطارية BAT0"
+#: prefs.js:90
+msgid "Skip sensors that read zero"
+msgstr "تجاوز الحساسات التي تقرأ صفرًا"
 
-#: prefs.ui:1116
-msgid "Monitor BAT1"
-msgstr "راقب البطارية BAT1"
-
-#: prefs.ui:1146
-msgid "Monitor BAT2"
-msgstr "راقب البطارية BAT2"
-
-#: prefs.ui:1176
-msgid "Monitor CMB0"
-msgstr "راقب البطارية CMB0"
-
-#: prefs.ui:1206
-msgid "Monitor macsmc-battery"
-msgstr "راقب بطارية macsmc"
-
-#: prefs.ui:1247
-msgid "Calculate Combined Values"
-msgstr "احسِب القيم المُجمّعة"
-
-#: prefs.ui:1277
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:141
-msgid "Include BAT0"
-msgstr "ضمِّن البطارية BAT0"
-
-#: prefs.ui:1307
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:146
-msgid "Include BAT1"
-msgstr "ضمِّن البطارية BAT1"
-
-#: prefs.ui:1337
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:151
-msgid "Include BAT2"
-msgstr "ضمِّن البطارية BAT2"
-
-#: prefs.ui:1367
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:156
-msgid "Include CMB0"
-msgstr "ضمِّن البطارية CMB0"
-
-#: prefs.ui:1397
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:161
-msgid "Include macsmc-battery"
-msgstr "ضمِّن بطارية macsmc"
-
-#: prefs.ui:1446
-msgid "Monitor command"
-msgstr "أمر المراقِب"
-
-#: prefs.ui:1498
-msgid "Include static info"
-msgstr "ضمِّن المعلومات الثابتة"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:6
-msgid "Sensors to show in panel"
-msgstr "الحساسات التي ستظهر في الشريط"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:7
-msgid "List of sensors to be shown in the panel"
-msgstr "لائحة الحساسات التي ستظهر في الشريط"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:12
-msgid "Delay between sensor polling"
-msgstr "الانتظار بين قراءات الحساسات"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:17
-msgid "Position in Panel ('left', 'center', 'right')"
-msgstr "المكان في الشريط (\"يمين\"، \"وسط\"، \"يسار\")"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:22
-msgid "Show one extra digit after decimal"
-msgstr "أظهِر منزلة عشرية واحدة إضافية بعد الفاصلة العشريّة"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:27
-msgid "Display sensors in alphabetical order"
-msgstr "اعرض الحساسات مرتبة هجائيًّا"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:32
-msgid "Hide data from sensors that are invalid"
-msgstr "اخفِ بيانات الحساسات غير الصالحة"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:37
-msgid "Display temperature of various components"
-msgstr "اعرض حرارة المكونات المختلفة"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:41
-msgid "Temperature unit"
-msgstr "وحدة قياس درجة الحرارة"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:42
+#: prefs.js:91
 msgid ""
-"The unit ('centigrade' or 'fahrenheit') the extension should "
-"display the temperature in"
-msgstr ""
-"الوِحدة (\"مئوية\" أو \"فهرنهايت\") التي تريد أن تُستخدَم في عرض درجة الحرارة"
+"A sensor that reads zero when it is found is left out. One that reads zero "
+"later stays."
+msgstr "يُستبعد الحساس إذا كانت قراءته صفرًا عند اكتشافه. أما إذا قرأ صفرًا لاحقًا فيبقى."
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:47
-msgid "Display voltage of various components"
-msgstr "اعرض الجهد الكهربائيّ للمكونات المختلفة"
+#: prefs.js:93
+msgid "Monitor voltage"
+msgstr "راقب الجهد الكهربائيّ"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:52
-msgid "Display fan rotation per minute"
-msgstr "اعرض سرعة دوران المروحة (كم دورة في الدقيقة)"
+#: prefs.js:95
+msgid "Monitor fan"
+msgstr "راقب المراوح"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:57
-msgid "Display memory information"
-msgstr "اعرض معلومات الذاكرة"
+#: prefs.js:97
+msgid "Monitor power"
+msgstr "راقب القدرة"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:62
-msgid "Display processor information"
-msgstr "اعرض معلومات المعالج"
+#: prefs.js:98
+msgid "Read powercap"
+msgstr "اقرأ powercap"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:67
-msgid "Display system information"
-msgstr "اعرض معلومات النظام"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:72
-msgid "Display storage information"
-msgstr "اعرض معلومات التخزين"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:77
-msgid "Display network information"
-msgstr "اعرض معلومات الشبكة"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:82
-msgid "Display public IP address of internet connection"
-msgstr "اعرض عنوان IP الخارجي لاتصال الإنترنت"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:86
-msgid "Network speed format"
-msgstr "صيغة سرعة الشبكة"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:87
-msgid "Should speed display in bits or bytes?"
-msgstr "هل تريد عرض السرعة بوحدة الـ\"بِت\" أم الـ\"بايت\" ؟"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:91
-msgid "Storage path"
-msgstr "مسار التخزين"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:92
-msgid "Storage path for monitoring"
-msgstr "مسار التخزين الذي تريد مراقبته"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:97
-msgid "Monitor battery health"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:101
-msgid "Memory measurement"
-msgstr "قياس الذاكرة"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:102
-msgid "Can use gigabyte or gibibyte for memory"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:106
-msgid "Storage measurement"
-msgstr "وحدة قياس سعة التخزين"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:107
-msgid "Can use gigabyte or gibibyte for storage"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:111
-msgid "Display battery BAT0"
-msgstr "اعرض البطارية BAT0"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:112
-msgid "Should battery 'BAT0' be displayed?"
-msgstr "هل تريد عرض معلومات البطارية BAT0 ؟"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:116
-msgid "Display battery BAT1"
-msgstr "اعرض البطارية BAT1"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:117
-msgid "Should battery 'BAT1' be displayed?"
-msgstr "هل تريد عرض معلومات البطارية BAT1 ؟"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:121
-msgid "Display battery BAT2"
-msgstr "اعرض البطارية BAT2"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:122
-msgid "Should battery 'BAT2' be displayed?"
-msgstr "هل تريد عرض معلومات البطارية BAT2 ؟"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:126
-msgid "Display battery CMB0"
-msgstr "اعرض البطارية CMB0"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:127
-msgid "Should battery 'CMB0' be displayed?"
-msgstr "هل تريد عرض معلومات البطارية CMB0 ؟"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:131
-msgid "Display battery macsmc-battery"
-msgstr "اعرض البطارية macsmc"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:132
-msgid "Should battery 'macsmc-battery' be displayed?"
-msgstr "هل تريد عرض معلومات البطارية macsmc ؟"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:136
-msgid "Display combined battery data"
-msgstr "اعرض معلومات البطاريات مجتمعة"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:137
-msgid "Display combined values for selected batteries"
-msgstr "اعرض محصلة القيم للبطاريات المختارة"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:142
-msgid "Include 'BAT0' when calculating combined Battery"
-msgstr "اشمل القيم من BAT0 عند احتساب القيم من البطاريات مجتمعة"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:147
-msgid "Include 'BAT1' when calculating combined Battery"
-msgstr "اشمل القيم من BAT1 عند احتساب القيم من البطاريات مجتمعة"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:152
-msgid "Include 'BAT2' when calculating combined Battery"
-msgstr "اشمل القيم من BAT2 عند احتساب القيم من البطاريات مجتمعة"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:157
-msgid "Include 'CMB0' when calculating combined Battery"
-msgstr "اشمل القيم من CMB0 عند احتساب القيم من البطاريات مجتمعة"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:162
-msgid "Include 'macsmc-battery' when calculating combined Battery"
-msgstr "اشمل القيم من macsmc عند احتساب القيم من البطاريات مجتمعة"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:166
-msgid "Use fixed widths in top bar"
-msgstr "استخدم مقاسات ثابتة في الشريط العُلوي"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:167
-msgid "Keep sensors in top bar from jumping around"
-msgstr "امنع الحساسات في الشريط العلوي من تغيير أماكنها"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:172
-msgid "Keep top bar clean by only showing sensor values"
-msgstr "أبق الشريط العلوي بسيطًا بعرض قيم الحساسات فقط"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:176
-msgid "Make the menu centered"
-msgstr "وَسِّط القائمة"
-
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:177
+#: prefs.js:99
 msgid ""
-"Center the menu to the icon regardless of the position in the "
-"panel"
-msgstr "وسِّط القائمة تبعاً للأيقونة بغض النظر عن مكانها في الشريط"
+"The power draw of the processor, such as Intel RAPL. Most systems let only "
+"root read it."
+msgstr "استهلاك المعالج للقدرة، مثل Intel RAPL. تسمح معظم الأنظمة للمستخدم root فقط بقراءته."
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:181
-msgid "System Monitor command"
-msgstr "أمر مراقب النظام"
+#: prefs.js:101
+msgid "Monitor memory"
+msgstr "راقب حالة الذاكرة"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:182
-msgid "The command run when system monitor button is clicked"
-msgstr "الأمر الذي سيُنفَّذ عند النقر على زر مراقب النظام"
+#: prefs.js:102
+msgid "Show details"
+msgstr "أظهر التفاصيل"
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:186
-msgid "Include processor static information"
-msgstr "اعرِض معلومات المعالج الثابتة"
+#: prefs.js:103
+msgid "Additional readings in the menu; pinned readings stay in the top bar."
+msgstr "قراءات إضافية في القائمة؛ تبقى القراءات المثبتة في الشريط العلوي."
 
-#: schemas/org.gnome.shell.extensions.vitals.gschema.xml:187
-msgid "Display processor static information that doesn't change"
-msgstr "أظهر معلومات المعالج ذات القيم الثابتة التي لا تتغير"
+#: prefs.js:104 prefs.js:128
+msgid "Units"
+msgstr "الوحدات"
 
-#: sensors.js:65
-msgid "Public IP"
+#: prefs.js:106 prefs.js:130
+msgid "Binary"
+msgstr "ثنائيّ"
+
+#: prefs.js:106 prefs.js:130
+msgid "KiB, MiB, GiB"
+msgstr "KiB, MiB, GiB"
+
+#: prefs.js:106
+msgid "15.5 GiB"
+msgstr "15.5 GiB"
+
+#: prefs.js:107 prefs.js:131
+msgid "Decimal"
+msgstr "عشريّ"
+
+#: prefs.js:107 prefs.js:131
+msgid "kB, MB, GB"
+msgstr "kB, MB, GB"
+
+#: prefs.js:107
+msgid "16.6 GB"
+msgstr "16.6 GB"
+
+#: prefs.js:109
+msgid "Monitor processor"
+msgstr "راقب حالة المعالج"
+
+#: prefs.js:110 prefs.js:140
+msgid "Include static information"
+msgstr "ضمّن المعلومات الثابتة"
+
+#: prefs.js:110
+msgid "Values that never change, such as vendor and cache size."
+msgstr "قيم لا تتغير، مثل المُنتِج وحجم الخبيئة."
+
+#: prefs.js:111
+msgid "Show individual cores"
+msgstr "أظهر الأنوية منفردة"
+
+#: prefs.js:111
+msgid "The usage of each core."
+msgstr "استخدام كل نواة."
+
+#: prefs.js:112
+msgid "Read live frequency from cpufreq"
+msgstr "اقرأ التردد المباشر من cpufreq"
+
+#: prefs.js:113
+msgid ""
+"Reads each core instead of /proc/cpuinfo, which some machines report late. "
+"Without cpufreq, /proc/cpuinfo is used."
+msgstr "يقرأ كل نواة بدلًا من /proc/cpuinfo الذي يتأخر تحديثه في بعض الأجهزة. يُستخدم /proc/cpuinfo عند غياب cpufreq."
+
+#: prefs.js:115
+msgid "Monitor system"
+msgstr "راقب حالة النظام"
+
+#: prefs.js:117
+msgid "Monitor network"
+msgstr "راقب حالة الشبكة"
+
+#: prefs.js:118
+msgid "Only show hardware interfaces"
+msgstr "أظهر واجهات العتاد فقط"
+
+#: prefs.js:118
+msgid "Hide bridges, container, VPN and loopback interfaces."
+msgstr "أخفِ واجهات الجسور والحاويات وVPN والاسترجاع."
+
+#: prefs.js:119
+msgid "Speeds"
+msgstr "السرعات"
+
+#: prefs.js:120
+msgid "Measure in"
+msgstr "وحدة القياس"
+
+#: prefs.js:120
+msgid "Bytes"
+msgstr "بايت"
+
+#: prefs.js:120
+msgid "Bits"
+msgstr "بِت"
+
+#: prefs.js:122
+msgid "Public IP Address"
 msgstr "عنوان IP الخارجي"
 
-#: sensors.js:133 sensors.js:181
-msgid "Usage"
-msgstr "الاستخدام"
+#: prefs.js:123
+msgid "Show public IP address"
+msgstr "أظهر عنوان IP الخارجي"
 
-#: sensors.js:134
-msgid "memory"
-msgstr "الذاكرة"
+#: prefs.js:123
+msgid "Looked up over the internet."
+msgstr "يُستعلم عنه عبر الإنترنت."
 
-#: sensors.js:135
-msgid "Physical"
-msgstr "الحقيقية"
+#: prefs.js:124
+msgid "Minutes between lookups"
+msgstr "الدقائق بين الاستعلامات"
 
-#: sensors.js:136
-msgid "Available"
-msgstr "المتاحة"
+#: prefs.js:125
+msgid "Refresh in the menu looks it up at once."
+msgstr "يستعلم خيار «تحديث» في القائمة عنه فورًا."
 
-#: sensors.js:137
-msgid "Allocated"
-msgstr "المحجوزة"
+#: prefs.js:127
+msgid "Monitor storage"
+msgstr "راقب حالة التخزين"
 
-#: sensors.js:138
-msgid "Cached"
-msgstr "الخبيئة (cache)"
+#: prefs.js:130
+msgid "100.5 GiB"
+msgstr "100.5 GiB"
 
-#: sensors.js:139 sensors.js:355
-msgid "Free"
-msgstr "الخالية"
+#: prefs.js:131
+msgid "107.9 GB"
+msgstr "107.9 GB"
 
-#: sensors.js:140
-msgid "Swap"
-msgstr "مساحة التبديل (Swap)"
+#: prefs.js:133
+msgid "Network Storage Locations"
+msgstr "مواقع التخزين الشبكي"
 
-#: sensors.js:248
-msgid "Average"
-msgstr "المعدّل"
+#: prefs.js:134
+msgid "Minutes between updates"
+msgstr "الدقائق بين التحديثات"
 
-#: sensors.js:180
-msgid "processor"
-msgstr "المعالج"
+#: prefs.js:135
+msgid "A share is asked over the network, so less often than a disk."
+msgstr "يُستعلم عن المورد المشترك عبر الشبكة، لذا يكون الاستعلام أقل تكرارًا من القرص."
 
-#: sensors.js:183
+#: prefs.js:137
+msgid "Monitor battery"
+msgstr "راقب حالة البطارية"
+
+#: prefs.js:139
+msgid "Monitor GPU"
+msgstr "راقب معالج الرسوميات"
+
+#: prefs.js:139
+msgid "NVIDIA cards are read with the nvidia-smi tool."
+msgstr "تُقرأ بطاقات NVIDIA بأداة nvidia-smi."
+
+#: prefs.js:141
+msgid "Values that never change, such as driver version and power limit."
+msgstr "قيم لا تتغير، مثل إصدار برنامج التشغيل وحدّ القدرة."
+
+#: prefs.js:166
+msgid "Classic"
+msgstr "تقليدي"
+
+#: prefs.js:166
+msgid "Filled and detailed"
+msgstr "ممتلئة ومفصّلة"
+
+#: prefs.js:167
+msgid "Adwaita"
+msgstr "Adwaita"
+
+#: prefs.js:167
+msgid "Rounded outlines"
+msgstr "حدود مستديرة"
+
+#: prefs.js:252
+#, javascript-format
+msgid "%s (unavailable)"
+msgstr "%s (غير متاح)"
+
+#: prefs.js:271
+msgid "Up to"
+msgstr "حتى"
+
+#: prefs.js:271
+msgid "From"
+msgstr "من"
+
+#: prefs.js:275
+msgid "Remove breakpoint"
+msgstr "أزل نقطة الحدّ"
+
+#: prefs.js:279
+msgid "Add breakpoint"
+msgstr "أضف نقطة حدّ"
+
+#: prefs.js:284
+msgid "Remove color scale"
+msgstr "أزل التدرج اللوني"
+
+#: prefs.js:294
+msgid "Add"
+msgstr "أضف"
+
+#: prefs.js:297
+msgid "Add color scale"
+msgstr "أضف تدرجًا لونيًا"
+
+#: prefs.js:300
+msgid "Threshold Colors"
+msgstr "ألوان الحدود"
+
+#: prefs.js:341
+#, javascript-format
+msgid "All values in %s"
+msgstr "كل القيم بوحدة %s"
+
+#: prefs.js:341
+msgid "All values without a unit"
+msgstr "كل القيم بلا وحدة"
+
+#: prefs.js:353
+msgid "Storage Locations"
+msgstr "مواقع التخزين"
+
+#: prefs.js:354
+msgid "Add storage location"
+msgstr "أضف موقع تخزين"
+
+#: prefs.js:355
+msgid "Monitor drives mounted by GNOME"
+msgstr "راقب الأقراص التي يضمّها GNOME"
+
+#: prefs.js:367
+#, javascript-format
+msgid "Now: %s"
+msgstr "الآن: %s"
+
+#: prefs.js:367
+msgid "None at the moment"
+msgstr "لا شيء حاليًا"
+
+#: prefs.js:369
+msgid "Not mounted"
+msgstr "غير مضموم"
+
+#: prefs.js:370
+msgid "Remove storage location"
+msgstr "أزل موقع التخزين"
+
+#: prefs.js:399
+msgid "Add Storage Location"
+msgstr "أضف موقع تخزين"
+
+#: prefs.js:401
+msgid "Other mount points"
+msgstr "نقاط ضمّ أخرى"
+
+#: prefs.js:497
+msgid "Automatic"
+msgstr "تلقائي"
+
+#: prefs.js:497
+msgid "kbit/s"
+msgstr "kbit/s"
+
+#: prefs.js:497
+msgid "Mbit/s"
+msgstr "Mbit/s"
+
+#: prefs.js:497
+msgid "kB/s"
+msgstr "kB/s"
+
+#: prefs.js:497
+msgid "MB/s"
+msgstr "MB/s"
+
+#: prefs.js:516
+msgid "1 second"
+msgstr "ثانية واحدة"
+
+#: prefs.js:516
+msgid "2 seconds"
+msgstr "ثانيتان"
+
+#: prefs.js:516
+msgid "3 seconds"
+msgstr "3 ثوانٍ"
+
+#: prefs.js:516
+msgid "5 seconds"
+msgstr "5 ثوانٍ"
+
+#: prefs.js:516
+msgid "10 seconds"
+msgstr "10 ثوانٍ"
+
+#: prefs.js:517
+msgid "15 seconds"
+msgstr "15 ثانية"
+
+#: prefs.js:517
+msgid "30 seconds"
+msgstr "30 ثانية"
+
+#: prefs.js:517
+msgid "60 seconds"
+msgstr "60 ثانية"
+
+#: prefs.js:519
+msgid "Update every"
+msgstr "حدّث كل"
+
+#: prefs.js:520
+msgid ""
+"Only sensors on screen are read: those in the top bar and in the open menu."
+msgstr "تُقرأ الحساسات الظاهرة على الشاشة فقط: في الشريط العلوي وفي القائمة المفتوحة."
+
+#: sensors.js:317
+msgid "on"
+msgstr "مفعّل"
+
+#: sensors.js:1595
 #, javascript-format
 msgid "Core %d"
 msgstr "النواة %d"
 
-#: sensors.js:213 sensors.js:222
-msgid "Frequency"
-msgstr "التردّد"
+#: sensors.js:2041
+#, javascript-format
+msgid "GPU %d"
+msgstr "معالج الرسوميات %d"
 
-#: sensors.js:231
-msgid "Open Files"
-msgstr "الملفّات المفتوحة"
-
-#: sensors.js:238
-msgid "Load 1m"
-msgstr "الحِمْل (1 د)"
-
-#: sensors.js:239
-msgid "system"
-msgstr "النظام"
-
-#: sensors.js:240
-msgid "Load 5m"
-msgstr "الحِمْل (5 د)"
-
-#: sensors.js:241
-msgid "Load 15m"
-msgstr "الحِمْل (15 د)"
-
-#: sensors.js:242
-msgid "Threads Active"
-msgstr "الخطوط النشطة"
-
-#: sensors.js:243
-msgid "Threads Total"
-msgstr "الخطوط الكلية"
-
-#: sensors.js:248
-msgid "Uptime"
-msgstr "زمن التشغيل"
-
-#: sensors.js:252
-msgid "Process Time"
-msgstr "وقت العمليات"
-
-#: sensors.js:302
-msgid "WiFi Link Quality"
-msgstr "جودة اتصال الشبكة اللاسلكية WiFi"
-
-#: sensors.js:303
-msgid "WiFi Signal Level"
-msgstr "مستوى إشارة الشبكة اللاسلكية WiFi"
-
-#: sensors.js:318
-msgid "ARC Target"
-msgstr ""
-
-#: sensors.js:319
-msgid "ARC Maximum"
-msgstr ""
-
-#: sensors.js:320
-msgid "ARC Current"
-msgstr ""
-
-#: sensors.js:330
-msgid "Read total"
-msgstr "إجمالي القراءة"
-
-#: sensors.js:331
-msgid "Write total"
-msgstr "إجمالي الكتابة"
-
-#: sensors.js:332
-msgid "Read rate"
-msgstr "معدل القراءة"
-
-#: sensors.js:333
-msgid "Write rate"
-msgstr "معدل الكتابة"
-
-#: sensors.js:352
+#: sensors.js:84
 msgid "Total"
 msgstr "الإجمالي"
 
-#: sensors.js:353
+#: sensors.js:85
+msgid "Available"
+msgstr "المتاحة"
+
+#: sensors.js:87
+msgid "File cache"
+msgstr "خبيئة الملفات"
+
+#: sensors.js:87
+msgid "Memory details"
+msgstr "تفاصيل الذاكرة"
+
+#: sensors.js:88
+msgid "Shared"
+msgstr "مشتركة"
+
+#: sensors.js:89
+msgid "Kernel cache"
+msgstr "خبيئة النواة"
+
+#: sensors.js:90
+msgid "Buffers"
+msgstr "المخازن المؤقتة"
+
+#: sensors.js:91
+msgid "Reclaimable"
+msgstr "قابلة للاسترداد"
+
+#: sensors.js:93
+msgid "Free"
+msgstr "الخالية"
+
+#: sensors.js:94
+msgid "Swap Total"
+msgstr "إجمالي التبديل"
+
+#: sensors.js:94
+msgid "Swap"
+msgstr "التبديل"
+
+#: sensors.js:96
+msgid "Swap Free"
+msgstr "التبديل الخالي"
+
+#: sensors.js:106
 msgid "Used"
 msgstr "مُستخدَم"
 
-#: sensors.js:354
-msgid "Reserved"
-msgstr "محجوز"
+#: sensors.js:112
+msgid "Usage"
+msgstr "الاستخدام"
 
-#: sensors.js:356
-msgid "storage"
-msgstr "التخزين"
+#: sensors.js:120
+msgid "Swap Used"
+msgstr "التبديل المستخدم"
 
-#: sensors.js:393
-msgid "Label"
-msgstr ""
+#: sensors.js:129
+msgid "Swap Usage"
+msgstr "استخدام التبديل"
 
-#: sensors.js:404 sensors.js:529
-msgid "State"
-msgstr "الحالة"
-
-#: sensors.js:409 sensors.js:519
-msgid "Cycles"
-msgstr "الدورات"
-
-#: sensors.js:414
-msgid "Voltage"
-msgstr "الجهد الكهربائي"
-
-#: sensors.js:418
-msgid "Level"
-msgstr "المستوى"
-
-#: sensors.js:422 sensors.js:553
-msgid "Percentage"
-msgstr "النسبة"
-
-#: sensors.js:432 sensors.js:527
-msgid "Rate"
-msgstr "المعدل"
-
-#: sensors.js:442 sensors.js:535
-msgid "Energy (full)"
-msgstr "الطاقة (ممتلئة)"
-
-#: sensors.js:451 sensors.js:541
-msgid "Energy (design)"
-msgstr "الطاقة (التصميم)"
-
-#: sensors.js:455
-msgid "Capacity"
-msgstr "السعة"
-
-#: sensors.js:464 sensors.js:547
-msgid "Energy (now)"
-msgstr "الطاقة (الآن)"
-
-#: sensors.js:501 sensors.js:504 sensors.js:588 sensors.js:591
-msgid "Time left"
-msgstr "الوقت المتبقي"
-
-#: sensors.js:677
+#: sensors.js:178
 msgid "Vendor"
 msgstr "المُنتِج"
 
-#: sensors.js:678
+#: sensors.js:179
 msgid "Bogomips"
-msgstr ""
+msgstr "Bogomips"
 
-#: sensors.js:679
+#: sensors.js:180
 msgid "Sockets"
 msgstr "المقابس"
 
-#: sensors.js:680
+#: sensors.js:182
 msgid "Cache"
 msgstr "الخبيئة"
 
-#: sensors.js:685
+#: sensors.js:194
+msgid "Frequency"
+msgstr "التردّد"
+
+#: sensors.js:200
+msgid "Min frequency"
+msgstr "أدنى تردد"
+
+#: sensors.js:206
+msgid "Max frequency"
+msgstr "أقصى تردد"
+
+#: sensors.js:220
 msgid "Kernel"
 msgstr "النواة"
 
-#: prefs.js:98
-msgid "Temperature"
-msgstr "درجة الحرارة"
+#: sensors.js:243
+msgid "Process Time"
+msgstr "وقت العمليات"
 
-#: prefs.js:98
-msgid "Network"
-msgstr "الشبكة"
+#: sensors.js:247
+msgid "Uptime"
+msgstr "زمن التشغيل"
 
-#: prefs.js:98
-msgid "Storage"
-msgstr "التخزين"
+#: sensors.js:256
+msgid "Load 1m"
+msgstr "الحِمْل (1 د)"
 
-#: prefs.js:98
+#: sensors.js:257
+msgid "Load 5m"
+msgstr "الحِمْل (5 د)"
+
+#: sensors.js:258
+msgid "Load 15m"
+msgstr "الحِمْل (15 د)"
+
+#: sensors.js:261
+msgid "Threads Active"
+msgstr "الخطوط النشطة"
+
+#: sensors.js:266
+msgid "Threads Total"
+msgstr "الخطوط الكلية"
+
+#: sensors.js:279
+msgid "Open Files"
+msgstr "الملفّات المفتوحة"
+
+#: sensors.js:288
+msgid "Powercap"
+msgstr "Powercap"
+
+#: sensors.js:302
+msgid "Cores"
+msgstr "الأنوية"
+
+#: sensors.js:302
+msgid "Uncore"
+msgstr "خارج الأنوية"
+
+#: sensors.js:302
 msgid "Memory"
 msgstr "الذاكرة"
 
-#: prefs.js:98
-msgid "Battery"
-msgstr "البطارية"
+#: sensors.js:302
+msgid "Platform"
+msgstr "المنصة"
 
-#: extension.js:112
-msgid "Battery 1"
-msgstr "البطارية 1"
+#: sensors.js:315
+msgid "Lap mode"
+msgstr "وضع الحضن"
 
-#: extension.js:112
-msgid "Battery 2"
-msgstr "البطارية 2"
+#: sensors.js:326
+msgid "WiFi"
+msgstr "WiFi"
 
-#: extension.js:112
-msgid "Battery 3"
-msgstr "البطارية 3"
+#: sensors.js:326
+msgid "Mobile"
+msgstr "شبكة محمولة"
 
-#: extension.js:112
-msgid "Battery 4"
-msgstr "البطارية 4"
+#: sensors.js:398
+msgid "Download speed"
+msgstr "سرعة التنزيل"
 
-#: extension.js:112
-msgid "Battery 5"
-msgstr "البطارية 5"
+#: sensors.js:406
+msgid "Downloaded since boot"
+msgstr "المنزّل منذ الإقلاع"
 
-#: extension.js:115
-msgid "Battery (hidden)"
-msgstr "البطارية (مخفي)"
+#: sensors.js:414
+msgid "Downloaded this session"
+msgstr "المنزّل في هذه الجلسة"
 
-#: prefs.js:98
-msgid "System"
-msgstr "النظام"
+#: sensors.js:422
+msgid "Upload speed"
+msgstr "سرعة الرفع"
 
-#: prefs.js:98
-msgid "Processor"
-msgstr "المعالج"
+#: sensors.js:430
+msgid "Uploaded since boot"
+msgstr "المرفوع منذ الإقلاع"
 
-#: sensors.js:759
+#: sensors.js:438
+msgid "Uploaded this session"
+msgstr "المرفوع في هذه الجلسة"
+
+#: sensors.js:446
+msgid "Total speed"
+msgstr "السرعة الإجمالية"
+
+#: sensors.js:479
+msgid "WiFi Link Quality"
+msgstr "جودة اتصال الشبكة اللاسلكية WiFi"
+
+#: sensors.js:486
+msgid "WiFi Signal Level"
+msgstr "مستوى إشارة الشبكة اللاسلكية WiFi"
+
+#: sensors.js:534
+msgid "Public IP"
+msgstr "عنوان IP الخارجي"
+
+#: sensors.js:582
+msgid "Reserved"
+msgstr "محجوز"
+
+#: sensors.js:586
+msgid "Used %"
+msgstr "المستخدم %"
+
+#: sensors.js:588
+msgid "Free %"
+msgstr "الخالي %"
+
+#: sensors.js:609
+msgid "Read total"
+msgstr "إجمالي القراءة"
+
+#: sensors.js:615
+msgid "Read rate"
+msgstr "معدل القراءة"
+
+#: sensors.js:621
+msgid "Write total"
+msgstr "إجمالي الكتابة"
+
+#: sensors.js:627
+msgid "Write rate"
+msgstr "معدل الكتابة"
+
+#: sensors.js:649
+msgid "ARC Target"
+msgstr "هدف ARC"
+
+#: sensors.js:650
+msgid "ARC Maximum"
+msgstr "أقصى ARC"
+
+#: sensors.js:651
+msgid "ARC Current"
+msgstr "ARC الحالي"
+
+#: sensors.js:685
+msgid "State"
+msgstr "الحالة"
+
+#: sensors.js:686
+msgid "Cycles"
+msgstr "الدورات"
+
+#: sensors.js:687
+msgid "Voltage"
+msgstr "الجهد الكهربائي"
+
+#: sensors.js:688
+msgid "Level"
+msgstr "المستوى"
+
+#: sensors.js:689
+msgid "Percentage"
+msgstr "النسبة"
+
+#: sensors.js:690
+msgid "Power Rate"
+msgstr "استهلاك القدرة"
+
+#: sensors.js:691
+msgid "Energy (full)"
+msgstr "الطاقة (ممتلئة)"
+
+#: sensors.js:692
+msgid "Energy (design)"
+msgstr "الطاقة (التصميم)"
+
+#: sensors.js:693
+msgid "Energy (now)"
+msgstr "الطاقة (الآن)"
+
+#: sensors.js:695
+msgid "Capacity"
+msgstr "السعة"
+
+#: sensors.js:701
+msgid "Time left"
+msgstr "الوقت المتبقي"
+
+#: sensors.js:915
+msgid "Screen Redraws"
+msgstr "إعادات رسم الشاشة"
+
+#: sensors.js:1698
+msgid "ACPI Thermal Zone"
+msgstr "منطقة ACPI الحرارية"
+
+#: sensors.js:1699
+msgid "Platform Controller Hub"
+msgstr "مركز التحكم بالمنصة"
+
+#: sensors.js:1700
+msgid "Wireless Adapter"
+msgstr "محوّل لاسلكي"
+
+#: sensors.js:1701
+msgid "Processor 0"
+msgstr "المعالج 0"
+
+#: sensors.js:1702
+msgid "Processor 1"
+msgstr "المعالج 1"
+
+#: sensors.js:1760
+msgid "Transferred"
+msgstr "المنقول"
+
+#: sensors.js:1857
+msgid "ZFS cache"
+msgstr "خبيئة ZFS"
+
+#: sensors.js:1904
+msgid "Total power rate"
+msgstr "إجمالي استهلاك القدرة"
+
+#: sensors.js:1972
+msgid "Average"
+msgstr "المعدّل"
+
+#: sensors.js:1972
+msgid "Minimum"
+msgstr "الحد الأدنى"
+
+#: sensors.js:1972
+msgid "Maximum"
+msgstr "الحد الأقصى"
+
+#: sensors.js:2005
+msgid "Temperature Limit"
+msgstr "حد الحرارة"
+
+#: sensors.js:2006
+msgid "Power Limit"
+msgstr "حد القدرة"
+
+#: sensors.js:2007
+msgid "Addressing Mode"
+msgstr "نمط العنونة"
+
+#: sensors.js:2008
+msgid "Driver Version"
+msgstr "إصدار برنامج التشغيل"
+
+#: sensors.js:2009
+msgid "vBIOS Version"
+msgstr "إصدار vBIOS"
+
+#: sensors.js:2010
+msgid "Serial Number"
+msgstr "الرقم التسلسلي"
+
+#: sensors.js:2011
+msgid "Domain Number"
+msgstr "رقم النطاق"
+
+#: sensors.js:2012
+msgid "Bus Number"
+msgstr "رقم الناقل"
+
+#: sensors.js:2013
+msgid "Device Number"
+msgstr "رقم الجهاز"
+
+#: sensors.js:2014
+msgid "Device ID"
+msgstr "معرّف الجهاز"
+
+#: sensors.js:2015
+msgid "Sub Device ID"
+msgstr "معرّف الجهاز الفرعي"
+
+#: sensors.js:2072
+msgid "Maximum Link Speed"
+msgstr "أقصى سرعة للوصلة"
+
+#: sensors.js:2080
 msgid "Fan"
 msgstr "المروحة"
 
+#: sensors.js:2081
+msgid "Temperature"
+msgstr "درجة الحرارة"
 
+#: sensors.js:2082
+msgid "Memory Temperature"
+msgstr "حرارة الذاكرة"
+
+#: sensors.js:2083
+msgid "Memory Total"
+msgstr "إجمالي الذاكرة"
+
+#: sensors.js:2084
+msgid "Memory Used"
+msgstr "الذاكرة المستخدمة"
+
+#: sensors.js:2085
+msgid "Memory Reserved"
+msgstr "الذاكرة المحجوزة"
+
+#: sensors.js:2086
+msgid "Memory Free"
+msgstr "الذاكرة الخالية"
+
+#: sensors.js:2087
+msgid "Memory Utilization"
+msgstr "نشاط الذاكرة"
+
+#: sensors.js:2088
+msgid "Utilization"
+msgstr "النشاط"
+
+#: sensors.js:2089
+msgid "Encoder Utilization"
+msgstr "نشاط المرمّز"
+
+#: sensors.js:2090
+msgid "Decoder Utilization"
+msgstr "نشاط فاكّ الترميز"
+
+#: sensors.js:2092
+msgid "Memory Frequency"
+msgstr "تردد الذاكرة"
+
+#: sensors.js:2093
+msgid "Encoder/Decoder Frequency"
+msgstr "تردد المرمّز/فاكّ الترميز"
+
+#: sensors.js:2094
+msgid "Power"
+msgstr "القدرة"
+
+#: sensors.js:2095
+msgid "Average Power"
+msgstr "متوسط القدرة"
+
+#: sensors.js:2112
+msgid "Memory Usage"
+msgstr "استخدام الذاكرة"
+
+#: sensors.js:2121
+msgid "Link Speed"
+msgstr "سرعة الوصلة"
+
+#: helpers/categories.js:12
+msgid "Processor"
+msgstr "المعالج"
+
+#: helpers/categories.js:13
+msgid "System"
+msgstr "النظام"
+
+#: helpers/categories.js:14
+msgid "Network"
+msgstr "الشبكة"
+
+#: helpers/categories.js:15
+msgid "Storage"
+msgstr "التخزين"
+
+#: helpers/categories.js:16
+msgid "Battery"
+msgstr "البطارية"
+
+#: helpers/categories.js:17
+msgid "GPU"
+msgstr "معالج الرسوميات"
+
+#: sensors.js:1802
+msgid "Ethernet"
+msgstr "إيثرنت"
+
+#: sensors.js:317
+msgid "off"
+msgstr "معطّل"
+
+#~ msgid "Physical"
+#~ msgstr "الحقيقية"
+
+#~ msgid "Cached"
+#~ msgstr "الخبيئة (cache)"
+
+#~ msgid "Allocated"
+#~ msgstr "المحجوزة"
+
+#~ msgid "No Data"
+#~ msgstr "لا توجد بيانات"
+
+#~ msgid "Format"
+#~ msgstr "الصيغة"
+
+#~ msgid "Menu always centered"
+#~ msgstr "القائمة متوسطة دائمًا"
+
+#~ msgid "Path"
+#~ msgstr "المسار"
+
+#~ msgid "Monitor BAT0"
+#~ msgstr "راقب البطارية BAT0"
+
+#~ msgid "Monitor BAT1"
+#~ msgstr "راقب البطارية BAT1"
+
+#~ msgid "Monitor BAT2"
+#~ msgstr "راقب البطارية BAT2"
+
+#~ msgid "Monitor CMB0"
+#~ msgstr "راقب البطارية CMB0"
+
+#~ msgid "Monitor macsmc-battery"
+#~ msgstr "راقب بطارية macsmc"
+
+#~ msgid "Calculate Combined Values"
+#~ msgstr "احسِب القيم المُجمّعة"
+
+#~ msgid "Include BAT0"
+#~ msgstr "ضمِّن البطارية BAT0"
+
+#~ msgid "Include BAT1"
+#~ msgstr "ضمِّن البطارية BAT1"
+
+#~ msgid "Include BAT2"
+#~ msgstr "ضمِّن البطارية BAT2"
+
+#~ msgid "Include CMB0"
+#~ msgstr "ضمِّن البطارية CMB0"
+
+#~ msgid "Include macsmc-battery"
+#~ msgstr "ضمِّن بطارية macsmc"
+
+#~ msgid "Monitor command"
+#~ msgstr "أمر المراقِب"
+
+#~ msgid "Sensors to show in panel"
+#~ msgstr "الحساسات التي ستظهر في الشريط"
+
+#~ msgid "List of sensors to be shown in the panel"
+#~ msgstr "لائحة الحساسات التي ستظهر في الشريط"
+
+#~ msgid "Delay between sensor polling"
+#~ msgstr "الانتظار بين قراءات الحساسات"
+
+#~ msgid "Position in Panel ('left', 'center', 'right')"
+#~ msgstr "المكان في الشريط (\"يمين\"، \"وسط\"، \"يسار\")"
+
+#~ msgid "Show one extra digit after decimal"
+#~ msgstr "أظهِر منزلة عشرية واحدة إضافية بعد الفاصلة العشريّة"
+
+#~ msgid "Display sensors in alphabetical order"
+#~ msgstr "اعرض الحساسات مرتبة هجائيًّا"
+
+#~ msgid "Hide data from sensors that are invalid"
+#~ msgstr "اخفِ بيانات الحساسات غير الصالحة"
+
+#~ msgid "Display temperature of various components"
+#~ msgstr "اعرض حرارة المكونات المختلفة"
+
+#~ msgid ""
+#~ "The unit ('centigrade' or 'fahrenheit') the extension should display the "
+#~ "temperature in"
+#~ msgstr ""
+#~ "الوِحدة (\"مئوية\" أو \"فهرنهايت\") التي تريد أن تُستخدَم في عرض درجة الحرارة"
+
+#~ msgid "Display voltage of various components"
+#~ msgstr "اعرض الجهد الكهربائيّ للمكونات المختلفة"
+
+#~ msgid "Display fan rotation per minute"
+#~ msgstr "اعرض سرعة دوران المروحة (كم دورة في الدقيقة)"
+
+#~ msgid "Display memory information"
+#~ msgstr "اعرض معلومات الذاكرة"
+
+#~ msgid "Display processor information"
+#~ msgstr "اعرض معلومات المعالج"
+
+#~ msgid "Display system information"
+#~ msgstr "اعرض معلومات النظام"
+
+#~ msgid "Display network information"
+#~ msgstr "اعرض معلومات الشبكة"
+
+#~ msgid "Display public IP address of internet connection"
+#~ msgstr "اعرض عنوان IP الخارجي لاتصال الإنترنت"
+
+#~ msgid "Network speed format"
+#~ msgstr "صيغة سرعة الشبكة"
+
+#~ msgid "Should speed display in bits or bytes?"
+#~ msgstr "هل تريد عرض السرعة بوحدة الـ\"بِت\" أم الـ\"بايت\" ؟"
+
+#~ msgid "Storage path for monitoring"
+#~ msgstr "مسار التخزين الذي تريد مراقبته"
+
+#~ msgid "Memory measurement"
+#~ msgstr "قياس الذاكرة"
+
+#~ msgid "Storage measurement"
+#~ msgstr "وحدة قياس سعة التخزين"
+
+#~ msgid "Display battery BAT0"
+#~ msgstr "اعرض البطارية BAT0"
+
+#~ msgid "Should battery 'BAT0' be displayed?"
+#~ msgstr "هل تريد عرض معلومات البطارية BAT0 ؟"
+
+#~ msgid "Display battery BAT1"
+#~ msgstr "اعرض البطارية BAT1"
+
+#~ msgid "Should battery 'BAT1' be displayed?"
+#~ msgstr "هل تريد عرض معلومات البطارية BAT1 ؟"
+
+#~ msgid "Display battery BAT2"
+#~ msgstr "اعرض البطارية BAT2"
+
+#~ msgid "Should battery 'BAT2' be displayed?"
+#~ msgstr "هل تريد عرض معلومات البطارية BAT2 ؟"
+
+#~ msgid "Display battery CMB0"
+#~ msgstr "اعرض البطارية CMB0"
+
+#~ msgid "Should battery 'CMB0' be displayed?"
+#~ msgstr "هل تريد عرض معلومات البطارية CMB0 ؟"
+
+#~ msgid "Display battery macsmc-battery"
+#~ msgstr "اعرض البطارية macsmc"
+
+#~ msgid "Should battery 'macsmc-battery' be displayed?"
+#~ msgstr "هل تريد عرض معلومات البطارية macsmc ؟"
+
+#~ msgid "Display combined battery data"
+#~ msgstr "اعرض معلومات البطاريات مجتمعة"
+
+#~ msgid "Display combined values for selected batteries"
+#~ msgstr "اعرض محصلة القيم للبطاريات المختارة"
+
+#~ msgid "Include 'BAT0' when calculating combined Battery"
+#~ msgstr "اشمل القيم من BAT0 عند احتساب القيم من البطاريات مجتمعة"
+
+#~ msgid "Include 'BAT1' when calculating combined Battery"
+#~ msgstr "اشمل القيم من BAT1 عند احتساب القيم من البطاريات مجتمعة"
+
+#~ msgid "Include 'BAT2' when calculating combined Battery"
+#~ msgstr "اشمل القيم من BAT2 عند احتساب القيم من البطاريات مجتمعة"
+
+#~ msgid "Include 'CMB0' when calculating combined Battery"
+#~ msgstr "اشمل القيم من CMB0 عند احتساب القيم من البطاريات مجتمعة"
+
+#~ msgid "Include 'macsmc-battery' when calculating combined Battery"
+#~ msgstr "اشمل القيم من macsmc عند احتساب القيم من البطاريات مجتمعة"
+
+#~ msgid "Use fixed widths in top bar"
+#~ msgstr "استخدم مقاسات ثابتة في الشريط العُلوي"
+
+#~ msgid "Keep sensors in top bar from jumping around"
+#~ msgstr "امنع الحساسات في الشريط العلوي من تغيير أماكنها"
+
+#~ msgid "Keep top bar clean by only showing sensor values"
+#~ msgstr "أبق الشريط العلوي بسيطًا بعرض قيم الحساسات فقط"
+
+#~ msgid "Make the menu centered"
+#~ msgstr "وَسِّط القائمة"
+
+#~ msgid "Center the menu to the icon regardless of the position in the panel"
+#~ msgstr "وسِّط القائمة تبعاً للأيقونة بغض النظر عن مكانها في الشريط"
+
+#~ msgid "The command run when system monitor button is clicked"
+#~ msgstr "الأمر الذي سيُنفَّذ عند النقر على زر مراقب النظام"
+
+#~ msgid "Include processor static information"
+#~ msgstr "اعرِض معلومات المعالج الثابتة"
+
+#~ msgid "Display processor static information that doesn't change"
+#~ msgstr "أظهر معلومات المعالج ذات القيم الثابتة التي لا تتغير"
+
+#~ msgid "memory"
+#~ msgstr "الذاكرة"
+
+#~ msgid "processor"
+#~ msgstr "المعالج"
+
+#~ msgid "system"
+#~ msgstr "النظام"
+
+#~ msgid "storage"
+#~ msgstr "التخزين"
+
+#~ msgid "Rate"
+#~ msgstr "المعدل"
+
+#~ msgid "Battery 1"
+#~ msgstr "البطارية 1"
+
+#~ msgid "Battery 2"
+#~ msgstr "البطارية 2"
+
+#~ msgid "Battery 3"
+#~ msgstr "البطارية 3"
+
+#~ msgid "Battery 4"
+#~ msgstr "البطارية 4"
+
+#~ msgid "Battery 5"
+#~ msgstr "البطارية 5"
+
+#~ msgid "Battery (hidden)"
+#~ msgstr "البطارية (مخفي)"

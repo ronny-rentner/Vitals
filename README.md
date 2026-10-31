@@ -1,127 +1,143 @@
-Vitals
-====================================
+# Vitals
 
 Vitals is a GNOME Shell extension for displaying your computer's temperature, voltage, fan speed, memory usage, processor load, system resources, network speed and storage stats in your GNOME Shell's top menu bar. This is a one stop shop to monitor all of your vital sensors. Vitals uses asynchronous polling to provide a smooth user experience.
 
-![How it works](https://raw.githubusercontent.com/corecoding/Vitals/main/howtouse.gif)
+This fork of [Vitals](https://github.com/corecoding/Vitals) lets you arrange top-bar readings and menu categories by drag and drop, rename or hide sensors, and monitor several disks and network shares together. You can set threshold colors for individual sensors or whole kinds of readings, and related readings are grouped into sections. See the [full comparison](docs/changes-against-upstream.md) for differences and limitations.
+
+Supports **GNOME Shell 50 and 51**.
+
+<img src="docs/screenshots/menu.png" alt="Vitals top-bar readings and sensor categories" width="360">
+
+[Install](#installation) · [Use Vitals](#using-vitals) · [Screenshots](docs/screenshots/README.md) · [Report a problem](#reporting-problems) · [Development](#development) · [Credits and licenses](#credits-and-licenses)
 
 ## Installation
 
-### 1) Install support packages
+### Build and install this fork
 
-#### Ubuntu/Debian
+You need Git, Make, `glib-compile-schemas` (GLib), `msgfmt` (gettext), `zip` and GNOME Shell's `gnome-extensions` command.
 
-    sudo apt install gnome-shell-extension-manager gir1.2-gtop-2.0 lm-sensors
+This fork uses the same extension ID as upstream. Installing it replaces your user-installed copy of Vitals. There is no migration of the old sensor configuration; configure your pins and check your preferences after switching.
 
-#### Fedora
+```sh
+git clone --branch catalog-rewrite https://github.com/ronny-rentner/Vitals.git
+cd Vitals
+make zip
+gnome-extensions install --force vitals.zip
+```
 
-    sudo dnf install libgtop2-devel lm_sensors
+Log out and back in, then enable the extension:
 
-#### Arch/Manjaro
+```sh
+gnome-extensions enable Vitals@CoreCoding.com
+```
 
-    sudo pacman -Syu libgtop lm_sensors gnome-icon-theme-symbolic gnome-icon-theme git
+The Vitals listing on [GNOME Extensions](https://extensions.gnome.org/extension/1460/vitals/) distributes upstream. To install the fork described here, use the commands above. For packaging details, see [builds and releases](docs/development.md#builds-and-releases).
 
-#### openSUSE
+### Update an installed copy
 
-    sudo zypper install libgtop-devel
+From your existing checkout of `catalog-rewrite`:
 
-### 2) Install extension
+```sh
+git pull --ff-only
+make zip
+gnome-extensions install --force vitals.zip
+```
 
-#### Ubuntu/Debian
+Log out and back in to load the updated code.
 
-#### &nbsp;&nbsp;&nbsp;&nbsp;Open the Extension Manager (installed above), search for Vitals and click Install.
+## Using Vitals
 
-#### Fedora
+Click a top-bar value to open the menu, then open a category to see its readings. Click a sensor row to open its actions:
 
-##### &nbsp;&nbsp;&nbsp;&nbsp;Visit [Gnome Extensions website](https://extensions.gnome.org/extension/1460/vitals/), search for Vitals and click switch (power on) icon.
-##### &nbsp;&nbsp;&nbsp;&nbsp; [<img src="https://raw.githubusercontent.com/andyholmes/gnome-shell-extensions-badge/master/get-it-on-ego.svg?sanitize=true" alt="Get it on GNOME Extensions" height="100" align="middle">][gextension]
+| Action | Result |
+|---|---|
+| Pin to top bar | Show the reading in the top bar; select again to unpin. |
+| Pin to category | Use the reading in its category header; select again to restore the default. |
+| Rename | Give the sensor your own label; clear it to restore its original label. |
+| Hide | Remove the sensor from the menu and its category's aggregates. A pinned reading stays in the top bar. |
 
-#### Arch/Manjaro
+Drag top-bar readings to reorder them. Repinning a reading adds it at the end. Use **Show hidden sensors** at the bottom of the menu to reveal hidden rows and undo **Hide**. **Refresh** looks for sensors again and updates the visible readings.
 
-    git clone https://aur.archlinux.org/gnome-shell-extension-vitals-git.git/
-    cd gnome-shell-extension-vitals-git
+Open **Preferences** from the bottom of the menu. General controls the update interval and icon style; Top Bar and Menu control their respective appearance. Category pages contain their units, collection options and threshold colors.
 
-    # always verify content before installing
-    less PKGBUILD
-    makepkg
+To arrange categories, set Menu › **Order** to **Manual** and enable **Reorder by drag and drop**, then drag category headers in the menu. Preferences follows the same category order. Choosing **Alphabetical** uses the translated category names again.
 
-    # example filename, different each release
-    pacman -U gnome-shell-extension-vitals-git-v52.0.4.r0.gb446cfc-1-any.pkg.tar.zst
+To monitor another disk or share, open Storage › **Storage Locations**, click **+**, and select a mounted location. Enable **Monitor drives mounted by GNOME** to include those drives automatically. Added locations remain configured while disconnected; Vitals resumes their readings when something is mounted at the same path.
 
-### 3) Activate after installation
+The [screenshot gallery](docs/screenshots/README.md) shows top-bar options and menus in light and dark styles, plus the preferences window.
 
-#### Ubuntu/Debian/Fedora
+### Understanding the readings
 
-##### &nbsp;&nbsp;&nbsp;&nbsp;At this point, Vitals should be running. If you reversed steps 1 and 2 above, you will need to restart your session by logging out and then back in.
+Memory's main section adds up: **Free + Reclaimable = Available**, and **Used + Available = Total**. Memory › **Show details** adds cache and buffer counters in a separate section; swap has its own section.
 
-#### Arch/Manjaro
+Temperature › **Skip sensors that read zero** excludes sensors that read zero during discovery and retries them on rediscovery. Sensors already accepted can later read zero. With the option off, readable zero temperatures are included.
 
-##### &nbsp;&nbsp;&nbsp;&nbsp;Open the Extensions application and toggle on Vitals
+Vitals reads the inputs needed by pinned values, visible category headers and expanded menu rows. With the menu closed, only pinned values require updates; a pinned aggregate also needs its contributing readings. See [design decisions](docs/design.md) for category behavior and its rationale.
 
-## Beta testing
+## Reporting problems
 
-##### Advanced users requesting bug fixes or asking for new features may occasionally be asked to help QA.
+Report problems with this fork in its [GitHub issues](https://github.com/ronny-rentner/Vitals/issues). Include your distribution, GNOME Shell version, steps to reproduce and relevant Shell logs. The [development guide](docs/development.md#running-it) explains how to read the logs and run an isolated preview.
 
-### 1) Remove existing copy of Vitals
+## Development
 
-##### &nbsp;&nbsp;&nbsp;&nbsp;Remove existing copy of vitals - expert users only!
+Start with the [development guide](docs/development.md) for setup, preview, tests, translations and releases.
 
-    rm -rI ~/.local/share/gnome-shell/extensions/Vitals@CoreCoding.com
+| Document | Purpose |
+|---|---|
+| [Design decisions](docs/design.md) | Behavior, layout and icon rules. |
+| [Sensor catalog](docs/catalog-design.md) | Collector, renderer, saved state and discovery. |
+| [Sensor keys](docs/sensor-key-format.md) | Key formats and device identity limits. |
+| [Glossary](docs/glossary.md) | Shared terminology. |
+| [Writing tests](docs/writing-tests.md) | Requirements and boundaries for tests. |
+| [Comparison with upstream](docs/changes-against-upstream.md) | User-visible and implementation differences; historical measurements. |
+| [Agent instructions](AGENTS.md) | Entry point for coding agents. |
 
-### 2) Clone from GitHub
+Common commands, run from the checkout:
 
-    mkdir -p ~/.local/share/gnome-shell/extensions
-    git clone https://github.com/corecoding/Vitals.git ~/.local/share/gnome-shell/extensions/Vitals@CoreCoding.com -b develop
+| Task | Command |
+|---|---|
+| Run unit tests | `make test` |
+| Run Shell integration tests | `make test-shell` |
+| Open an interactive preview | `make preview` |
+| Compile translations | `make translations` |
+| Refresh screenshots | `make screenshots` |
+| Package the extension | `make zip` |
 
-### 3) Compile Schemas
+The [preview and test instructions](docs/development.md#running-it) explain dependencies, UI scale, resolution and isolated settings.
 
-    glib-compile-schemas --strict ~/.local/share/gnome-shell/extensions/Vitals\@CoreCoding.com/schemas/
+### Historical plans
 
-### 4) Activate develop version
+[Icons by name](docs/plans/icons-by-name.md) records an earlier implementation plan. Current icon rules are in [Design decisions](docs/design.md#icons).
 
-#### Ubuntu/Debian/Fedora
+## Credits and licenses
 
-##### &nbsp;&nbsp;&nbsp;&nbsp;You will need to restart your session by logging out and then back in.
+This fork builds on [Vitals by Core Coding and contributors](https://github.com/corecoding/Vitals), which originated from [Freon](https://github.com/UshakovVasilii/gnome-shell-extension-freon).
 
-#### Arch/Manjaro
+See the project's [LICENSE](LICENSE) and the bundled font's [DejaVu license](icons/countries/DejaVu-LICENSE). Country-code icons use DejaVu Sans Mono Bold. Icon names below omit the `vitals-` prefix and `-symbolic.svg` suffix.
 
-##### &nbsp;&nbsp;&nbsp;&nbsp;Open the Extensions application and toggle on Vitals
+### Classic icons
 
-## Credits
-Vitals was originally forked from [gnome-shell-extension-freon](https://github.com/UshakovVasilii/gnome-shell-extension-freon). I was having trouble finding an up to date, resource friendly and fully featured system monitoring tool. My biggest pet peeve was random system delays because of I/O blocking polls, and thus, the idea for Vitals was born! It has been refactored several times over, so most of the code is new or different.
+* `voltage` and `fan` - inherited from Freon.
+* `system` and `storage` - from the Pop! OS theme.
+* `temperature` - [iconnice studio](https://www.iconfinder.com/iconnice).
+* `cpu` and `memory` - [DinosoftLabs](https://www.iconfinder.com/dinosoftlabs).
+* `network*` - [Yannick Lung](https://www.iconfinder.com/yanlu).
+* Historical Health icon - [Dod Cosmin](https://www.iconfinder.com/icons/458267/cross_doctor_drug_health_healthcare_hospital_icon).
+* `wifi-signal-*` - from [Adwaita Icon Theme](https://gitlab.gnome.org/GNOME/adwaita-icon-theme).
+* `power` - drawn for Vitals.
 
-## Icons
+### Adwaita icons
 
-### Original Theme
-* (voltage|fan)-symbolic.svg - inherited from Freon project.
-* (system|storage)-symbolic.svg - from Pop! OS theme.
-* temperature-symbolic.svg - [iconnice studio](https://www.iconfinder.com/iconnice).
-* (cpu|memory)-symbolic.svg - [DinosoftLabs](https://www.iconfinder.com/dinosoftlabs).
-* network\*.svg - [Yannick Lung](https://www.iconfinder.com/yanlu).
-* Health icon - [Dod Cosmin](https://www.iconfinder.com/icons/458267/cross_doctor_drug_health_healthcare_hospital_icon).
+* `battery`, `storage` and `wifi-signal-*` - from [Adwaita Icon Theme](https://gitlab.gnome.org/GNOME/adwaita-icon-theme).
+* `memory`, `network*`, `swap`, `system` and `voltage` - from [Icon Development Kit](https://gitlab.gnome.org/Teams/Design/icon-development-kit).
+* `power` - drawn for Vitals.
+* `fan` - inherited from [Freon](https://github.com/UshakovVasilii/gnome-shell-extension-freon), with mild modifications.
+* `temperature` and `cpu` - designed by [daudix](https://github.com/daudix).
 
-### GNOME Theme
-* (battery | storage)-symbolic.svg - from [Adwaita Icon Theme](https://gitlab.gnome.org/GNOME/adwaita-icon-theme).
-* (memory | network* | system | voltage)-symbolic.svg - from [Icon Development Kit](https://gitlab.gnome.org/Teams/Design/icon-development-kit).
-* fan-symbolic.svg - inherited from [Freon](https://github.com/UshakovVasilii/gnome-shell-extension-freon) project, with mild modifications.
-* (temperature | cpu)-symbolic.svg - designed by [daudix](https://github.com/daudix).
+### Disclaimer
 
-## Disclaimer
-Sensor data is obtained from the system using hwmon and GTop. Core Coding and the Vitals authors are not responsible for improperly represented data. No warranty expressed or implied.
+Sensor data is obtained from sysfs, procfs, Gio filesystem queries and supported GPU tools. Core Coding and the Vitals authors are not responsible for improperly represented data. No warranty expressed or implied.
 
-## Development Commands
+### Support upstream
 
-| Description | Command |
-| --- | --- |
-| Launch preferences | `gnome-shell-extension-prefs Vitals@CoreCoding.com` |
-| View logs | ``journalctl --since="`date '+%Y-%m-%d %H:%M'`" -f \| grep Vitals`` |
-| Compile schemas | `glib-compile-schemas --strict schemas/` |
-| Compile translation file | `msgfmt vitals.po -o vitals.mo` |
-| Launch Wayland virtual window | `dbus-run-session -- gnome-shell --nested --wayland` |
-| Read hot-sensors value | `dconf read /org/gnome/shell/extensions/vitals/hot-sensors` |
-| Write hot-sensors value | `dconf write /org/gnome/shell/extensions/vitals/hot-sensors "['_memory_usage_', '_system_load_1m_']"`<br/>This value configures the list of sensors that show up in the panel. To specify a sensor name, click on the extension to show the drop-down menu, then take the category label and the label of the individual sensor, convert them to `snake_case`, and format them like this: `_category_sensor_`.|
-
-## Donations
-[Please consider donating if you find this extension useful.](https://corecoding.com/donate.php)
-
-[gextension]: https://extensions.gnome.org/extension/1460/vitals/
+[Donate to Core Coding](https://corecoding.com/donate.php) to support upstream Vitals.
