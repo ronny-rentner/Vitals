@@ -6,7 +6,7 @@
 
 ## Original context
 
-At the time of this proposal, discovery fixed each sensor's icon. The field supplied its name (`{icon: 'read'}`), discovery stored it as `sensor.icon`, and the renderer loaded that file directly from `icons/`. Loading by path prevented icon themes from overriding it. The icon also could not change with the reading, as WiFi signal bars should. Public-IP flags had been removed because their colours did not fit the monochrome icons.
+When we proposed this change, discovery fixed each sensor's icon. The field supplied its name (`{icon: 'read'}`), discovery stored it as `sensor.icon`, and the renderer loaded that file directly from `icons/`. Loading by path prevented icon themes from overriding it. The icon also could not change with the reading, as WiFi signal bars should. We had removed public-IP flags because their colours did not fit the monochrome icons.
 
 ## 1. Icons by name
 
@@ -37,4 +37,4 @@ At the time of this proposal, discovery fixed each sensor's icon. The field supp
 ## Verification recorded at the time
 
 - `make test`: the tests checked that a WiFi sensor's icon changed with its signal and that the public-IP icon used each service's country code, with none for ipify.
-- `make screenshots`: the captures were inspected but not kept. They showed WiFi bars in the menu and both icon styles in the top bar and preferences.
+- `make screenshots`: we inspected the captures but did not keep them. They showed WiFi bars in the menu and both icon styles in the top bar and preferences.

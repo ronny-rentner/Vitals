@@ -7,7 +7,7 @@ This document explains Vitals' behavior and design decisions. [Sensor catalog](c
 ## Where values come from
 
 - Read sensors through files and system APIs rather than launching programs (decided on 2026-10-10). NVIDIA monitoring is the exception: Vitals uses `nvidia-smi`.
-- Vitals reads procfs and sysfs asynchronously instead of using `libgtop` (decided on 2026-10-08). This avoids an extra dependency and synchronous libgtop calls on the Shell's main thread. Storage space comes from GLib (`query_filesystem_info_async`).
+- We read procfs and sysfs asynchronously instead of using `libgtop` (decided on 2026-10-08). This avoids an extra dependency and synchronous libgtop calls on the Shell's main thread. Storage space comes from GLib (`query_filesystem_info_async`).
 - For hardware and filesystem classification, reuse established rules from tools such as `df` or libgtop and cite the source in the code (decided on 2026-10-11). Observations on one machine do not justify a general rule. Where the user can decide instead, let the user decide.
 
 ## Memory
@@ -65,18 +65,18 @@ Each category has its own colour scales, applied by `colorStyle` in `helpers/col
 
 ## The menu
 
-- **Use sections inside categories.** Nested sensor submenus were tried for CPU groups and Memory details and worked poorly. The Memory submenu closed its enclosing category and failed the scrolling check. Use the existing dividers and headings instead. This rule comes from those experiments. A sensor's row menu is a separate interaction for its actions.
+- **Use sections inside categories.** We tried nested sensor submenus for CPU groups and Memory details, and they worked poorly. The Memory submenu closed its enclosing category and failed the scrolling check. Use the existing dividers and headings instead. This rule comes from those experiments. A sensor's row menu is a separate interaction for its actions.
 - By default, clicking Vitals opens the menu centered under the pointer. With "Open centered under the sensors", it opens under the center of Vitals' combined top-bar items. Its position stays fixed while it is open.
 - The menu has a fixed width. If a row does not fit, its label is shortened; its value stays complete.
-- Vitals uses its own slide animation for categories because GNOME Shell only animates submenus that need no scrollbar. This keeps long and short categories consistent. Only one category can be open at a time, and it remains expanded when the menu closes.
+- We use our own slide animation for categories because GNOME Shell only animates submenus that need no scrollbar. This keeps long and short categories consistent. Only one category can be open at a time, and it remains expanded when the menu closes.
 - Each level of the menu starts under the name of the level above it.
 - Clicking a row only opens the row menu beneath it, with Pin to top bar, Pin to category, Rename and Hide. The marks on the row indicate state; they do not perform actions.
-- The row menu follows GNOME Shell's second-level quick-settings menus (`QuickToggleMenu`), including their animation duration. This was decided on 2026-10-09 after a custom design made it unclear which row the menu belonged to.
+- The row menu follows GNOME Shell's second-level quick-settings menus (`QuickToggleMenu`), including their animation duration. We chose this on 2026-10-09 after our custom design made it unclear which row the menu belonged to.
 - A click anywhere else closes the row menu and does nothing else. Escape closes the whole menu, as in every menu of the Shell.
 
 ## The top bar
 
-These appearance rules were decided on 2026-10-11. `stylesheet.css` contains the values.
+We settled on these appearance rules on 2026-10-11. `stylesheet.css` contains the values.
 
 - Spacing between top-bar items, and between an icon and its value, is set by the containing box's `spacing` in the stylesheet. The Shell theme's status-icon margin and padding are removed so they do not add to those gaps.
 - Do not measure glyph bounds to position icons, values or units; earlier attempts gave uneven spacing. Measuring text width for "Steady widths" serves a different purpose: reserving room as readings change.

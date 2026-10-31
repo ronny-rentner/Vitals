@@ -8,7 +8,7 @@ This fork substantially reworks [Vitals](https://github.com/corecoding/Vitals), 
 
 You can drag pinned sensors into the order you want in the top bar. You can also reorder menu categories, rename or hide sensors, and monitor several disks and network shares together.
 
-The menu keeps related sensors together in sections. Threshold colors can apply to one sensor or a group, such as all temperatures in a category. The [full comparison](docs/changes-against-upstream.md) covers the differences from upstream and the fork's limitations.
+The menu keeps related sensors together in sections. Threshold colors can apply to one sensor or a group, such as all temperatures in a category. See the [full comparison](docs/changes-against-upstream.md) for what we've changed and the known limitations.
 
 ### Important notes
 
@@ -90,7 +90,7 @@ Vitals collects readings for pinned sensors, category headers in the open menu a
 
 ## Reporting problems
 
-Report problems with this fork in its [GitHub issues](https://github.com/ronny-rentner/Vitals/issues). Include your distribution, GNOME Shell version, steps to reproduce and relevant Shell logs. The [development guide](docs/development.md#running-it) explains how to read the logs and run an isolated preview.
+Report problems in [our GitHub issues](https://github.com/ronny-rentner/Vitals/issues). Include your distribution, GNOME Shell version, steps to reproduce and relevant Shell logs. The [development guide](docs/development.md#running-it) explains how to read the logs and run an isolated preview.
 
 ## Development
 
@@ -125,7 +125,7 @@ The [preview and test instructions](docs/development.md#running-it) explain depe
 
 ## Credits and licenses
 
-This fork builds on [Vitals by Core Coding and contributors](https://github.com/corecoding/Vitals), which originated from [Freon](https://github.com/UshakovVasilii/gnome-shell-extension-freon).
+Our work builds on [Vitals by Core Coding and contributors](https://github.com/corecoding/Vitals), which originated from [Freon](https://github.com/UshakovVasilii/gnome-shell-extension-freon).
 
 See the project's [LICENSE](LICENSE) and the bundled font's [DejaVu license](icons/countries/DejaVu-LICENSE). Country-code icons use DejaVu Sans Mono Bold. Icon names below omit the `vitals-` prefix and `-symbolic.svg` suffix.
 

@@ -33,14 +33,14 @@ Helpers shared by both entry points must not import `St`, `Clutter`, `Gtk`, `Adw
 
 ## Metadata versioning
 
-Verified against GNOME's documentation and website source on 2026-10-30:
+We checked GNOME's documentation and website source on 2026-10-30:
 
 - [`version`](https://gjs.guide/extensions/overview/anatomy.html#version) is an optional integer submission counter controlled by extensions.gnome.org. The documentation says: "This field SHOULD NOT be set by extension developers." The website overrides it; setting it can affect automatic upgrades or downgrades. This is a recommendation against setting it, not a claim that the field is invalid.
 - The [review guidelines](https://gjs.guide/extensions/review-guidelines/review-guidelines.html#metadata-json-must-be-well-formed) mark `version` as deprecated and reserved for the website's internal use.
 - The [website implementation](https://github.com/GNOME/extensions-web/blob/master/sweettooth/extensions/models.py) confirms this: `ExtensionVersion.save()` assigns the next submission number, `make_metadata_json()` overwrites `version`, and `_replace_metadata_json()` writes that metadata into the uploaded ZIP.
 - [`version-name`](https://gjs.guide/extensions/overview/anatomy.html#version-name) is the optional developer-controlled string for the version shown to users.
 
-Vitals omits `version` in source metadata to follow this guidance. GitHub releases take their names from pushed tags beginning with `v` followed by a digit, independently of the website's submission counter.
+We omit `version` in source metadata to follow this guidance. GitHub releases take their names from pushed tags beginning with `v` followed by a digit, independently of the website's submission counter.
 
 ## Builds and releases
 
@@ -56,7 +56,7 @@ Category names, sensor labels and section headings are translated when displayed
 
 ## GNOME versions and size
 
-Support targets current GNOME versions (decided on 2026-10-10). `metadata.json` lists GNOME 50 and 51; preferences use `Adw.ViewSwitcherSidebar`, available since libadwaita 1.9. The development rule is to use GNOME's APIs directly rather than maintain compatibility branches for older releases. Propose changes to the supported versions explicitly and update `metadata.json` and the installation docs together.
+We decided on 2026-10-10 to target current GNOME versions and use GNOME's APIs directly, without maintaining compatibility branches for older releases. We support GNOME 50 and 51, as declared in `metadata.json`. The preferences use `Adw.ViewSwitcherSidebar`, available since libadwaita 1.9. Propose changes to the supported versions explicitly and update `metadata.json` and the installation docs together.
 
 When two approaches do the same job, choose the one with less code.
 
@@ -98,7 +98,7 @@ Use the standard SI spellings, and IEC 80000-13 for bits and bytes (decided on 2
 
 ## The preferences
 
-The preferences window is built in `prefs.js`, without a UI file (decided on 2026-10-10). Calls in `fillPreferencesWindow` follow the order of the controls in the window. Each call defines one setting completely, rather than generating rows in a loop from a separate settings list.
+We build the preferences window in `prefs.js`, without a UI file (decided on 2026-10-10). Calls in `fillPreferencesWindow` follow the order of the controls in the window. Each call defines one setting completely, rather than generating rows in a loop from a separate settings list.
 
 Use libadwaita's standard rows, with one exception: number inputs use a `Gtk.SpinButton` inside an `Adw.ActionRow`. The `Adw.SpinRow` design does not make it clear that users can type a number. Keep the widgets' default margins and use GNOME's names for them, such as toggle group and combo row.
 
