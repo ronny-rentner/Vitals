@@ -19,7 +19,7 @@ The terms used in the code and the documentation of Vitals, each with one meanin
 - **Label**: the text that names a sensor in the menu. The user can replace it (`customLabel`).
 - **Format**: how a sensor's value is written, such as `temp` or `percent`. A colour scale for all sensors of one format calls it a kind (`kind:temp`).
 - **Section**: a part of a category's menu whose rows stay together, such as the network interfaces or the average, minimum and maximum.
-- **Heading**: the battery, graphics card, network interface or storage location a sensor belongs to. The menu shows it above its rows when a category's rows fall into several groups.
+- **Heading**: the name of a group of sensor rows within a category, such as a battery's name, "Memory details" or "Swap". The menu shows it above its rows when a category's rows fall into several groups.
 - **Category pin**: the sensor whose value the category header shows, derived by `categoryPin(categoryName)`: the present sensor the user marked `pinnedToCategory`, otherwise the default chosen by the collector's rules.
 - **Aggregate**: a value computed from other sensors, such as an average, minimum, maximum or battery power total.
 - **Panel sensor**: a sensor pinned to the top bar, with a `panelPosition` and a `reservedWidth` for its displayed value.
@@ -42,7 +42,7 @@ The terms used in the code and the documentation of Vitals, each with one meanin
 - **Source**: what one read gets values from: a file such as `/proc/meminfo`, the `nvidia-smi` process, a storage location, the public IP services. Several sensors can come from one source.
 - **Read**: one request to a source.
 - **Reading**: what a read of a source returned, with its time and status.
-- **Status**: `ready` when a sensor's value is current, `pending` while there is none yet (shown as "…"), `unavailable` when a read fails or yields no usable value. Unavailable readings are hidden.
+- **Status**: `ready` when a sensor's value is current, `pending` while there is none yet (shown as "…"), `unavailable` when a read fails or yields no usable value. Unavailable sensors are not displayed.
 - **Tick**: one collection pass at the update interval. It refreshes the active-source map and reads each due source needed by shown sensors or aggregates once.
 - **Update interval**: the time between two ticks, the setting `update-time`.
 - **Interval** (of a source): a time of its own between two reads of a source, longer than the update interval, such as the public IP's or that of a network storage location.

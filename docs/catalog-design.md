@@ -58,11 +58,11 @@ The category pin is derived by `categoryPin(categoryName)`: the present sensor m
 - `discovered`: the timestamp of the discovery run that last found it. See [Discovery](#discovery).
 - `section`: which part of its category's menu a sensor belongs to. The rows of a section stay together, whatever their labels are. The network sensors name one, and so do the average, minimum and maximum, which also carry `aggregate`.
 - `order`: an explicit row order within a section and heading, before sorting by label. Memory uses it to keep the breakdown in its arithmetic order.
-- `heading`: the battery, graphics card, network interface or storage location the sensor belongs to, such as "BAT0", "GPU 2", "WiFi (wlp0s20f3)" or "/home". When a category's rows fall into more than one group by heading, rows without one being a group too, the menu shows each heading above its rows. So the labels stay plain ("Percentage") and are translated as they are.
+- `heading`: the name of the sensor's row group. It can name a battery, graphics card, network interface or storage location, such as "BAT0", "GPU 2", "WiFi (wlp0s20f3)" or "/home", or a group such as "Memory details", "Swap" or "ZFS cache". When a category's rows fall into more than one group by heading, rows without one being a group too, the menu shows each heading above its rows. So the labels stay plain ("Percentage") and are translated as they are.
 - `icon`: the name of its icon in the icon theme, when it is not its category's, such as `vitals-storage-read-symbolic`. Discovery writes it, and a few sensors take it from each reading: the WiFi values the bars of their signal, the public IP its country (`vitals-country-de-symbolic`). The renderer shows the category's icon when no theme has an icon of that name.
 - `runtime.shown`: whether it is on screen right now. The renderer sets this; see [What is collected](#what-is-collected).
 - `value` and `updated`: its reading and when it was taken. A few readings are text, such as a battery's state.
-- `status`: `ready` when `value` is current, `pending` while there is none yet (shown as "…"), and `unavailable` when it cannot be read (the row is hidden).
+- `status`: `ready` when `value` is current, `pending` while there is none yet (shown as "…"), and `unavailable` when it cannot be read (the row is not displayed).
 - `file`: the file the sensor is read from: its own for a temperature, `/proc/meminfo` for every memory sensor. A sensor read from something else has none: an NVIDIA card's values (`nvidia`), the space of a storage location (`location`), the public IP, the screen redraws and, on some machines, the CPU frequencies. Nor does a value discovery writes, such as a graphics card's driver version, or an average, minimum or maximum.
 - Fields that say which part of the file is the sensor's: the interface name for a network rate (with `hardware`, whether that interface is a hardware device), the core for a CPU core.
 - `lowIsBad`: set by discovery on a sensor whose low values are the ones to watch, such as free memory, a battery's charge or the WiFi link quality (`LOW_IS_BAD` in `sensors.js`). A colour scale on such a sensor colours downwards from its breakpoints; on every other sensor, upwards.
@@ -122,7 +122,7 @@ A tick refreshes the active-source map and reads each source that is due once. S
 
 Read costs vary by source and hardware. The [historical measurements](changes-against-upstream.md#historical-speed-and-memory-measurements) include per-source costs from one ThinkPad.
 
-A read that fails is an expected state, not an error: its sensors become `unavailable`, their rows are hidden, and it is logged with `console.debug`.
+A read that fails is an expected state, not an error: its sensors become `unavailable`, their rows are not displayed, and it is logged with `console.debug`.
 
 An aggregate is computed from other sensors. Showing one activates the sources of present, non-hidden sensors in its category, including inputs not on screen. The aggregates are computed after the category’s reads finish. Unavailable inputs are excluded; pending inputs keep the aggregate pending. Battery power totals exclude peripheral batteries.
 
@@ -132,7 +132,7 @@ A rate needs two readings. If a first reading leaves a sensor pending, the colle
 
 When the last successful reading is younger than half the update interval, the collector uses that reading's previous sample as the rate's starting point, if one exists. Otherwise it uses the last reading itself. This avoids very short intervals after Refresh while allowing the first pair of samples to produce a rate. Rates are never computed across a failed read.
 
-A reading from `nvidia-smi` holds only the fields that were asked for. When another sensor of a card comes on screen, the process is started again with more fields, and the reading it left counts as none, so the new sensor is read at once like any other.
+A reading from `nvidia-smi` holds only the requested fields. When newly shown sensors require additional fields, the process restarts with those fields. Its previous reading is marked pending because it may lack those fields, and the collector requests a new reading immediately.
 
 ## Device identity
 

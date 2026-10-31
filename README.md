@@ -2,11 +2,11 @@
 
 Vitals is a GNOME Shell extension for displaying your computer's temperature, voltage, fan speed, memory usage, processor load, system resources, network speed and storage stats in your GNOME Shell's top menu bar. This is a one stop shop to monitor all of your vital sensors. Vitals uses asynchronous polling to provide a smooth user experience.
 
-This fork of [Vitals](https://github.com/corecoding/Vitals) lets you arrange top-bar readings and menu categories by drag and drop, rename or hide sensors, and monitor several disks and network shares together. You can set threshold colors for individual sensors or whole kinds of readings, and related readings are grouped into sections. See the [full comparison](docs/changes-against-upstream.md) for differences and limitations.
+This fork of [Vitals](https://github.com/corecoding/Vitals) lets you reorder pinned sensors in the top bar and categories in the menu by drag and drop, rename or hide sensors, and monitor several disks and network shares together. You can set threshold colors for individual sensors or groups, such as all temperatures in a category. The menu groups related sensors into sections. See the [full comparison](docs/changes-against-upstream.md) for differences and limitations.
 
 Supports **GNOME Shell 50 and 51**.
 
-<img src="docs/screenshots/menu.png" alt="Vitals top-bar readings and sensor categories" width="360">
+<img src="docs/screenshots/menu.png" alt="Vitals pinned sensors in the top bar and categories in the menu" width="360">
 
 [Install](#installation) · [Use Vitals](#using-vitals) · [Screenshots](docs/screenshots/README.md) · [Report a problem](#reporting-problems) · [Development](#development) · [Credits and licenses](#credits-and-licenses)
 
@@ -47,20 +47,22 @@ Log out and back in to load the updated code.
 
 ## Using Vitals
 
-Click a top-bar value to open the menu, then open a category to see its readings. Click a sensor row to open its actions:
+Click a pinned sensor in the top bar, or the Vitals icon if none are shown, to open the menu. Then open a category to see its sensors. Click a sensor row to open its actions:
 
 | Action | Result |
 |---|---|
-| Pin to top bar | Show the reading in the top bar; select again to unpin. |
-| Pin to category | Use the reading in its category header; select again to restore the default. |
+| Pin to top bar | Show the sensor's value in the top bar; select again to unpin. |
+| Pin to category | Show the sensor's value in its category header; select again to restore the default. |
 | Rename | Give the sensor your own label; clear it to restore its original label. |
-| Hide | Remove the sensor from the menu and its category's aggregates. A pinned reading stays in the top bar. |
+| Hide | Remove the sensor from the menu and its category's aggregates. A pinned sensor stays in the top bar. |
 
-Drag top-bar readings to reorder them. Repinning a reading adds it at the end. Use **Show hidden sensors** at the bottom of the menu to reveal hidden rows and undo **Hide**. **Refresh** looks for sensors again and updates the visible readings.
+Drag pinned sensors in the top bar to reorder them. Repinning a sensor adds it at the end. Use **Show hidden sensors** at the bottom of the menu to reveal hidden rows and undo **Hide**. **Refresh** looks for sensors again and updates the visible readings.
 
-Open **Preferences** from the bottom of the menu. General controls the update interval and icon style; Top Bar and Menu control their respective appearance. Category pages contain their units, collection options and threshold colors.
+Open **Preferences** from the bottom of the menu. General controls the update interval and icon style; Top Bar and Menu control their respective appearance. The switch at the top of each category page enables or disables its monitoring. Category pages also contain their units, collection options and threshold colors.
 
 To arrange categories, set Menu › **Order** to **Manual** and enable **Reorder by drag and drop**, then drag category headers in the menu. Preferences follows the same category order. Choosing **Alphabetical** uses the translated category names again.
+
+For threshold colors, open a category page, choose a sensor or group under **Add color scale**, and click **Add**. Set the threshold and color; **Add breakpoint** adds another level. **From** applies at and above its threshold; **Up to** applies at and below it, until another breakpoint takes over. A sensor's own color scale takes precedence over its group's scale.
 
 To monitor another disk or share, open Storage › **Storage Locations**, click **+**, and select a mounted location. Enable **Monitor drives mounted by GNOME** to include those drives automatically. Added locations remain configured while disconnected; Vitals resumes their readings when something is mounted at the same path.
 
@@ -68,11 +70,13 @@ The [screenshot gallery](docs/screenshots/README.md) shows top-bar options and m
 
 ### Understanding the readings
 
+An ellipsis ("…") means a value is still being collected. Rates without recent samples need a second reading, scheduled one second later. Sensors that cannot be read disappear until readings resume.
+
 Memory's main section adds up: **Free + Reclaimable = Available**, and **Used + Available = Total**. Memory › **Show details** adds cache and buffer counters in a separate section; swap has its own section.
 
 Temperature › **Skip sensors that read zero** excludes sensors that read zero during discovery and retries them on rediscovery. Sensors already accepted can later read zero. With the option off, readable zero temperatures are included.
 
-Vitals reads the inputs needed by pinned values, visible category headers and expanded menu rows. With the menu closed, only pinned values require updates; a pinned aggregate also needs its contributing readings. See [design decisions](docs/design.md) for category behavior and its rationale.
+Vitals reads the inputs needed by pinned sensors, visible category headers and expanded menu rows. With the menu closed, only pinned sensors require updates; a pinned aggregate also needs its contributing readings. See [design decisions](docs/design.md) for category behavior and its rationale.
 
 ## Reporting problems
 
@@ -97,10 +101,10 @@ Common commands, run from the checkout:
 | Task | Command |
 |---|---|
 | Run unit tests | `make test` |
-| Run Shell integration tests | `make test-shell` |
+| Run Shell integration tests in English | `LC_ALL=C make test-shell` |
 | Open an interactive preview | `make preview` |
 | Compile translations | `make translations` |
-| Refresh screenshots | `make screenshots` |
+| Refresh the English screenshots | `LC_ALL=C make screenshots` |
 | Package the extension | `make zip` |
 
 The [preview and test instructions](docs/development.md#running-it) explain dependencies, UI scale, resolution and isolated settings.

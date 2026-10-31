@@ -14,7 +14,7 @@ What Vitals does and why, outside the sensor catalog, which [catalog-design.md](
 
 The first section shows Used, Reclaimable, Free, Available and Total. Used is `MemTotal - MemAvailable`; Reclaimable is `MemAvailable - MemFree`. Thus Free + Reclaimable = Available, and Used + Available = Total. The formatter uses the total's unit and subtracts rounded operands so these relationships hold at the displayed precision, while raw readings stay intact.
 
-The Memory page's "Show details" switch (`memory-show-details`, off by default) adds a section after a divider: file cache (`Cached - Shmem`), shared memory and tmpfs (`Shmem`), kernel reclaimable cache (`SReclaimable`), buffers and usage percentage. Switching it off leaves pinned detail readings in the top bar. Swap follows in its own section with Used, Free, Total and Usage regardless of that switch. Existing sensor keys retain their pins and settings. These counters follow the [kernel's definitions](https://docs.kernel.org/filesystems/proc.html).
+The Memory page's "Show details" switch (`memory-show-details`, off by default) adds a section after a divider: file cache (`Cached - Shmem`), shared memory and tmpfs (`Shmem`), kernel reclaimable cache (`SReclaimable`), buffers and usage percentage. Switching it off leaves pinned sensors from that section in the top bar. Swap follows in its own section with Used, Free, Total and Usage regardless of that switch. Existing sensor keys retain their pins and settings. These counters follow the [kernel's definitions](https://docs.kernel.org/filesystems/proc.html).
 
 ## Temperatures
 
@@ -39,7 +39,7 @@ The icon-size slider was tried and removed at the user's request. Keep the exist
 - Monitored are the mount points in the setting `storage-locations`; one stays in it while nothing is mounted there. With `storage-monitor-volumes` (off by default), the mounts of `Gio.VolumeMonitor` are monitored too: GIO collects them from the volume monitor services of gvfs, of which `gvfs-udisks2-volume-monitor` reports the disks. The preferences call them "drives mounted by GNOME".
 - A location is added by picking it from what is mounted now, not by typing. Offered first are those that libgtop counts as a disk or `df` as remote.
 - What is mounted where comes from `/proc/self/mountinfo` (`parseMountTable`). An automount that waits to be used counts as nothing mounted, since asking it would connect it.
-- The space of a location is asked from the kernel, once per location. The mount table is read first, because asking a path where nothing is mounted any more would connect an automounted share again. A location is not asked again while a question is out: a share whose server is gone can take minutes to answer.
+- Filesystem space is queried once per location. The mount table is read first, because querying a path where nothing is mounted any more would connect an automounted share again. Only one filesystem query per location may be pending: a share whose server is gone can take minutes to answer.
 - A network location is one that `df` counts as remote (`isRemoteMount`, using gnulib's `ME_REMOTE` rule). Its space is queried only while mounted, at the separate `storage-network-interval` in minutes.
 
 ## Network
@@ -52,7 +52,7 @@ The icon-size slider was tried and removed at the user's request. Keep the exist
 
 Vitals discovers power supplies with `type` equal to `Battery`, including mouse and keyboard batteries, and UPS devices reported by UPower. Readings are grouped under their battery's name; a peripheral's model is used when available.
 
-The kernel's `scope` equal to `Device` identifies a peripheral battery. It can report power consumption, but its power rate is excluded from the machine-battery total. With more than one machine battery, Vitals adds that total. UPS readings remain separate. The default category pin is the total when present, otherwise the first power-rate reading, otherwise a percentage. The user can choose another category pin.
+The kernel's `scope` equal to `Device` identifies a peripheral battery. It can report power consumption, but its power rate is excluded from the machine-battery total. With more than one machine battery, Vitals adds that total. UPS readings remain separate. The default category pin is the total when present, otherwise the first power-rate sensor, otherwise a percentage sensor. The user can choose another category pin.
 
 ## Categories
 
@@ -66,7 +66,7 @@ Colour scales follow one rule (decided on 2026-10-10), `colorStyle` in `helpers/
 ## The menu
 
 - **Use sections inside categories.** Experiments with nested sensor submenus, including CPU groups and Memory details, produced poor interactions. The Memory attempt closed its enclosing category and then failed the scrolling check. This is a lesson from trying the interaction, not merely a preference: use the existing dividers and headings instead of repeating nested sensor submenus. The actions opened from a sensor row are a separate interaction.
-- The menu opens with its middle under the pointer, or under the middle of the top-bar item when opened from the keyboard or with the "Open centered under the sensors" option, and stays at that place while it is open.
+- By default, clicking Vitals opens the menu with its middle under the pointer. With "Open centered under the sensors", it opens under the middle of Vitals' combined top-bar items. The menu stays at its opening position while it is open.
 - The menu has a fixed width; in a row that is too narrow the label is shortened, never the value.
 - A category slides open with a slide of our own, never GNOME Shell's: the Shell only slides a submenu that needs no scrollbar, so long and short categories would behave differently. One category is open at a time, and it stays open while the menu is closed.
 - Each level of the menu starts under the name of the level above it.

@@ -39,7 +39,7 @@ Keys are built from device names and source fields rather than translated labels
 
 Rules:
 
-- **A device's sensor is `<device name>/<input>`.** The device name is the content of the hwmon directory's `name` file, with a number from the second device of that name on. A thermal zone is `thermal/<content of its type file>`.
+- **A device's sensor is `<device name>/<input>`.** The device name is the content of the hwmon directory's `name` file. Repeated names receive a numeric suffix starting with the second device: `nvme`, `nvme2`, `nvme3`. A thermal zone is `thermal/<content of its type file>`.
 - **No directory numbers.** The number in `hwmon5` or `thermal_zone2` is given by the kernel in the order it finds devices and can differ at the next boot.
 - **Input numbers stay.** `temp1`, `in0` and `fan1` are fixed by the driver, and they are the only thing that tells unlabelled inputs apart.
 - **The separator is `/`.** Discovery joins the device name and input with it. Category-wide keys such as `average` contain no separator.
