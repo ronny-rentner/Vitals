@@ -10,21 +10,23 @@ You can drag pinned sensors into the order you want in the top bar. You can also
 
 The menu keeps related sensors together in sections. Threshold colors can apply to one sensor or a group, such as all temperatures in a category. The [full comparison](docs/changes-against-upstream.md) covers the differences from upstream and the fork's limitations.
 
+### Important notes
+
+The preferences sidebar and cropped top-bar icons use newer GNOME APIs, so this fork requires GNOME Shell 50 or 51.
+
+Sensors are now identified independently of their displayed names, keeping pins and color settings attached when labels change. Existing sensor settings use the old identifiers, so you'll need to set up your pinned sensors again and review your preferences when switching.
+
 <img src="docs/screenshots/menu.png" alt="Vitals pinned sensors in the top bar and categories in the menu" width="360">
 
 [Install](#installation) · [Use Vitals](#using-vitals) · [Screenshots](docs/screenshots/README.md) · [Report a problem](#reporting-problems) · [Development](#development) · [Credits and licenses](#credits-and-licenses)
 
 ## Installation
 
-### Important notes
-
-This fork supports only GNOME Shell 50 and 51. The preferences sidebar and cropped top-bar icons use APIs introduced with GNOME 50.
-
-Installing this fork replaces your user-installed copy of upstream Vitals because both use the same extension ID. Your old sensor configuration is not migrated: set up your pinned sensors again and review the other preferences after switching.
-
 ### Build and install this fork
 
 You need Git, Make, `glib-compile-schemas` (GLib), `msgfmt` (gettext), `zip` and GNOME Shell's `gnome-extensions` command.
+
+These steps install the fork in place of upstream Vitals.
 
 ```sh
 git clone --branch catalog-rewrite https://github.com/ronny-rentner/Vitals.git
