@@ -4,11 +4,11 @@ Vitals is a GNOME Shell extension for displaying your computer's temperature, vo
 
 ## This fork
 
-This fork of [Vitals](https://github.com/corecoding/Vitals) lets you drag pinned sensors into the order you want in the top bar. You can also reorder menu categories, rename or hide sensors, and monitor several disks and network shares together.
+This fork substantially reworks [Vitals](https://github.com/corecoding/Vitals), extending its features and rewriting much of the underlying code. Sensor polling follows what the top bar and menu need to display, reducing unnecessary background work.
+
+You can drag pinned sensors into the order you want in the top bar. You can also reorder menu categories, rename or hide sensors, and monitor several disks and network shares together.
 
 The menu keeps related sensors together in sections. Threshold colors can apply to one sensor or a group, such as all temperatures in a category. The [full comparison](docs/changes-against-upstream.md) covers the differences from upstream and the fork's limitations.
-
-Supports **GNOME Shell 50 and 51**.
 
 <img src="docs/screenshots/menu.png" alt="Vitals pinned sensors in the top bar and categories in the menu" width="360">
 
@@ -16,11 +16,15 @@ Supports **GNOME Shell 50 and 51**.
 
 ## Installation
 
+### Important notes
+
+This fork supports only GNOME Shell 50 and 51. The preferences sidebar and cropped top-bar icons use APIs introduced with GNOME 50.
+
+Installing this fork replaces your user-installed copy of upstream Vitals because both use the same extension ID. Your old sensor configuration is not migrated: set up your pinned sensors again and review the other preferences after switching.
+
 ### Build and install this fork
 
 You need Git, Make, `glib-compile-schemas` (GLib), `msgfmt` (gettext), `zip` and GNOME Shell's `gnome-extensions` command.
-
-This fork uses the same extension ID as upstream, so installing it replaces your user-installed copy of Vitals. It does not migrate your old sensor configuration. After switching, set up your pins again and check your preferences.
 
 ```sh
 git clone --branch catalog-rewrite https://github.com/ronny-rentner/Vitals.git
