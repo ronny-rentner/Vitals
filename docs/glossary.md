@@ -7,7 +7,7 @@ The terms used in the code and the documentation of Vitals, each with one meanin
 ## The two parts
 
 - **Collector**: `Sensors` in `sensors.js`. It discovers sensors, reads the inputs needed by shown values and aggregates, and saves the catalog.
-- **Renderer**: `extension.js`. It displays the catalog in the top bar and the menu, and marks what is on screen.
+- **Renderer**: `extension.js`. It displays the catalog in the top bar and the menu, and marks which sensors and category headers need readings.
 
 ## The catalog
 
@@ -34,7 +34,7 @@ The terms used in the code and the documentation of Vitals, each with one meanin
 - **Row**: one sensor in the menu.
 - **Row menu**: what opens under a row when it is clicked, with the sensor's actions.
 - **Action**: an entry of a row menu: Pin to top bar, Pin to category, Rename, Hide.
-- **Shown**: a sensor or category header is shown while it is on screen; the renderer sets `runtime.shown` in the catalog.
+- **Shown**: marked by the renderer with `runtime.shown` because the top bar or open menu needs its reading. This includes rows outside the scroll viewport and unavailable sensors awaiting recovery. See [What is collected](catalog-design.md#what-is-collected).
 - **Hidden**: the user's choice to exclude a sensor from the normal menu and aggregates (`hidden`). "Show hidden sensors" reveals its row; its top-bar pin stays. Not the same as unavailable.
 
 ## Reading

@@ -9,7 +9,7 @@ How the collector and renderer share sensor state. Category behavior and UI deci
 - **The collector** (`sensors.js`) knows every sensor, reads their values, and stores the catalog on disk.
 - **The renderer** (`extension.js`) displays the catalog. Beyond the catalog it only knows the user's display settings, such as the temperature unit or the icon style.
 
-The collector saves the catalog to settings. The preferences window writes the catalog settings, which say whether each category is switched on. The renderer marks what is on screen (`runtime.shown`, `shownChanged`), notes on each pinned sensor the width it keeps free for its top-bar value (`reservedWidth`), and changes panel membership and order through `pinToPanel` and `movePanelSensor`. The collector uses those visibility marks to determine what to read.
+The collector saves the catalog to settings. The preferences window writes the catalog settings, which say whether each category is switched on. The renderer marks which sensors and category headers need readings (`runtime.shown`, `shownChanged`), notes on each pinned sensor the width it keeps free for its top-bar value (`reservedWidth`), and changes panel membership and order through `pinToPanel` and `movePanelSensor`. The collector uses those marks to determine what to read.
 
 ## The catalog
 
@@ -27,7 +27,7 @@ A shortened example of saved data:
             label: 'Usage',
             format: 'percent',
             discovered: 1759820000,
-            value: 63,
+            value: 0.63,
             updated: 1759823000,
             status: 'ready',
             panelPosition: 0,
@@ -44,7 +44,7 @@ The collector keeps source readings, pending reads and the active-source map sep
 - `position`: the category's place in the menu and preferences sidebar when Menu › Order is Manual. Unplaced categories follow in alphabetical order. With Alphabetical selected, all categories sort by their translated names, ignoring saved positions.
 - `runtime.enabled`: whether the category is switched on, taken from the setting `catalog-settings` and not saved in the catalog. See [On disk](#on-disk).
 - `discovered`: the timestamp of the last discovery run that completed this category. See [Discovery](#discovery).
-- `runtime.shown`: whether the category header is on screen right now. The renderer sets this; see [What is collected](#what-is-collected).
+- `runtime.shown`: whether the menu is open and the category enabled. Its category pin then needs readings; see [What is collected](#what-is-collected).
 - `sensors`: its sensors, in discovery order. Menu ordering is derived separately; see [The renderer](#the-renderer).
 
 The category pin is derived by `categoryPin(categoryName)`: the present sensor marked `pinnedToCategory`, otherwise the category's default. For voltage, the default prefers the battery, then the system, then a USB supply.
@@ -60,7 +60,7 @@ The category pin is derived by `categoryPin(categoryName)`: the present sensor m
 - `order`: an explicit row order within a section and heading, before sorting by label. Memory uses it to keep the breakdown in its arithmetic order.
 - `heading`: the name of the sensor's row group. It can name a battery, graphics card, network interface or storage location, such as "BAT0", "GPU 2", "WiFi (wlp0s20f3)" or "/home", or a group such as "Memory details", "Swap" or "ZFS cache". When a category's rows fall into more than one group by heading, rows without one being a group too, the menu shows each heading above its rows. So the labels stay plain ("Percentage") and are translated as they are.
 - `icon`: the name of its icon in the icon theme, when it is not its category's, such as `vitals-storage-read-symbolic`. Discovery writes it, and a few sensors take it from each reading: the WiFi values the bars of their signal, the public IP its country (`vitals-country-de-symbolic`). The renderer shows the category's icon when no theme has an icon of that name.
-- `runtime.shown`: whether it is on screen right now. The renderer sets this; see [What is collected](#what-is-collected).
+- `runtime.shown`: whether the sensor needs readings for a top-bar item or a row in an expanded category. The renderer sets this; see [What is collected](#what-is-collected).
 - `value` and `updated`: its reading and when it was taken. A few readings are text, such as a battery's state.
 - `status`: `ready` when `value` is current, `pending` while there is none yet (shown as "…"), and `unavailable` when it cannot be read (the row is not displayed).
 - `file`: the file the sensor is read from: its own for a temperature, `/proc/meminfo` for every memory sensor. A sensor read from something else has none: an NVIDIA card's values (`nvidia`), the space of a storage location (`location`), the public IP, the screen redraws and, on some machines, the CPU frequencies. Nor does a value discovery writes, such as a graphics card's driver version, or an average, minimum or maximum.
@@ -97,7 +97,7 @@ The catalog is saved in one setting, excluding every `runtime` field. It records
 - User changes to pins, labels, hiding and ordering save the catalog, as does panel destruction. Discovery saves when the sensor count changes.
 - There are no migrations. Settings saved by earlier versions are not converted.
 - The preferences window is a separate program. Its category switches write `catalog-settings` (`_categoryPage` in `prefs.js`), and it reads the sensors' labels from the saved catalog for the colour pages. The extension takes a changed switch over when `catalog-settings` changes.
-- Session-only fields live in `runtime`: visibility, source references, computation functions and `initialTemperature` (what the hide-zeros option remembers). They are omitted from saved data. The last reading (`value`, `updated`, `status`) is written; on load every sensor is `pending`, so every value starts as "…".
+- Session-only fields live in `runtime`: collection marks, source references, computation functions and `initialTemperature` (what the hide-zeros option remembers). They are omitted from saved data. The last reading (`value`, `updated`, `status`) is written; on load every sensor is `pending`, so every value starts as "…".
 
 The setting holds the catalog as a structure, not as text. GNOME's settings format stores nested records and lists directly (type `a{sv}`). `helpers/storedCatalog.js` turns the catalog's plain data into that format; reading it back is built in.
 
@@ -116,7 +116,7 @@ Other settings stay as they are: the display settings, and the options that belo
 
 ## What is collected
 
-The renderer marks visible sensors and category headers with `runtime.shown`. The collector derives `activeSources` from those marks, category pins and the inputs of visible aggregates. With the menu closed, collection is driven by the pinned sensors.
+The renderer sets `runtime.shown` for present pinned sensors in enabled categories. While the menu is open, it also marks enabled category headers and rows in expanded categories. These marks include rows outside the scroll viewport and unavailable sensors awaiting recovery. They describe which readings the UI needs, not whether an actor is currently visible. The collector derives `activeSources` from those marks, category pins and aggregate inputs. With the menu closed, collection is driven by the pinned sensors.
 
 A tick refreshes the active-source map and reads each source that is due once. Sensors sharing a source share its reading. Each completed read updates the active sensors that depend on it and notifies the renderer, so a slow source does not hold the others back. Source state and the active-source map persist between ticks.
 
@@ -126,7 +126,7 @@ A read that fails is an expected state, not an error: its sensors become `unavai
 
 An aggregate is computed from other sensors. Showing one activates the sources of present, non-hidden sensors in its category, including inputs not on screen. The aggregates are computed after the category’s reads finish. Unavailable inputs are excluded; pending inputs keep the aggregate pending. Battery power totals exclude peripheral batteries.
 
-After changing visibility marks, the renderer calls `shownChanged`. Newly needed sources are read immediately through `_readNewlyShown`, with two exceptions: a ready reading with a previous sample is reused while younger than the update interval, and a source still within its own interval keeps its reading. Catalog changes, including a different category pin, also update collection. Sensors sharing an already active source use its existing samples.
+After changing these marks, the renderer calls `shownChanged`. Newly needed sources are read immediately through `_readNewlyShown`, with two exceptions: a ready reading with a previous sample is reused while younger than the update interval, and a source still within its own interval keeps its reading. Catalog changes, including a different category pin, also update collection. Sensors sharing an already active source use its existing samples.
 
 A rate needs two readings. If a first reading leaves a sensor pending, the collector schedules a second read one second later (`SECOND_READING_SECONDS`). Regular ticks wait for that read. Leaving the active-source map cancels it; discovery delays it until the run ends. A source reactivated after its samples have become stale starts a new pair, rather than calculating a rate across the time it was inactive.
 

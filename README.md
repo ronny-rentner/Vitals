@@ -76,7 +76,7 @@ Memory's main section adds up: **Free + Reclaimable = Available**, and **Used + 
 
 Temperature › **Skip sensors that read zero** excludes sensors that read zero during discovery and retries them on rediscovery. Sensors already accepted can later read zero. With the option off, readable zero temperatures are included.
 
-Vitals reads the inputs needed by pinned sensors, visible category headers and expanded menu rows. With the menu closed, only pinned sensors require updates; a pinned aggregate also needs its contributing readings. See [design decisions](docs/design.md) for category behavior and its rationale.
+Vitals reads the inputs needed by pinned sensors, category headers in the open menu and rows in expanded categories. With the menu closed, only pinned sensors require updates; a pinned aggregate also needs its contributing readings. See [design decisions](docs/design.md) for category behavior and its rationale.
 
 ## Reporting problems
 

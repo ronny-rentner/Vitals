@@ -10,6 +10,8 @@ import {toVariant} from '../../helpers/storedCatalog.js';
 
 // Room around what a screenshot shows, in pixels.
 const MARGIN = 12;
+// One width for all top-bar and menu examples, in logical pixels; captions do not resize individual images.
+const CAPTURE_WIDTH = 560;
 // Colour rules for the pictures of threshold colours, as a user would set them: green, then yellow from the second
 // number on, then red.
 const GREEN = '38 162 105', YELLOW = '229 165 10', RED = '224 27 36';
@@ -20,8 +22,8 @@ const COLOR_RULES = {
 // How many pictures are saved so far, and their size together.
 let savedPictures = 0, savedBytes = 0;
 
-// Saves the part of the screen that holds the given actors, with some room around it.
-async function capture(name, ...actors) {
+// A shared width keeps examples at the same visual scale; height follows the contents.
+async function capture(name, width, ...actors) {
     let left = Infinity, top = Infinity, right = 0, bottom = 0;
     for (let actor of actors) {
         let [x, y] = actor.get_transformed_position();
@@ -35,6 +37,13 @@ async function capture(name, ...actors) {
     top = Math.max(0, Math.floor(top) - MARGIN);
     right = Math.min(global.stage.width, Math.ceil(right) + MARGIN);
     bottom = Math.min(global.stage.height, Math.ceil(bottom) + MARGIN);
+    if (width) {
+        if (right - left > width || width > global.stage.width)
+            throw new Error(name + ': contents exceed the shared screenshot width');
+        // Extend into the empty panel space on the left, keeping neighbouring status icons out of the picture.
+        left = Math.max(0, right - width);
+        right = left + width;
+    }
     let picture = Gio.File.new_for_path(GLib.getenv('SCREENSHOT_DIR') + '/' + name + '.png');
     let stream = picture.replace(null, false, Gio.FileCreateFlags.NONE, null);
     await new Promise((resolve, reject) => {
@@ -65,6 +74,7 @@ export async function run() {
     let button = Main.panel.statusArea.vitalsMenu;
     let sensors = button._sensors;
     let settings = button._settings;
+    let captureWidth = CAPTURE_WIDTH * St.ThemeContext.get_for_stage(global.stage).scale_factor;
 
     // Reads until every value on screen is there. A speed needs two readings, some time apart, and nothing is
     // read while the extension looks for hardware, which it does after a setting changed and when the menu opens.
@@ -109,7 +119,7 @@ export async function run() {
             sensor.reservedWidth = -1;
         button._redrawPanelItems();
         await read();
-        await capture(name, button);
+        await capture(name, captureWidth, button);
         reset(options);
     };
     // The menu with all categories closed, or with one of them open, or with the actions of one of its rows open.
@@ -122,7 +132,7 @@ export async function run() {
             button._rows.get(actionsOf).activate();
             await Scripting.sleep(300);
         }
-        await capture(name, button, button.menu.actor);
+        await capture(name, captureWidth, button, button.menu.actor);
         if (actionsOf)
             button._rows.get(actionsOf).activate();
         // A category stays open while the menu is closed, and the next picture may want all of them closed.
@@ -162,14 +172,14 @@ export async function run() {
         await pin(usual, true);
     };
     // Every picture once in the Shell's dark style and once in its light style, whose pictures end in "-light".
-    // The Shell is dark unless the desktop asks for light.
     let desktop = new Gio.Settings({schema_id: 'org.gnome.desktop.interface'});
+    // Keep the shared capture's extra space free of wallpaper details.
+    new Gio.Settings({schema_id: 'org.gnome.desktop.background'}).set_string('picture-options', 'none');
     print('Taking the pictures in ' + GLib.getenv('SCREENSHOT_DIR'));
     print('Screen ' + global.stage.width + 'x' + global.stage.height + ' px, scale ' + St.ThemeContext.get_for_stage(global.stage).scale_factor +
         ', text scale ' + desktop.get_double('text-scaling-factor'));
     for (let style of ['', '-light']) {
-        if (style)
-            desktop.set_string('color-scheme', 'prefer-light');
+        desktop.set_string('color-scheme', style ? 'prefer-light' : 'prefer-dark');
         await Scripting.sleep(500);
         await topBar('top-bar' + style);
         await topBar('top-bar-plain' + style, {'emphasize-values': false});
@@ -193,6 +203,6 @@ export async function run() {
     while (!preferences())
         await Scripting.sleep(50);
     await Scripting.sleep(1500);
-    await capture('preferences', preferences());
+    await capture('preferences', null, preferences());
     print(savedPictures + ' pictures saved (' + (savedBytes / 1000).toFixed(1) + ' kB, ' + Math.round((GLib.get_monotonic_time() - start) / 1000000) + ' s)');
 }

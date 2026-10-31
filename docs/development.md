@@ -80,7 +80,7 @@ Keep `enable()` and `disable()` small, and make cleanup explicit wherever a sign
 
 ## Code conventions
 
-- The Shell's main loop is never blocked: a crash or a stall in the Shell process takes the desktop with it. Files are read with `Gio.File.load_contents_async`, programs run through `Gio.Subprocess`.
+- Never block the Shell's main loop: a crash or a stall in the Shell process takes the desktop with it. Read files with `Gio.File.load_contents_async` and run programs through `Gio.Subprocess`.
 - Translated texts use `_()` from the Extension or preferences import, domain `vitals`.
 - GObject subclasses use `GObject.registerClass` with a unique `GTypeName`.
 - Vitals ships its own sensor icons in `icons/`, with names that a user's icon theme can override.
@@ -141,4 +141,4 @@ The [test-writing rules](writing-tests.md) define which requirements tests prote
 
 `LC_ALL=C make screenshots` refreshes the English [screenshot gallery](screenshots/README.md) in a Shell without a screen, using readings from the machine it runs on. The script, `docs/screenshots/screenshots.js`, starts from schema defaults, enables Battery and GPU, pins additional sensors and applies the options named in each gallery caption. It switches the public IP address off because the pictures are published. When an accepted display option changes the appearance, update its example and caption together.
 
-Screenshots are captured at twice the display resolution. Embed them with an explicit width no greater than half their pixel width so they retain detail on high-density displays. The README's category overview is displayed at 360 pixels wide.
+Screenshots are captured at UI scale 2. Top-bar and menu examples share one capture width, set in `screenshots.js`; their heights follow the contents. The preferences screenshot includes its whole window. In the gallery, put captions above their images and omit explicit image widths so the images can use the available page width. Check the rendered gallery for readable labels, values and icons after changing captures or layout. The README's compact category overview uses a separate width of 360 pixels.
