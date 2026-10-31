@@ -6,7 +6,7 @@
 
 ## Top bar
 
-By default, the top bar shows memory usage, system load and download speed. These screenshots add upload speed, average temperature and fan speed; captions identify examples with other pins. Battery and GPU monitoring are enabled, and the public IP address is hidden. Readings come from the machine used for capture.
+By default, the top bar shows memory usage, system load and download speed. These screenshots also show upload speed, average temperature and fan speed, unless the caption lists other pins. Battery and GPU monitoring are enabled, and public IP lookup is disabled. Readings come from the machine used for capture.
 
 Default appearance, including **Crop icons**. Cropping removes transparent borders while preserving each icon's proportions.
 
@@ -16,7 +16,7 @@ Top Bar › **Emphasize values** disabled. When enabled, icons and units are dra
 
 <img src="top-bar-plain.png" alt="Top bar, dark style"><br><img src="top-bar-plain-light.png" alt="Top bar, light style">
 
-Top Bar › **Crop icons** disabled. GNOME's stock square icon allocation leaves transparent space around narrow artwork. Menu icons always use stock sizing.
+Top Bar › **Crop icons** disabled. GNOME gives each icon a square, leaving transparent space around narrow artwork. Menu icons always use this sizing.
 
 <img src="top-bar-stock-icons.png" alt="Top bar with stock icon sizing, dark style"><br><img src="top-bar-stock-icons-light.png" alt="Top bar with stock icon sizing, light style">
 
@@ -24,7 +24,7 @@ General › **Icon style** set to Adwaita.
 
 <img src="top-bar-gnome-icons.png" alt="Top bar, dark style"><br><img src="top-bar-gnome-icons-light.png" alt="Top bar, light style">
 
-Top Bar › **Hide icons** enabled. The icons in the menu stay.
+Top Bar › **Hide icons** enabled. Menu icons remain visible.
 
 <img src="top-bar-no-icons.png" alt="Top bar, dark style"><br><img src="top-bar-no-icons-light.png" alt="Top bar, light style">
 
@@ -32,7 +32,7 @@ General › **Use higher precision** enabled. Battery charge, battery power rate
 
 <img src="top-bar-precision.png" alt="Top bar, dark style"><br><img src="top-bar-precision-light.png" alt="Top bar, light style">
 
-Temperature › **Unit** set to °F and Network › **Measure in** set to Bits. Shown: download and upload speed, downloaded and uploaded since boot, and the processor's temperature.
+Temperature › **Unit** set to °F and Network › **Measure in** set to Bits. The pinned sensors show download and upload speed, total data downloaded and uploaded since boot, and the processor's temperature.
 
 <img src="top-bar-fahrenheit-bits.png" alt="Top bar, dark style"><br><img src="top-bar-fahrenheit-bits-light.png" alt="Top bar, light style">
 

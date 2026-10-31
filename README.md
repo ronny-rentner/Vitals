@@ -2,7 +2,11 @@
 
 Vitals is a GNOME Shell extension for displaying your computer's temperature, voltage, fan speed, memory usage, processor load, system resources, network speed and storage stats in your GNOME Shell's top menu bar. This is a one stop shop to monitor all of your vital sensors. Vitals uses asynchronous polling to provide a smooth user experience.
 
-This fork of [Vitals](https://github.com/corecoding/Vitals) lets you reorder pinned sensors in the top bar and categories in the menu by drag and drop, rename or hide sensors, and monitor several disks and network shares together. You can set threshold colors for individual sensors or groups, such as all temperatures in a category. The menu groups related sensors into sections. See the [full comparison](docs/changes-against-upstream.md) for differences and limitations.
+## This fork
+
+This fork of [Vitals](https://github.com/corecoding/Vitals) lets you drag pinned sensors into the order you want in the top bar. You can also reorder menu categories, rename or hide sensors, and monitor several disks and network shares together.
+
+The menu keeps related sensors together in sections. Threshold colors can apply to one sensor or a group, such as all temperatures in a category. The [full comparison](docs/changes-against-upstream.md) covers the differences from upstream and the fork's limitations.
 
 Supports **GNOME Shell 50 and 51**.
 
@@ -16,7 +20,7 @@ Supports **GNOME Shell 50 and 51**.
 
 You need Git, Make, `glib-compile-schemas` (GLib), `msgfmt` (gettext), `zip` and GNOME Shell's `gnome-extensions` command.
 
-This fork uses the same extension ID as upstream. Installing it replaces your user-installed copy of Vitals. There is no migration of the old sensor configuration; configure your pins and check your preferences after switching.
+This fork uses the same extension ID as upstream, so installing it replaces your user-installed copy of Vitals. It does not migrate your old sensor configuration. After switching, set up your pins again and check your preferences.
 
 ```sh
 git clone --branch catalog-rewrite https://github.com/ronny-rentner/Vitals.git
@@ -58,25 +62,25 @@ Click a pinned sensor in the top bar, or the Vitals icon if none are shown, to o
 
 Drag pinned sensors in the top bar to reorder them. Repinning a sensor adds it at the end. Use **Show hidden sensors** at the bottom of the menu to reveal hidden rows and undo **Hide**. **Refresh** looks for sensors again and updates the visible readings.
 
-Open **Preferences** from the bottom of the menu. General controls the update interval and icon style; Top Bar and Menu control their respective appearance. The switch at the top of each category page enables or disables its monitoring. Category pages also contain their units, collection options and threshold colors.
+Open **Preferences** from the bottom of the menu. On the General page, you can change the update interval and icon style. The Top Bar and Menu pages control how those parts look. Each category page has a switch at the top to turn monitoring on or off, followed by its units, collection options and threshold colors.
 
-To arrange categories, set Menu › **Order** to **Manual** and enable **Reorder by drag and drop**, then drag category headers in the menu. Preferences follows the same category order. Choosing **Alphabetical** uses the translated category names again.
+To rearrange categories, open the Menu page, set **Order** to **Manual** and enable **Reorder by drag and drop**. You can then drag category headers to their new positions in the menu. The preferences pages follow the same order. Choose **Alphabetical** to sort by the translated category names instead.
 
-For threshold colors, open a category page, choose a sensor or group under **Add color scale**, and click **Add**. Set the threshold and color; **Add breakpoint** adds another level. **From** applies at and above its threshold; **Up to** applies at and below it, until another breakpoint takes over. A sensor's own color scale takes precedence over its group's scale.
+To set threshold colors, open a category page, choose a sensor or group under **Add color scale**, and click **Add**. Set a threshold and its color, then use **Add breakpoint** for each additional level. A **From** breakpoint applies at and above its threshold; an **Up to** breakpoint applies at and below it. Each color continues until the next breakpoint. If a sensor has its own color scale, that scale overrides the group's.
 
-To monitor another disk or share, open Storage › **Storage Locations**, click **+**, and select a mounted location. Enable **Monitor drives mounted by GNOME** to include those drives automatically. Added locations remain configured while disconnected; Vitals resumes their readings when something is mounted at the same path.
+To monitor another disk or share, open Storage › **Storage Locations**, click **+**, and select a mounted location. Enable **Monitor drives mounted by GNOME** to include those drives automatically. Vitals keeps your configured locations when you disconnect them and resumes readings when something is mounted at the same path.
 
 The [screenshot gallery](docs/screenshots/README.md) shows top-bar options and menus in light and dark styles, plus the preferences window.
 
 ### Understanding the readings
 
-An ellipsis ("…") means a value is still being collected. Rates without recent samples need a second reading, scheduled one second later. Sensors that cannot be read disappear until readings resume.
+An ellipsis ("…") means Vitals is still collecting a value. Rates need two readings. If there are no recent samples, Vitals schedules another reading one second after the first. Sensors that cannot be read disappear until readings resume.
 
 Memory's main section adds up: **Free + Reclaimable = Available**, and **Used + Available = Total**. Memory › **Show details** adds cache and buffer counters in a separate section; swap has its own section.
 
-Temperature › **Skip sensors that read zero** excludes sensors that read zero during discovery and retries them on rediscovery. Sensors already accepted can later read zero. With the option off, readable zero temperatures are included.
+Temperature › **Skip sensors that read zero** leaves out sensors that report zero during discovery. Vitals tries them again on rediscovery. A sensor that was accepted earlier stays available if it later reads zero. Turn the option off to include readable zero temperatures during discovery too.
 
-Vitals reads the inputs needed by pinned sensors, category headers in the open menu and rows in expanded categories. With the menu closed, only pinned sensors require updates; a pinned aggregate also needs its contributing readings. See [design decisions](docs/design.md) for category behavior and its rationale.
+Vitals collects readings for pinned sensors, category headers in the open menu and rows in expanded categories. When you close the menu, only pinned sensors need updates. If you pin an aggregate, Vitals also collects the readings used to calculate it. The [design decisions](docs/design.md) explain how each category behaves and why.
 
 ## Reporting problems
 

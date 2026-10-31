@@ -1,4 +1,4 @@
-# Icons by name, from the reading, overridable by a theme
+# Themeable icons that follow sensor readings
 
 [Documentation index](../../README.md#historical-plans) · [Current icon rules](../design.md#icons) · [Development](../development.md#code-conventions)
 
@@ -6,35 +6,35 @@
 
 ## Original context
 
-A sensor's icon is fixed at discovery: its field names it (`{icon: 'read'}`), discovery writes `sensor.icon` into the catalog, and the renderer loads the file of that name from the extension's `icons/` folder by path. A path cannot be overridden by an icon theme, and an icon cannot follow the value, such as the bars of a WiFi signal. The flags of the public IP were removed: colourful, they did not fit the monochrome icons.
+At the time of this proposal, discovery fixed each sensor's icon. The field supplied its name (`{icon: 'read'}`), discovery stored it as `sensor.icon`, and the renderer loaded that file directly from `icons/`. Loading by path prevented icon themes from overriding it. The icon also could not change with the reading, as WiFi signal bars should. Public-IP flags had been removed because their colours did not fit the monochrome icons.
 
 ## 1. Icons by name
 
-- Every icon has a name of its own, such as `vitals-temperature-symbolic`; `-symbolic` makes it monochrome, coloured by the theme.
-- The extension's `icons/` folder is the last place the icon theme looks, so its icons are the fallback, and an icon of the same name in the user's theme or in `~/.local/share/icons` wins.
-- To check first: how an extension adds a folder to the search path of the Shell's icon theme in GNOME 50.
+- Give each icon a name, such as `vitals-temperature-symbolic`. The `-symbolic` suffix makes it monochrome, coloured by the theme.
+- Put the extension's `icons/` folder last in the icon theme's search path. An icon with the same name in the user's theme or in `~/.local/share/icons` then takes precedence over the extension's fallback.
+- First check how an extension adds a folder to the Shell's icon theme search path in GNOME 50.
 
 ## 2. The icon follows the reading
 
-- A field may compute its icon from the reading, as it computes its value. Each reading writes `sensor.icon` with `sensor.value`; the collector stays the one that decides it, and the icon stays in the catalog.
-- The renderer compares the icon of a sensor whose reading changed, and swaps it only when it differs.
-- WiFi signal: GNOME's own `network-wireless-signal-{none,weak,ok,good,excellent}-symbolic`, at the thresholds of GNOME Shell's network indicator, named in the comment.
+- A field may compute its icon from the reading, just as it computes its value. Each reading updates `sensor.icon` alongside `sensor.value`. The collector chooses the icon and stores it in the catalog.
+- When a sensor's reading changes, the renderer checks its icon and replaces it only if the name has changed.
+- WiFi signal: use GNOME's `network-wireless-signal-{none,weak,ok,good,excellent}-symbolic` icons and the thresholds from GNOME Shell's network indicator. Cite that indicator in the comment.
 - Battery charge: GNOME's own battery level icons, if their steps fit.
 
 ## 3. The country of the public IP
 
-- The country code comes from the provider's answer and is shown as an icon next to the address. The icon's name is built from the code, in lowercase: `vitals-country-<code>-symbolic`, such as `vitals-country-de-symbolic`. No list of countries is in the code.
-- Fallback: one icon per country code, the two letters drawn small and monochrome, in the size and line weight of the other icons. The letters are paths, not SVG text, which would take whatever font the machine has. A script in the repo draws them from one font, so the set can be made again.
+- Use the country code from the provider's response to show an icon next to the address. Build its name from the lowercase code: `vitals-country-<code>-symbolic`, such as `vitals-country-de-symbolic`. This needs no list of countries in the code.
+- Supply one fallback icon per country code: two small, monochrome letters matching the size and line weight of the other icons. Draw the letters as paths, since SVG text would depend on the fonts installed on the machine. A script in the repo generates the set from one font, so it can be reproduced.
 - A theme can replace any of them, for example with a coloured flag.
 
 ## Implementation notes at the time
 
-- The Shell's icon theme is an `St.IconTheme` of the extension's own: it follows the user's theme, and the folder of the style and `icons/countries/` are appended to its search path. A name is looked up once and kept until the theme or the style changes.
-- Country codes: ipv4.corecoding.com answers `countryCode`, api.myip.com `cc` ("XX" when unknown), ipify none, as upstream reads them.
-- The icons: an outlined rounded rectangle with the letters filled in Adwaita Sans Bold, 249 codes from Debian's iso-codes, 354 kB. Cut out of a filled rectangle, the letters broke, because a letter of the font is made of parts that overlap.
-- Thermometers that fill and fan blades that turn with the speed fit the same mechanism: a field names its icon by the step of its value.
+- The extension uses its own `St.IconTheme`, which follows the user's theme. It appends the selected icon style's folder and `icons/countries/` to the search path. Each name is looked up once and cached until the theme or style changes.
+- Country codes, as read by upstream: ipv4.corecoding.com returns `countryCode`; api.myip.com returns `cc` ("XX" when unknown); ipify returns none.
+- Each icon has an outlined rounded rectangle and filled letters in Adwaita Sans Bold. The set contains 249 codes from Debian's iso-codes and takes 354 kB. Cutting the letters out of a filled rectangle damaged their shapes because the font builds letters from overlapping parts.
+- The same mechanism could support thermometers that fill and fan blades that turn with the speed: a field would choose an icon for each range of values.
 
 ## Verification recorded at the time
 
-- `make test`: a WiFi sensor's icon changes with its signal; the public IP's icon names the country of each service, and none for ipify.
-- `make screenshots`, looked at and not kept: the menu shows the WiFi bars, the top bar and the preferences both icon styles.
+- `make test`: the tests checked that a WiFi sensor's icon changed with its signal and that the public-IP icon used each service's country code, with none for ipify.
+- `make screenshots`: the captures were inspected but not kept. They showed WiFi bars in the menu and both icon styles in the top bar and preferences.

@@ -10,7 +10,7 @@ A key identifies a sensor within its category in the [sensor catalog](catalog-de
 - **In the colour settings.** A threshold colour for one sensor targets `sensor:<category>/<key>`, for example `sensor:temperature/thinkpad/temp1`. A scale for a category's value format targets `kind:<format>`, such as `kind:temp`.
 - **For default category pins.** The collector uses keys such as `usage` and `average` to choose the category header's reading when the user has not selected one.
 
-Keys are built from device names and source fields rather than translated labels. Their physical-device identity has [limits](#device-identity-limits) when names repeat or a mount point is reused.
+Keys are built from device names and source fields rather than translated labels. They do not always identify the same physical device when names repeat or a mount point is reused. See [Device identity limits](#device-identity-limits).
 
 ## The format
 
@@ -40,14 +40,14 @@ Keys are built from device names and source fields rather than translated labels
 Rules:
 
 - **A device's sensor is `<device name>/<input>`.** The device name is the content of the hwmon directory's `name` file. Repeated names receive a numeric suffix starting with the second device: `nvme`, `nvme2`, `nvme3`. A thermal zone is `thermal/<content of its type file>`.
-- **No directory numbers.** The number in `hwmon5` or `thermal_zone2` is given by the kernel in the order it finds devices and can differ at the next boot.
-- **Input numbers stay.** `temp1`, `in0` and `fan1` are fixed by the driver, and they are the only thing that tells unlabelled inputs apart.
+- **No directory numbers.** The kernel assigns numbers such as those in `hwmon5` or `thermal_zone2` in discovery order. They can change at the next boot.
+- **Input numbers stay.** The driver fixes names such as `temp1`, `in0` and `fan1`. These numbers are the only way to distinguish unlabelled inputs.
 - **The separator is `/`.** Discovery joins the device name and input with it. Category-wide keys such as `average` contain no separator.
 - **A storage location's sensor is `<mount point>/<field>`.** The mount point is a path, so the key of `/` starts with two slashes. The field names the value in the `STORAGE_SPACE` or `DISKSTATS` definition.
-- **A key is unique at most within its category.** `usage` is a sensor in `memory` and another one in `processor`.
+- **Keys are unique within a category, not across categories.** Both `memory` and `processor` have a sensor keyed `usage`.
 - **Case is kept.** `thermal/SEN1` and an interface called `WAN` keep their spelling.
 
-The keys of the sensors that are not devices are the keys in their source's definition in `sensors.js`.
+Sensors that do not represent devices use the keys from their source definitions in `sensors.js`.
 
 ## Device identity limits
 

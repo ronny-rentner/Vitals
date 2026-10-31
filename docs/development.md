@@ -4,7 +4,7 @@
 
 Vitals is a GNOME Shell extension (`Vitals@CoreCoding.com`) that reads hardware sensors asynchronously and shows them in the top bar. It runs as GJS ES modules and supports GNOME Shell 50 and 51. GNOME's own guides: [Creating an extension](https://gjs.guide/extensions/development/creating.html), [Anatomy](https://gjs.guide/extensions/overview/anatomy.html), [Imports](https://gjs.guide/extensions/overview/imports-and-modules.html), [Debugging](https://gjs.guide/extensions/development/debugging.html), [Best practices](https://gjs.guide/extensions/review-guidelines/best-practices.html).
 
-The terms used here are defined in [glossary.md](glossary.md). How the sensor catalog works is in [catalog-design.md](catalog-design.md), the other decisions about what Vitals does are in [design.md](design.md).
+The [glossary](glossary.md) defines the terms used here. [Sensor catalog](catalog-design.md) explains how the catalog works, and [Design decisions](design.md) covers the extension's behavior and layout.
 
 ## Getting started
 
@@ -18,7 +18,7 @@ Start with `make test`, then use the [preview](#running-it) for UI changes. Read
 
 ## Files
 
-The install directory has the name of the `uuid` in `metadata.json`; a user install is in `~/.local/share/gnome-shell/extensions/Vitals@CoreCoding.com/`.
+The installation directory is named after the `uuid` in `metadata.json`. For a user install, it is `~/.local/share/gnome-shell/extensions/Vitals@CoreCoding.com/`.
 
 GNOME Shell requires `metadata.json` and `extension.js`. Vitals also has `prefs.js`, `stylesheet.css`, `schemas/`, `locale/`, `helpers/` and `icons/`.
 
@@ -27,9 +27,9 @@ GNOME Shell requires `metadata.json` and `extension.js`. Vitals also has `prefs.
 | File | Process | Toolkit |
 |---|---|---|
 | `extension.js` and the modules it imports | `gnome-shell` | Clutter / St |
-| `prefs.js` | a GTK program of its own | GTK 4 / Adwaita |
+| `prefs.js` | Separate GTK process | GTK 4 / Adwaita |
 
-A helper imported by both may import neither `St`/`Clutter` nor `Gtk`/`Adw`/`Gdk`. `stylesheet.css` applies to the Shell only, not to the preferences. The schema id is in `metadata.json`, so both entry points call `this.getSettings()` without an argument.
+Helpers shared by both entry points must not import `St`, `Clutter`, `Gtk`, `Adw` or `Gdk`. `stylesheet.css` applies only to the Shell. Both entry points call `this.getSettings()` without an argument because `metadata.json` supplies the schema ID.
 
 ## Metadata versioning
 
@@ -46,26 +46,26 @@ Vitals omits `version` in source metadata to follow this guidance. GitHub releas
 
 `make zip` compiles the settings schema and translations, then packages the extension as `vitals.zip`. It requires `glib-compile-schemas`, `msgfmt` and `zip`.
 
-GitHub Actions runs `make test` on branch pushes, pull requests and release tags. Only a release-tag push builds the ZIP with `make zip`, checks it with `shexli`, then publishes a GitHub release with that ZIP. The release job requires the tests to pass. No ZIP is built or published for branch pushes or pull requests. The Shell UI tests remain a local check because they require GNOME Shell and real sensor hardware.
+GitHub Actions runs `make test` on branch pushes, pull requests and release tags. A release-tag push also runs the release job after the tests pass: it builds the ZIP with `make zip`, checks it with `shexli` and publishes it in a GitHub release. Branch pushes and pull requests do not build or publish a ZIP. Run the Shell UI tests locally; they need GNOME Shell and real sensor hardware.
 
 ## Translations
 
-`locale/vitals.pot` lists the messages, and each language has `locale/<language>/LC_MESSAGES/vitals.po` and its compiled `.mo` file. `make translations` rebuilds all compiled catalogs; `make zip` includes that step. Keep the compiled files with their catalog changes.
+`locale/vitals.pot` lists the messages. Each language has a catalog at `locale/<language>/LC_MESSAGES/vitals.po` and a compiled `.mo` file alongside it. `make translations` rebuilds all compiled catalogs, and `make zip` includes that step. Commit the compiled files together with their catalog changes.
 
-Category names, sensor labels and section headings are translated when displayed. Their plain string literals also need entries in the translation template and catalogs; extracting only literal `_()` calls does not include them. Validate changed catalogs with `msgfmt --check --statistics -o /dev/null <file.po>` and review fuzzy matches before accepting them.
+Category names, sensor labels and section headings are translated when displayed. They are stored as plain string literals, so extracting only literal `_()` calls misses them. Include them in the translation template and catalogs too. Validate changed catalogs with `msgfmt --check --statistics -o /dev/null <file.po>` and review fuzzy matches before accepting them.
 
 ## GNOME versions and size
 
 Support targets current GNOME versions (decided on 2026-10-10). `metadata.json` lists GNOME 50 and 51; preferences use `Adw.ViewSwitcherSidebar`, available since libadwaita 1.9. The development rule is to use GNOME's APIs directly rather than maintain compatibility branches for older releases. Propose changes to the supported versions explicitly and update `metadata.json` and the installation docs together.
 
-Of two ways that do the job, the one with less code is taken.
+When two approaches do the same job, choose the one with less code.
 
 ## Modules
 
 - `extension.js` default-exports a subclass of `Extension` with `enable()` and `disable()`; `prefs.js` default-exports a subclass of `ExtensionPreferences`.
 - Libraries are imported as `import St from 'gi://St'` or `import Gtk from 'gi://Gtk'`.
 - Shell modules are imported from `resource:///org/gnome/shell/...` in the Shell, and from `resource:///org/gnome/Shell/Extensions/js/...` in the preferences.
-- Files of Vitals are imported by relative path (`./sensors.js`). `imports.` is not used.
+- Vitals imports its own modules by relative path (`./sensors.js`) and does not use `imports.`.
 
 ## Lifecycle
 
@@ -85,29 +85,30 @@ Keep `enable()` and `disable()` small, and make cleanup explicit wherever a sign
 - GObject subclasses use `GObject.registerClass` with a unique `GTypeName`.
 - Vitals ships its own sensor icons in `icons/`, with names that a user's icon theme can override.
 - Before changing icon artwork or sizing, follow the [icon design and approval rules](design.md#icons), including verification at actual panel size.
-- Icons are `St.Icon` and `Gtk.Image`, never emoji. An icon is looked up by name in the user's icon theme, so that a theme can replace it. Vitals' own icons are named `vitals-…-symbolic` and lie in the folder of each icon style, which is searched last. The country icons in `icons/countries/` can be regenerated with `make country-icons`. That optional command needs GJS with Cairo support, the GObject introspection libraries for GTK 4's Gsk, Pango, PangoCairo and librsvg, and the `iso-codes` data. It uses the bundled DejaVu Sans Mono Bold font; ordinary builds use the existing SVG files.
+- Use `St.Icon` and `Gtk.Image` for icons, never emoji. Look them up by name so the user's icon theme can replace them. Vitals' bundled icons are named `vitals-…-symbolic`; each icon style has its own folder, searched last.
+- Regenerate the country icons in `icons/countries/` with `make country-icons`. This optional command needs GJS with Cairo support, the GObject introspection libraries for GTK 4's Gsk, Pango, PangoCairo and librsvg, and the `iso-codes` data. It uses the bundled DejaVu Sans Mono Bold font. Ordinary builds use the existing SVG files.
 - The `crop-icons` setting selects `CroppedIcon` or stock `St.Icon` through `PanelIconType` in `extension.js`. Cropping, its cache and lifecycle are confined to `croppedIcon.js`. Menu icons always use stock `St.Icon`.
-- Lines stay under about 200 characters, which is what the review page of extensions.gnome.org shows.
-- A new sensor goes into the definition of its source in `sensors.js`; a new source is a new definition there, with the discovery of its sensors.
-- Logging: a read that fails is logged with `console.debug`; `console.warn` and `console.error` are for faults. The journal is shared by the whole system, so messages are few.
+- Keep lines under about 200 characters, the width shown on the extensions.gnome.org review page.
+- Add a sensor to its source definition in `sensors.js`. For a new source, add a definition and the code to discover its sensors there.
+- Log failed reads with `console.debug`. Reserve `console.warn` and `console.error` for faults. Keep messages sparse because the whole system shares the journal.
 
 ## Units
 
-Units are written as the standards write them, SI and IEC 80000-13 for bits and bytes (decided on 2026-10-08): `kB` and `MB` for thousands, `KiB` and `MiB` for 1024s, `kHz`, and a rate as the unit with `/s`: `kB/s` for bytes and `kbit/s` for bits, never `Kbps`. The lists are at the top of `formatter.js`, and `tests/formatter.test.js` holds the spellings.
+Use the standard SI spellings, and IEC 80000-13 for bits and bytes (decided on 2026-10-08). Use `kB` and `MB` for powers of 1000, `KiB` and `MiB` for powers of 1024, and `kHz` for kilohertz. Write data-transfer rates with `/s`: `kB/s` for bytes and `kbit/s` for bits, never `Kbps`. The unit lists are at the top of `formatter.js`; `tests/formatter.test.js` checks their spellings.
 
 ## The preferences
 
-The preferences window is written in code, in `prefs.js`, without a UI file (decided on 2026-10-10). `fillPreferencesWindow` reads in the order of the window, and one call holds everything about a setting. There is no list of settings and no loop that makes rows from one.
+The preferences window is built in `prefs.js`, without a UI file (decided on 2026-10-10). Calls in `fillPreferencesWindow` follow the order of the controls in the window. Each call defines one setting completely, rather than generating rows in a loop from a separate settings list.
 
-The rows are libadwaita's own, with one exception: a number is a `Gtk.SpinButton` in an `Adw.ActionRow`, because an `Adw.SpinRow` does not look like something to type into. Use the widgets' default margins. Elements are called by the names GNOME gives them: toggle group, combo row.
+Use libadwaita's standard rows, with one exception: number inputs use a `Gtk.SpinButton` inside an `Adw.ActionRow`. The `Adw.SpinRow` design does not make it clear that users can type a number. Keep the widgets' default margins and use GNOME's names for them, such as toggle group and combo row.
 
-A setting is on the page of what it changes: General, Top Bar, Menu, or a category's page. A setting has a name and a description, in `prefs.js` and again in the schema.
+A setting belongs on the page for what it changes: General, Top Bar, Menu or a category page. Give it a name and description in both `prefs.js` and the schema.
 
-- On a page, a name does not repeat the page ("Hide icons"). The schema has no pages, so its names say the whole thing ("Hide icons in top bar").
-- Page and group titles are capitalised like headings, names of settings and list entries like sentences.
-- The name says what the setting does. The description says what the user cannot see from the name and needs in order to decide: what the setting affects, what it leaves alone, or what happens otherwise. It does not repeat the name in other words.
-- A description is one sentence, two at most. A detail that does not change the user's decision is left out.
-- When behaviour changes, the texts of the settings it touches change with it.
+- In preferences, leave the page name out of the setting's name: "Hide icons". In the schema, include it because there are no pages: "Hide icons in top bar".
+- Capitalise page and group titles as headings, and setting names and list entries as sentences.
+- The name should say what the setting does. Use the description for details that help the user decide, such as what it affects, what it leaves alone or what happens otherwise. Do not repeat the name in other words.
+- Keep descriptions to one sentence, or two at most. Leave out details that do not affect the user's decision.
+- When behavior changes, update the affected settings' names and descriptions too.
 
 ## Running it
 
@@ -125,20 +126,20 @@ GJS caches the modules it has loaded, so a change of code needs a new gnome-shel
 
 The [test-writing rules](writing-tests.md) define which requirements tests protect and what they may depend on.
 
-`make test` runs the unit tests in GJS. `LC_ALL=C make test-shell` runs `tests/shell.test.js` in English inside a gnome-shell without a screen, after resetting the settings under `build/test-shell`, so it starts from the schema defaults. Setting the locale for this command leaves the desktop's language unchanged.
+`make test` runs the unit tests in GJS. `LC_ALL=C make test-shell` runs `tests/shell.test.js` in English inside a headless GNOME Shell. It resets the settings under `build/test-shell` first, so each run starts from the schema defaults. The command's locale setting does not change the desktop's language.
 
 - The unit-test files listed in the Makefile each run in a separate GJS interpreter. `tests/shell.test.js` also imports the cropped-icon checks, which construct icons in the Shell and check their dimensions and rendered pixels using St and Clutter.
 - Collector tests use `Sensors` as the extension does, including its callbacks. They change the machine and settings without replacing Vitals internals or reading private members.
-- A test of `Sensors` drives it through a `Machine` (`tests/machine.js`), the test double for the system that `Sensors` monitors. It stands in for the files under `/sys` and `/proc`, the space of the mounted filesystems, the mounts of `Gio.VolumeMonitor`, the public IP services, the monotonic clock and the GLib timers. A test sets and removes files, plugs device groups in and out, fails and holds reads, and skips time instead of waiting out an interval; skipping fires the timers that fall due.
-- Fixtures are frozen constants in `tests/fixtures/`. `machine.js` there is a ThinkPad in device groups, each file's content exactly as the kernel presents it. No test changes a fixture.
-- Everything mutable is created inside the test and ends with it. A `setup()` helper may build it; it holds no data.
-- In the GJS tests, a `console.error` or `console.warn` fails the test, unless the test expects it and takes it with `takeFaults`.
+- `Sensors` tests use a `Machine` (`tests/machine.js`) as a test double for the monitored system. It supplies the files under `/sys` and `/proc`, mounted filesystem space, `Gio.VolumeMonitor` mounts, public IP services, the monotonic clock and GLib timers. Tests can change files, connect or disconnect device groups, fail or hold reads, and advance time. Advancing time fires the timers that become due, so tests do not have to wait for real polling intervals.
+- Fixtures are frozen constants in `tests/fixtures/`. The `machine.js` fixture describes a ThinkPad, grouped by device, with file contents exactly as the kernel provides them. Tests must not modify fixtures.
+- Create all mutable state inside the test and discard it when the test ends. A `setup()` helper may construct that state but must not retain any data itself.
+- In GJS tests, `console.error` and `console.warn` fail the test unless it expects the message and collects it with `takeFaults`.
 - The `nvidia-smi` fixture in `tests/fixtures/programs` runs as a subprocess. The test puts its directory first in `PATH`, so it exercises process handling without an NVIDIA card.
 - Every expected value is computed from the machine's current contents or from named inputs in the same test. The formatted strings in `tests/formatter.test.js` are the specification and stay literal.
-- `tests/shell.test.js` runs inside GNOME Shell with real sensor hardware. It exercises the menu and top bar through a virtual pointer, keyboard and settings. The missing-icon check temporarily moves the isolated Shell's installed icon directory, then restores it. Each step puts back the settings and the arrangement it changed. It needs a machine with two temperatures or more, and English as the language.
+- `tests/shell.test.js` runs inside GNOME Shell with real sensor hardware. It exercises the menu and top bar through a virtual pointer, keyboard and settings. The missing-icon check temporarily moves the isolated Shell's installed icon directory, then restores it. Each step restores the settings and layout it changed. These tests need at least two temperature sensors and an English-language session.
 
 ## Screenshots
 
-`LC_ALL=C make screenshots` refreshes the English [screenshot gallery](screenshots/README.md) in a Shell without a screen, using readings from the machine it runs on. The script, `docs/screenshots/screenshots.js`, starts from schema defaults, enables Battery and GPU, pins additional sensors and applies the options named in each gallery caption. It switches the public IP address off because the pictures are published. When an accepted display option changes the appearance, update its example and caption together.
+`LC_ALL=C make screenshots` refreshes the English [screenshot gallery](screenshots/README.md) in a headless Shell, using readings from the machine running it. The script, `docs/screenshots/screenshots.js`, starts from schema defaults, enables Battery and GPU, pins additional sensors and applies the options named in each caption. It disables public IP lookup because the pictures are published. When an accepted display option changes the appearance, update its example and caption together.
 
 Screenshots are captured at UI scale 2. Top-bar and menu examples share one capture width, set in `screenshots.js`; their heights follow the contents. The preferences screenshot includes its whole window. In the gallery, put captions above their images and omit explicit image widths so the images can use the available page width. Check the rendered gallery for readable labels, values and icons after changing captures or layout. The README's compact category overview uses a separate width of 360 pixels.
