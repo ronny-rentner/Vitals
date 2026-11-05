@@ -1,5 +1,5 @@
 blank_issues_enabled: false
 contact_links:
-  - name: Wiki
-    url: https://github.com/corecoding/Vitals/wiki/
-    about: Please read this page before submitting a feature request or bug report!
+  - name: Documentation
+    url: https://github.com/ronny-rentner/Vitals/blob/catalog-rewrite/README.md
+    about: Installation, usage and development documentation for this fork.

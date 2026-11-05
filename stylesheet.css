@@ -1,15 +1,107 @@
-.vitals-panel-item{spacing: 0;}
-.vitals-panel-menu{spacing: 11px; padding: 3px; }
-.vitals-panel-icon-temperature { margin: 0 1px 0 0; padding: 0; }
-.vitals-panel-icon-voltage { margin: 0 0 0 0; padding: 0; }
-.vitals-panel-icon-fan { margin: 0 4px 0 0; padding: 0; }
-.vitals-panel-icon-memory { margin: 0 2px 0 0; padding: 0; }
-.vitals-panel-icon-processor { margin: 0 3px 0 0; padding: 0; }
-.vitals-panel-icon-system { margin: 0 3px 0 0; padding: 0; }
-.vitals-panel-icon-network { margin: 0 3px 0 0; padding: 0; }
-.vitals-panel-icon-storage { margin: 0 2px 0 0; padding: 0; }
-.vitals-panel-icon-battery { margin: 0 4px 0 0; padding: 0; }
-.vitals-button-action { -st-icon-style: symbolic; border-radius: 32px; margin: 0px; min-height: 22px; min-width: 22px; padding: 10px; font-size: 100%; border: 1px solid transparent; }
-.vitals-button-action:hover, .vitals-button-action:focus { border-color: #777; }
-.vitals-button-action > StIcon { icon-size: 16px; }
-.vitals-button-box { padding: 0px; spacing: 22px; }
+/* Top bar */
+
+.vitals-panel-sensors {
+    spacing: 10px;
+    padding: 0 3px;
+}
+
+/* The cropped icon needs a larger gap to balance the font's space beside the number and unit. */
+.vitals-panel-item {
+    spacing: 6px;
+}
+
+.vitals-panel-value {
+    spacing: 5px;
+}
+
+/* Icon margins and padding must not add to the gaps set above. */
+#panel .panel-button .vitals-panel-item > .system-status-icon {
+    margin: 0;
+    padding: 0;
+}
+
+/* "Emphasize values" uses 80% of GNOME's default 1.091em icon size. */
+#panel .panel-button .vitals-panel-item-emphasized > .system-status-icon {
+    icon-size: 0.873em;
+}
+
+.vitals-panel-item-emphasized .vitals-panel-unit {
+    font-size: 85%;
+    font-weight: normal;
+}
+
+/* Sensor list
+   Category headers: .vitals-category-header, with .vitals-category-name and .vitals-category-value.
+   Sensor rows: .vitals-sensor-row, with .vitals-sensor-label and .vitals-sensor-value. */
+
+/* Keep changing readings from resizing the menu. */
+.vitals-menu {
+    width: 22em;
+}
+
+/* Category-pin and hidden-sensor indicators beside a sensor's name. */
+.vitals-row-mark {
+    icon-size: 0.9em;
+    margin-left: 0.4em;
+}
+
+/* Sensor actions
+   .vitals-row-menu-header contains the sensor's name; .vitals-row-menu-action selects all four actions.
+   Individual actions: .vitals-action-pin-top-bar, .vitals-action-pin-category, .vitals-action-rename, .vitals-action-hide. */
+
+.vitals-row-menu {
+    border-radius: 12px;
+    padding: 4px 0;
+    margin: 2px 0 6px 0;
+    border: none;
+}
+
+/* Keep an action's hover highlight inside the row menu's rounded corners. */
+.popup-sub-menu .vitals-row-menu .popup-menu-item {
+    border-radius: 12px;
+}
+
+/* The sensor's name above its actions. */
+.vitals-sensor-name {
+    font-weight: bold;
+}
+
+/* Rename: text entry and confirm/restore buttons
+   The buttons share .vitals-rename-button; select one with .vitals-rename-confirm or .vitals-rename-restore. */
+
+.vitals-rename-entry {
+    padding: 0.4em 0.7em;
+}
+
+.vitals-rename-button {
+    padding: 0.3em;
+    border-radius: 99px;
+}
+
+.vitals-rename-button:hover {
+    background-color: rgba(128, 128, 128, 0.35);
+}
+
+.vitals-rename-button StIcon {
+    icon-size: 1em;
+}
+
+/* Bottom buttons: Refresh, System Monitor, Preferences, Show hidden sensors
+   All share .vitals-button-action; individual buttons use .vitals-button-refresh, .vitals-button-monitor,
+   .vitals-button-preferences and .vitals-button-hidden-sensors. */
+
+.vitals-button-action {
+    -st-icon-style: symbolic;
+    border-radius: 32px;
+    min-height: 22px;
+    min-width: 22px;
+    padding: 10px;
+}
+
+.vitals-button-action > StIcon {
+    icon-size: 16px;
+}
+
+.vitals-button-box {
+    spacing: 22px;
+}

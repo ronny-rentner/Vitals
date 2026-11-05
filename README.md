@@ -1,9 +1,30 @@
 Vitals
 ====================================
 
-Vitals is a GNOME Shell extension for displaying your computer's temperature, voltage, fan speed, memory usage, processor load, system resources, network speed and storage stats in your GNOME Shell's top menu bar. This is a one stop shop to monitor all of your vital sensors. Vitals uses asynchronous polling to provide a smooth user experience.
+Vitals is a GNOME Shell extension for displaying your computer's temperature, voltage, fan speed, power draw, memory usage, processor load, system resources, network speed and storage stats in your GNOME Shell's top menu bar. This is a one stop shop to monitor all of your vital sensors. Vitals uses asynchronous polling to provide a smooth user experience.
 
-![How it works](https://raw.githubusercontent.com/corecoding/Vitals/main/howtouse.gif)
+## This fork
+
+<img src="docs/screenshots/top-bar.png" width="448" alt="Vitals top bar with sensor readings">
+
+[Screenshots](docs/screenshots/README.md) · [Documentation](docs/README.md) · [Upstream Vitals](https://github.com/corecoding/Vitals)
+
+Our goals are to:
+
+- Address the features users have requested most.
+- Improve the accuracy of readings and make their meaning clear.
+- Make everyday configuration easier and fit naturally into GNOME.
+- Make Vitals look beautiful.
+- Reduce the CPU use and background work needed for monitoring.
+- Keep the code easy to test, with automated tests for calculations and the interface.
+
+See the [full comparison](docs/changes-against-upstream.md) for what we've changed and the known limitations.
+
+### Important notes
+
+The preferences sidebar and cropped top-bar icons use newer GNOME APIs, so this fork requires GNOME Shell 50 or 51.
+
+When switching to this fork, set up your pinned sensors again and review your preferences. Existing sensor settings do not carry over.
 
 ## Installation
 
@@ -98,13 +119,15 @@ Vitals was originally forked from [gnome-shell-extension-freon](https://github.c
 * temperature-symbolic.svg - [iconnice studio](https://www.iconfinder.com/iconnice).
 * (cpu|memory)-symbolic.svg - [DinosoftLabs](https://www.iconfinder.com/dinosoftlabs).
 * network\*.svg - [Yannick Lung](https://www.iconfinder.com/yanlu).
+* power-symbolic.svg - drawn for Vitals.
 * Health icon - [Dod Cosmin](https://www.iconfinder.com/icons/458267/cross_doctor_drug_health_healthcare_hospital_icon).
 
 ### GNOME Theme
 * (battery | storage)-symbolic.svg - from [Adwaita Icon Theme](https://gitlab.gnome.org/GNOME/adwaita-icon-theme).
-* (memory | network* | system | voltage)-symbolic.svg - from [Icon Development Kit](https://gitlab.gnome.org/Teams/Design/icon-development-kit).
+* (memory | network* | swap | system | voltage)-symbolic.svg - from [Icon Development Kit](https://gitlab.gnome.org/Teams/Design/icon-development-kit).
 * fan-symbolic.svg - inherited from [Freon](https://github.com/UshakovVasilii/gnome-shell-extension-freon) project, with mild modifications.
 * (temperature | cpu)-symbolic.svg - designed by [daudix](https://github.com/daudix).
+* power-symbolic.svg - drawn for Vitals.
 
 ## Disclaimer
 Sensor data is obtained from the system using hwmon and GTop. Core Coding and the Vitals authors are not responsible for improperly represented data. No warranty expressed or implied.
