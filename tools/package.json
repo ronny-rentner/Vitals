@@ -1,0 +1,9 @@
+{
+  "name": "vitals-dev-tools",
+  "private": true,
+  "devDependencies": {
+    "@eslint/config-helpers": "latest",
+    "@eslint/js": "latest",
+    "eslint": "latest"
+  }
+}

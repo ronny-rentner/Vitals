@@ -1,0 +1,43 @@
+name: Release
+
+on:
+  push:
+    tags: ['v[0-9]*']
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Build and publish release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '*'
+
+      - name: Install build and test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gettext gjs libglib2.0-bin make zip
+
+      - name: Install JavaScript tools
+        run: npm --prefix tools install
+
+      - name: Check JavaScript
+        run: make lint
+
+      - name: Run unit tests
+        run: make test
+
+      - name: Build extension package
+        run: make zip
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" vitals.zip --verify-tag --title "$GITHUB_REF_NAME" --generate-notes
