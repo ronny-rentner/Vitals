@@ -9,7 +9,7 @@ TEXT_SCALE ?= 1.25
 RESOLUTION ?= 3840x2160
 
 # What shell-session.sh needs from here.
-export UUID EXTENSION_FILES SCALE TEXT_SCALE
+export SCALE TEXT_SCALE
 
 .ONESHELL:
 .SHELLFLAGS := -ec
@@ -22,20 +22,19 @@ compile:
 	glib-compile-schemas --strict schemas
 
 # Settings are under build/preview and are kept between runs.
-preview: compile
-	@echo "Running in persistent home: $(CURDIR)/build/preview"
-	bash shell-session.sh "$(CURDIR)/build/$@" --wayland --devkit
+preview: zip
+	@bash shell-session.sh "$(ZIP)" "$(CURDIR)/build/$@"
 
-test-shell: compile
+test-shell: zip
 	@echo ":: Running tests/shell.test.js in a Shell without a screen..."
-	bash shell-session.sh "$(CURDIR)/build/$@" --reset-settings \
+	bash shell-session.sh "$(ZIP)" "$(CURDIR)/build/$@" --reset-settings \
 		--wayland --headless --virtual-monitor $(RESOLUTION) \
 			--automation-script tests/shell.test.js
 
-screenshots: compile
+screenshots: zip
 	@echo ":: Taking the pictures in docs/screenshots again..."
 	export SCREENSHOT_DIR=$(CURDIR)/docs/screenshots
-	bash shell-session.sh "$(CURDIR)/build/$@" --reset-settings \
+	bash shell-session.sh "$(ZIP)" "$(CURDIR)/build/$@" --reset-settings \
 		--wayland --headless --virtual-monitor $(RESOLUTION) \
 			--automation-script docs/screenshots/screenshots.js
 
