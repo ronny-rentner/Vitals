@@ -13,8 +13,8 @@ export const sensorCategories = {
     'system': {'name': 'System', 'icon': 'vitals-system-symbolic', 'enabled': true},
     'network': {'name': 'Network', 'icon': 'vitals-network-symbolic', 'enabled': true},
     'storage': {'name': 'Storage', 'icon': 'vitals-storage-symbolic', 'enabled': true},
-    'battery': {'name': 'Battery', 'icon': 'vitals-battery-symbolic', 'enabled': false},
-    'gpu': {'name': 'GPU', 'icon': 'vitals-gpu-symbolic', 'enabled': false},
+    'battery': {'name': 'Battery', 'icon': 'vitals-battery-symbolic', 'enabled': true},
+    'gpu': {'name': 'GPU', 'icon': 'vitals-gpu-symbolic', 'enabled': true},
 };
 
 // The value of the `category-order` setting for the order the user gave the categories; 0 is alphabetical.

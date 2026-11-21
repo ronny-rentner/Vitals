@@ -23,7 +23,8 @@ export XDG_STATE_HOME="$dir/state"
 export GSETTINGS_BACKEND=keyfile DCONF_PROFILE=/dev/null
 # Remember the host system's Wayland socket for gnome-shell's window.
 host_wayland="$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY"
-unset WAYLAND_DISPLAY
+# Programs in the session use the nested shell's displays, not the host system's.
+unset WAYLAND_DISPLAY DISPLAY
 export XDG_RUNTIME_DIR="$dir/runtime"
 export GTK_A11Y=none
 export NO_AT_SPI_BUS_DIRECT_NAV=1

@@ -159,8 +159,6 @@ export async function run() {
 
     // The pictures are published, so the machine's public IP address stays out of them.
     settings.set_boolean('include-public-ip', false);
-    // The battery and the graphics card are switched off for a new user; switched on as the preferences do, their
-    // sensors can be pinned.
     settings.set_value('catalog-settings', toVariant({battery: {enabled: true}, gpu: {enabled: true}}));
     await button._discoverSensors();
 

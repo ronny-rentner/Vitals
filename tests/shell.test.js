@@ -154,7 +154,7 @@ async function closeMenu() {
 
 // The names of the categories in the menu, from top to bottom.
 function categoryNames() {
-    return button.menu.box.get_children().filter(actor => actor instanceof PopupMenu.PopupSubMenuMenuItem && actor.visible)
+    return visibleActors(button.menu.box, actor => actor instanceof PopupMenu.PopupSubMenuMenuItem)
         .map(item => item.label.text);
 }
 
@@ -162,7 +162,7 @@ function categoryNames() {
 // value in its category header, and the box of its rows.
 function category(name) {
     const item = labelled(button.menu.box, name).get_parent();
-    const actors = button.menu.box.get_children();
+    const actors = item.get_parent().get_children();
     const header = item.get_children().find(actor => actor instanceof St.Label && actor !== item.label);
     return {item, header, rows: actors[actors.indexOf(item) + 1]};
 }

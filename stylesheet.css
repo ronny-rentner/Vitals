@@ -29,6 +29,21 @@
     width: 22em;
 }
 
+.vitals-category {
+    padding: 0;
+    spacing: 0;
+}
+
+/* The category supplies the rounded background shared by its header and rows. Their backgrounds must stay
+   transparent while it slides; !important overrides the theme's more specific hover, selected and checked rules. */
+.vitals-category-header, .vitals-category-rows {
+    background-color: transparent !important;
+}
+
+.vitals-category-rows {
+    margin: 0;
+}
+
 /* Category-pin and hidden-sensor indicators beside a sensor's name. */
 .vitals-row-mark {
     icon-size: 0.9em;

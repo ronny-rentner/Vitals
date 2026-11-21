@@ -807,6 +807,7 @@ const BATTERY = {
             label: 'Capacity',
             format: 'percent',
             ...LOW_IS_BAD,
+            icon: context => BATTERY.iconForReading(context),
             compute: ({reading}) => reading.value.full / reading.value.design,
         },
         'time-left': {

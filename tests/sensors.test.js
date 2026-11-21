@@ -1405,7 +1405,7 @@ test('the panel\'s sensors and category switches are changed through Sensors, wh
     sensors.movePanelSensor(find('memory', 'usage'));
     equal(shown(), 'system load-1m, processor usage, memory usage', 'moved to the end');
     // The preferences switch a category in the catalog settings.
-    equal(sensors.catalog.battery.runtime.enabled, false, 'the default');
+    equal(sensors.catalog.battery.runtime.enabled, true, 'the default');
     configuration.set_value('catalog-settings', toVariant({battery: {enabled: true}, memory: {enabled: false}}));
     equal(sensors.reloadEnabled(), true, 'a changed switch is reported');
     equal(sensors.reloadEnabled(), false, 'once');

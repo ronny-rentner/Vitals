@@ -320,90 +320,86 @@ var VitalsMenuButton = GObject.registerClass({GTypeName: 'VitalsMenuButton'},
             const submenu = group.menu;
             const openSubmenu = submenu.open.bind(submenu);
             const closeSubmenu = submenu.close.bind(submenu);
+            // Shell updates the rows instantly; its arrow still follows the timing of our slide.
+            const easeArrow = submenu._arrow.ease.bind(submenu._arrow);
+            submenu._arrow.ease = params => {
+                const duration = Object.values(this._categoryMenus).some(header => header.menu.isOpen) ? CATEGORY_OPEN_MILLISECONDS : CATEGORY_CLOSE_MILLISECONDS;
+                easeArrow({...params, duration: this._settings.get_boolean('animate-categories') ? duration : 0});
+            };
+            const slide = (header, height, duration) => {
+                const actor = header.menu.actor;
+                const open = header.menu.isOpen;
+                // Keep the scrollbar's space unchanged while closing, so the rows do not jump sideways as the height shrinks.
+                if (!open)
+                    actor.vscrollbar_policy = actor.vscrollbar_visible ? St.PolicyType.ALWAYS : St.PolicyType.NEVER;
+                // Keep the scrollbar from protruding below the rounded category while it slides; opacity preserves its space.
+                for (const scrollbar of actor.get_children().filter(child => child instanceof St.ScrollBar))
+                    scrollbar.opacity = 0;
+                actor.show();
+                actor.height = open ? 0 : height;
+                actor.ease({
+                    height: open ? height : 0, duration,
+                    mode: Clutter.AnimationMode.EASE_OUT_EXPO, onStopped: () => {
+                        Object.assign(actor, {visible: open, height: -1, vscrollbar_policy: St.PolicyType.AUTOMATIC});
+                        for (const scrollbar of actor.get_children().filter(child => child instanceof St.ScrollBar))
+                            scrollbar.opacity = 255;
+                    },
+                });
+            };
             submenu.open = () => {
-            // What the menu needs around its rows. It is measured while the menu is below its height limit, where
-            // the menu asks for all it needs; at the limit it asks for less, so the largest value seen is kept.
+                // What the menu needs around its rows. It is measured while the menu is below its height limit, where
+                // the menu asks for all it needs; at the limit it asks for less, so the largest value seen is kept.
                 this._menuFrame = Math.max(this._menuFrame ?? 0,
                     this.menu.actor.get_preferred_height(-1)[1] - this.menu.box.get_preferred_height(-1)[1]);
                 // A category that is still sliding shut is closed for good now, so that only this one moves.
                 for (const categoryHeader of Object.values(this._categoryMenus))
                     categoryHeader.menu.actor.remove_all_transitions();
+                const previous = Object.values(this._categoryMenus).find(header => header !== group && header.menu.isOpen);
+                const previousHeight = previous?.menu.actor.height;
                 // Inside this call the Shell closes the category that was open; see submenu.close.
-                this._slideShutOnOpen = null;
-                this._openingCategory = true;
                 openSubmenu(false);
-                this._openingCategory = false;
                 // GNOME Shell lets a submenu have a scrollbar only when the menu was at its height limit as it opened, so
                 // a row menu would sometimes give the category a scrollbar and sometimes make the menu taller than the
                 // screen. Every category may have one, whatever the menu's height was.
                 submenu.actor.vscrollbar_policy = St.PolicyType.AUTOMATIC;
                 // An empty submenu does not open.
-                if (!submenu.isOpen || !this._settings.get_boolean('animate-categories'))
+                if (!submenu.isOpen)
                     return;
                 // The slide ends at the height the submenu gets, not at the height of all its rows: what does not
                 // fit under the menu's height limit is scrolled, and sliding past that would overshoot and jump back.
                 // The menu asks for no more than its limit, so what its rows and frame need beyond that is the overflow.
                 // The height an actor asks for includes its margins, and the height that is set on it does not.
+                // .vitals-category-rows removes those margins, so the measured height needs no margin adjustment.
                 const [, heightOfAllRows] = submenu.actor.get_preferred_height(-1);
-                const margins = submenu.actor.margin_top + submenu.actor.margin_bottom;
                 const overflow = this.menu.box.get_preferred_height(-1)[1] + this._menuFrame - this.menu.actor.get_preferred_height(-1)[1];
+                // While another category opens, both slide at the same speed, so that the rows between and below them
+                // move in step.
+                const duration = this._settings.get_boolean('animate-categories') ? CATEGORY_OPEN_MILLISECONDS : 0;
                 // The category that was open until now slides shut at the same time, as in a menu of GNOME Shell. It
                 // starts only here, after the measuring above, which is of the menu without it.
-                this._slideShutOnOpen?.(group.actor);
-                this._slideShutOnOpen = null;
-                // A long category has its scrollbar from the start of the slide: the rows are narrower next to it, and
-                // would jump sideways if it came at the end. One that fits has none while it slides, though its rows do
-                // not fit the growing height yet; afterwards a row menu can still make it long enough for one.
+                if (previous)
+                    slide(previous, previousHeight, duration);
+                // A long category reserves room for its scrollbar from the start of the slide: the rows are narrower next to it,
+                // and would jump sideways if that room were added at the end. The scrollbar itself stays hidden during the slide.
+                // One that fits reserves no room while it slides, though its rows do not fit the growing height yet; afterwards
+                // a row menu can still make it long enough for one.
                 if (overflow <= 0)
                     submenu.actor.vscrollbar_policy = St.PolicyType.NEVER;
-                // The theme's margin under the submenu grows with it, or it would take its room at once.
-                const marginBottom = submenu.actor.margin_bottom;
-                submenu.actor.margin_bottom = 0;
-                submenu.actor.height = 0;
-                submenu.actor.ease({
-                    height: heightOfAllRows - margins - overflow, margin_bottom: marginBottom, duration: CATEGORY_OPEN_MILLISECONDS,
-                    mode: Clutter.AnimationMode.EASE_OUT_EXPO, onStopped: () => {
-                        submenu.actor.set_height(-1);
-                        submenu.actor.margin_bottom = marginBottom;
-                        submenu.actor.vscrollbar_policy = St.PolicyType.AUTOMATIC;
-                    },
-                });
+                slide(group, heightOfAllRows - overflow, duration);
             };
             submenu.close = animation => {
-            // The open category is still open when the menu is opened again. GNOME Shell closes the submenus after
-            // the menu has closed, and that is the one close it asks for without any animation; it is left out.
+                // The open category is still open when the menu is opened again. GNOME Shell closes the submenus after
+                // the menu has closed, and that is the one close it asks for without any animation; it is left out.
                 if (!submenu.isOpen || animation === BoxPointer.PopupAnimation.NONE)
                     return;
                 const openHeight = submenu.actor.height;
                 // Closing without the Shell's slide hides the submenu at once.
                 closeSubmenu(false);
-                if (!this._settings.get_boolean('animate-categories'))
-                    return;
-                // `openingHeader` is the header of the category that opens while this one shuts, if one does.
-                const slideShut = openingHeader => {
-                    submenu.actor.show();
-                    // As above: the height an actor reports includes its margins, and the height that is set on it does not.
-                    submenu.actor.height = openHeight - submenu.actor.margin_top - submenu.actor.margin_bottom;
-                    // While another category opens, both slide at the same speed, so that the rows between and below them
-                    // move in step.
-                    const duration = openingHeader ? CATEGORY_OPEN_MILLISECONDS : CATEGORY_CLOSE_MILLISECONDS;
-                    // The theme's margin under the submenu shrinks with it, or it would give its room back only at the end.
-                    const marginBottom = submenu.actor.margin_bottom;
-                    submenu.actor.ease({
-                        height: 0, margin_bottom: 0, duration, mode: Clutter.AnimationMode.EASE_OUT_EXPO, onStopped: () => {
-                            submenu.actor.hide();
-                            submenu.actor.set_height(-1);
-                            submenu.actor.margin_bottom = marginBottom;
-                        },
-                    });
-                };
                 // The user's own close asks for the full animation: a click on the category or the Left key. A category
                 // that the Shell closes in the middle of another one's opening slides when that one has measured.
                 // Any other close is at once.
                 if (animation === BoxPointer.PopupAnimation.FULL)
-                    slideShut();
-                else if (this._openingCategory)
-                    this._slideShutOnOpen = slideShut;
+                    slide(group, openHeight, this._settings.get_boolean('animate-categories') ? CATEGORY_CLOSE_MILLISECONDS : 0);
             };
 
             submenu.connectObject('open-state-changed', () => {
@@ -416,7 +412,10 @@ var VitalsMenuButton = GObject.registerClass({GTypeName: 'VitalsMenuButton'},
             // A category is dragged onto another one to take that one's place. The Shell's drag and drop asks the
             // dragged actor's delegate, which for a menu item is the item itself, for what is dragged, and the item
             // under the pointer whether it takes the drop.
-            group.getDragActor = () => new Clutter.Clone({source: group, width: group.width, height: group.height});
+            group.getDragActor = () => new St.Bin({
+                style_class: 'popup-menu-item vitals-category', pseudo_class: 'selected',
+                child: new Clutter.Clone({source: group, width: group.width, height: group.height}),
+            });
             group.getDragActorSource = () => group;
             const draggedCategory = source => Object.keys(this._categoryMenus).find(name => this._categoryMenus[name] === source);
             group.handleDragOver = source => draggedCategory(source) && source !== group
@@ -433,7 +432,18 @@ var VitalsMenuButton = GObject.registerClass({GTypeName: 'VitalsMenuButton'},
             this._settings.get_int('category-order') === SensorCategories.MANUAL_CATEGORY_ORDER)
                 DND.makeDraggable(group);
 
-            this.menu.addMenuItem(group, position);
+            // One rounded background surrounds the header and rows, including the last pixels of the closing slide.
+            const categorySection = new PopupMenu.PopupMenuSection();
+            // Stop inherited expansion from assigning spare rounding pixels to unrelated categories.
+            categorySection.actor.y_expand = false;
+            categorySection.actor.add_style_class_name('popup-menu-item vitals-category');
+            submenu.actor.add_style_class_name('vitals-category-rows');
+            categorySection.addMenuItem(group);
+            group.bind_property('visible', categorySection.actor, 'visible', GObject.BindingFlags.SYNC_CREATE);
+            // Pressing or expanding the header must not change the category's outline or flash its whole background.
+            group.connectObject('notify::pseudo-class', () =>
+                categorySection.actor.set_style_pseudo_class(group.get_style_pseudo_class().replace(/\b(checked|active)\b/g, 'selected')), categorySection.actor);
+            this.menu.addMenuItem(categorySection, position);
         }
 
         // Builds the categories again, with their rows, in the order that holds now. This is how the two options for the
@@ -449,7 +459,7 @@ var VitalsMenuButton = GObject.registerClass({GTypeName: 'VitalsMenuButton'},
             for (const group of Object.values(this._categoryMenus)) {
             // An open category closes when it is destroyed, and says so; by then other categories are gone.
                 group.menu.disconnectObject(this);
-                group.destroy();
+                group._parent.destroy();
             }
             this._categoryMenus = {};
             this._shownCategoryPins.clear();
@@ -471,11 +481,8 @@ var VitalsMenuButton = GObject.registerClass({GTypeName: 'VitalsMenuButton'},
             names.splice(names.indexOf(movedName), 1);
             names.splice(targetPosition, 0, movedName);
             this._sensors.setCategoryOrder(names);
-            for (const [position, name] of names.entries()) {
-                this.menu.moveMenuItem(this._categoryMenus[name], position);
-                // The Shell moves a category without its rows, which are an actor of their own after it.
-                this.menu.box.set_child_above_sibling(this._categoryMenus[name].menu.actor, this._categoryMenus[name]);
-            }
+            for (const [position, name] of names.entries())
+                this.menu.moveMenuItem(this._categoryMenus[name]._parent, position);
         }
 
         // `name` is what a screen reader says for the button, which shows an icon only.
@@ -903,7 +910,7 @@ var VitalsMenuButton = GObject.registerClass({GTypeName: 'VitalsMenuButton'},
             menu.addMenuItem(rowMenu, menu._getMenuItems().indexOf(row) + 1);
 
             // Everything but the row menu is dimmed: the other parts of the menu, and the rows of its own category.
-            const dimmed = [...this.menu.box.get_children().filter(actor => actor !== menu.actor),
+            const dimmed = [...this.menu.box.get_children().filter(actor => !actor.contains(menu.actor)), menu.sourceActor,
                 ...menu._getMenuItems().filter(item => item !== rowMenu).map(item => item.actor)];
             for (const actor of dimmed)
                 actor.ease({opacity: ROW_MENU_DIMMED_OPACITY, duration: animate ? POPUP_ANIMATION_TIME / 2 : 0});
